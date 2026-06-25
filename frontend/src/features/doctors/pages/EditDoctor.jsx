@@ -4,11 +4,12 @@ import { ChevronLeft } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import DoctorFormFields from '@features/doctors/components/DoctorFormFields'
+import { ErrorBanner, LoadingSpinner } from '@shared/components/FormPrimitives'
 import SkeletonRow from '@shared/components/SkeletonRow'
 import { useToast } from '@shared/components/Toast'
 import { getBackendError } from '@shared/lib/records'
 import { usePermission } from '@shared/lib/usePermission'
-import { validatePhone } from '@shared/lib/validation'
+import { validateEmail, validatePhone } from '@shared/lib/validation'
 import { getDoctorById, updateDoctor } from '@shared/services/api'
 
 const TOUCHED_ALL = {
@@ -41,8 +42,10 @@ function validateDoctorForm(data) {
     errors.last_name = 'Last name is required'
   }
 
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-    errors.email = 'Please enter a valid email'
+  const emailError = validateEmail(trimmedEmail)
+
+  if (emailError) {
+    errors.email = emailError
   }
 
   if (phoneError) {
@@ -95,6 +98,7 @@ function mapDoctorToForm(doctor) {
     email: doctor.email || '',
     experience_years: doctor.experience_years ?? 0,
     first_name: doctor.first_name || fullNameParts[0] || '',
+    has_account: doctor.has_account === true,
     last_name: doctor.last_name || fullNameParts.slice(1).join(' ') || '',
     join_date: doctor.join_date || '',
     phone: doctor.phone || '',
@@ -140,6 +144,7 @@ export function EditDoctor() {
   const { isAdmin } = usePermission()
   const [data, setData] = useState(null)
   const [errors, setErrors] = useState({})
+  const [generalError, setGeneralError] = useState('')
   const [touched, setTouched] = useState({})
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -183,10 +188,15 @@ export function EditDoctor() {
 
   function handleChange(event) {
     const { name, value } = event.target
+    if (name === 'email' && data?.has_account) {
+      return
+    }
+
     setData((currentData) => ({
       ...currentData,
       [name]: value,
     }))
+    setGeneralError('')
 
     if (errors[name]) {
       setErrors((currentErrors) => ({
@@ -222,7 +232,9 @@ export function EditDoctor() {
       toast.success('Changes saved')
       navigate(`/doctors/${id}`)
     } catch (error) {
-      toast.error(getBackendError(error, 'Doctor could not be updated.'))
+      const message = getBackendError(error, 'Doctor could not be updated.')
+      toast.error(message)
+      setGeneralError(message)
       setErrors(error?.response?.data || { general: 'Doctor could not be updated.' })
     } finally {
       setIsSubmitting(false)
@@ -282,11 +294,14 @@ export function EditDoctor() {
       >
         <DoctorFormFields
           data={data}
+          emailReadOnly={data.has_account === true}
           errors={errors}
           onBlur={handleBlur}
           onChange={handleChange}
           touched={touched}
         />
+
+        <ErrorBanner message={generalError} />
 
         <div className="flex gap-3 pt-4">
           <button
@@ -297,11 +312,11 @@ export function EditDoctor() {
             Cancel
           </button>
           <button
-            className="flex-1 rounded-control bg-brand px-4 py-2.5 text-[13px] font-medium text-white transition hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex flex-1 items-center justify-center rounded-control bg-brand px-4 py-2.5 text-[13px] font-medium text-white transition hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isSubmitting}
             type="submit"
           >
-            {isSubmitting ? 'Saving...' : 'Save Changes'}
+            {isSubmitting ? <LoadingSpinner light /> : 'Save Changes'}
           </button>
         </div>
       </form>

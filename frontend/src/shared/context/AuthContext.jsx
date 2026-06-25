@@ -8,7 +8,9 @@ import {
   useRef,
   useState,
 } from 'react'
+import { useNavigate } from 'react-router-dom'
 
+import { normalizeAccessLevel } from '@shared/lib/permissions'
 import {
   getPublicTestingSession,
   PUBLIC_ROUTES_FOR_TESTING,
@@ -21,6 +23,7 @@ import {
 
 const AuthContext = createContext(null)
 const REFRESH_SYNC_INTERVAL_MS = 60_000
+const PERMISSION_MODULES = ['appointments', 'doctors', 'patients', 'reports', 'staff']
 
 function readStorageJson(key) {
   const stored = localStorage.getItem(key)
@@ -58,42 +61,56 @@ function normalizeRole(role, user = {}) {
 
 function normalizePermissions(permissions, user = {}) {
   if (permissions && typeof permissions === 'object') {
-    return permissions
+    return Object.entries(permissions).reduce((nextPermissions, [module, access]) => {
+      nextPermissions[module] = normalizeAccessLevel(access)
+      return nextPermissions
+    }, {})
   }
 
   if (Array.isArray(user.enabled_features)) {
     return {
-      appointments: user.enabled_features.includes('appointments') ? 'both' : 'none',
-      doctors: user.enabled_features.includes('doctors') ? 'both' : 'none',
-      patients: user.enabled_features.includes('patients') ? 'both' : 'none',
-      reports: user.enabled_features.includes('reports') ? 'read' : 'none',
-      staff: user.enabled_features.includes('staff') ? 'both' : 'none',
+      appointments: user.enabled_features.includes('appointments') ? 'full_access' : 'no_access',
+      doctors: user.enabled_features.includes('doctors') ? 'full_access' : 'no_access',
+      patients: user.enabled_features.includes('patients') ? 'full_access' : 'no_access',
+      reports: user.enabled_features.includes('reports') ? 'read' : 'no_access',
+      staff: user.enabled_features.includes('staff') ? 'full_access' : 'no_access',
     }
   }
 
-  return {
-    appointments: 'none',
-    doctors: 'none',
-    patients: 'none',
-    reports: 'none',
-    staff: 'none',
-  }
+  return PERMISSION_MODULES.reduce((nextPermissions, module) => {
+    nextPermissions[module] = 'no_access'
+    return nextPermissions
+  }, {})
 }
 
-function normalizeUser(responseUser = {}) {
-  const profile = { ...responseUser }
+function normalizeUser(responseUser = {}, fallbackUser = {}) {
+  const profile = { ...fallbackUser, ...responseUser }
 
-  delete profile.role
+  delete profile.access
+  delete profile.access_token
   delete profile.enabled_features
+  delete profile.permissions
+  delete profile.refresh
+  delete profile.refresh_token
+  delete profile.role
 
   return profile
 }
 
-function normalizeSessionPayload(response = {}) {
+function normalizeSessionPayload(response = {}, fallbackUser = {}) {
   const responseUser = response.user || response
-  const user = normalizeUser(responseUser)
+  const forcePasswordChange = Boolean(
+    response.force_password_change ?? responseUser.force_password_change,
+  )
+  const user = {
+    ...normalizeUser(responseUser, fallbackUser),
+    force_password_change: forcePasswordChange,
+  }
   const role = normalizeRole(response.role, responseUser)
-  const permissions = normalizePermissions(response.permissions, responseUser)
+  const permissions = normalizePermissions(
+    response.permissions || responseUser.permissions,
+    responseUser,
+  )
 
   return {
     accessToken: response.access_token ?? response.access ?? '',
@@ -145,7 +162,10 @@ function getInitialSession() {
 
   const user = readStorageJson('user')
   const role = readStorageJson('role') || normalizeRole(null, user || {})
-  const permissions = readStorageJson('permissions') || normalizePermissions(null, user || {})
+  const storedPermissions = readStorageJson('permissions')
+  const permissions = storedPermissions
+    ? normalizePermissions(storedPermissions, user || {})
+    : normalizePermissions(null, user || {})
 
   if (!user) {
     return getPublicTestingSession()
@@ -159,6 +179,7 @@ function getStoredRefreshToken() {
 }
 
 export function AuthProvider({ children }) {
+  const navigate = useNavigate()
   const initialSession = getInitialSession()
   const [user, setUser] = useState(initialSession?.user || null)
   const [role, setRole] = useState(initialSession?.role || null)
@@ -190,14 +211,35 @@ export function AuthProvider({ children }) {
     setPermissions(nextPermissions)
   }, [permissions])
 
+  const homePath = useCallback((targetRole = roleRef.current) => {
+    if (!targetRole) {
+      return PUBLIC_ROUTES_FOR_TESTING ? '/dashboard/general' : '/login'
+    }
+
+    if (targetRole.slug === 'doctor') {
+      return '/dashboard/doctor'
+    }
+
+    return '/dashboard/general'
+  }, [])
+
   const login = useCallback(async (email, password) => {
     const response = await loginRequest(email, password)
-    const authenticatedSession = normalizeSessionPayload(response)
+    const authenticatedSession = normalizeSessionPayload(response, {
+      email: String(email || '').trim(),
+    })
 
     applySession(authenticatedSession)
 
+    navigate(
+      authenticatedSession.user.force_password_change
+        ? '/change-password'
+        : homePath(authenticatedSession.role),
+      { replace: true },
+    )
+
     return authenticatedSession
-  }, [applySession])
+  }, [applySession, homePath, navigate])
 
   const refreshSession = useCallback(async () => {
     if (PUBLIC_ROUTES_FOR_TESTING) {
@@ -213,7 +255,7 @@ export function AuthProvider({ children }) {
     }
 
     const response = await refreshTokenRequest(storedRefreshToken)
-    const nextSession = normalizeSessionPayload(response)
+    const nextSession = normalizeSessionPayload(response, userRef.current || {})
 
     applySession({
       accessToken: nextSession.accessToken,
@@ -236,24 +278,22 @@ export function AuthProvider({ children }) {
     setPermissions(testingSession?.permissions || normalizePermissions())
   }, [])
 
-  const homePath = useCallback((targetRole = roleRef.current) => {
-    if (!targetRole) {
-      return PUBLIC_ROUTES_FOR_TESTING ? '/dashboard/general' : '/login'
+  const markPasswordChangeComplete = useCallback(() => {
+    const nextUser = {
+      ...(userRef.current || {}),
+      force_password_change: false,
     }
 
-    if (targetRole.slug === 'doctor') {
-      return '/dashboard/doctor'
-    }
-
-    return '/dashboard/general'
-  }, [])
+    applySession({ user: nextUser })
+    return nextUser
+  }, [applySession])
 
   useEffect(() => {
     configureAuthSync({
       getRefreshToken: getStoredRefreshToken,
       onSessionExpired: logout,
       onSessionSync: (response) => {
-        const nextSession = normalizeSessionPayload(response)
+        const nextSession = normalizeSessionPayload(response, userRef.current || {})
         applySession({
           accessToken: nextSession.accessToken,
           permissions: nextSession.permissions,
@@ -282,12 +322,22 @@ export function AuthProvider({ children }) {
       homePath,
       login,
       logout,
+      markPasswordChangeComplete,
       permissions,
       refreshSession,
       role,
       user,
     }),
-    [homePath, login, logout, permissions, refreshSession, role, user],
+    [
+      homePath,
+      login,
+      logout,
+      markPasswordChangeComplete,
+      permissions,
+      refreshSession,
+      role,
+      user,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -457,7 +457,7 @@ export function StaffList() {
                               {staffMember.full_name}
                             </p>
                             <p className="mt-0.5 font-mono text-[11px] text-slate">
-                              {staffMember.phone}
+                              {staffMember.email || staffMember.phone}
                             </p>
                           </div>
                         </div>

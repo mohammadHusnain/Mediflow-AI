@@ -12,6 +12,7 @@ import {
   getPublicTestingUser,
   PUBLIC_ROUTES_FOR_TESTING,
 } from './testingAccess'
+import { validateEmail } from './validation'
 
 const DEMO_STORAGE_KEY = 'mediflow_demo_data_v7'
 
@@ -127,6 +128,7 @@ const DOCTORS = [
     last_name: 'Patel',
     full_name: 'Nora Patel',
     email: 'nora.patel@clinic.com',
+    has_account: true,
     phone: '+1555010101',
     role: 'doctor',
     status: 'active',
@@ -157,6 +159,7 @@ const DOCTORS = [
     last_name: 'Morris',
     full_name: 'Ethan Morris',
     email: 'ethan.morris@clinic.com',
+    has_account: true,
     phone: '+1555010102',
     role: 'doctor',
     status: 'active',
@@ -187,6 +190,7 @@ const DOCTORS = [
     last_name: 'Reed',
     full_name: 'Leila Reed',
     email: 'leila.reed@clinic.com',
+    has_account: true,
     phone: '+1555010103',
     role: 'doctor',
     status: 'active',
@@ -227,6 +231,8 @@ const STAFF = [
     full_name: 'Dana Teller',
     age: 34,
     phone: '+1555020101',
+    email: 'dana.teller@clinic.com',
+    has_account: true,
     address: '12 Elm Street, Springfield',
     role: 'Reception Desk',
     status: 'active',
@@ -241,6 +247,8 @@ const STAFF = [
     full_name: 'Imran Malik',
     age: 41,
     phone: '+923001112222',
+    email: 'imran.malik@clinic.com',
+    has_account: true,
     address: '45 Clinic Road, Lahore',
     role: 'Ward Boy',
     status: 'active',
@@ -255,6 +263,8 @@ const STAFF = [
     full_name: 'Grace Wilson',
     age: 29,
     phone: '+1555020103',
+    email: 'grace.wilson@clinic.com',
+    has_account: true,
     address: '88 Pine Street, Springfield',
     role: 'Nurse',
     status: 'active',
@@ -269,6 +279,8 @@ const STAFF = [
     full_name: 'Farah Ahmed',
     age: 38,
     phone: '+923001113333',
+    email: 'farah.ahmed@clinic.com',
+    has_account: true,
     address: null,
     role: 'Cleaner',
     status: 'inactive',
@@ -410,10 +422,21 @@ function withDoctorDefaults(doctor, qualifications = []) {
     first_name: firstName || fullName.split(' ')[0] || '',
     last_name: lastName || fullName.split(' ').slice(1).join(' ') || '',
     full_name: fullName,
+    has_account: doctor.has_account === true,
     qualification: selectedQualifications.map((item) => item.name).join(', ') || doctor.qualification || '',
     qualifications: selectedQualifications,
     today_checkin:
       doctor.today_checkin === undefined ? null : doctor.today_checkin,
+  }
+}
+
+function withStaffDefaults(staffMember) {
+  return {
+    ...staffMember,
+    email: staffMember.email || '',
+    has_account: staffMember.has_account === true,
+    shift_start: staffMember.shift_start ?? null,
+    shift_end: staffMember.shift_end ?? null,
   }
 }
 
@@ -429,11 +452,7 @@ function normalizeDemoData(data) {
       withDoctorDefaults(doctor, qualifications),
     ),
     qualifications,
-    staff: (Array.isArray(data.staff) ? data.staff : STAFF).map((staffMember) => ({
-      ...staffMember,
-      shift_start: staffMember.shift_start ?? null,
-      shift_end: staffMember.shift_end ?? null,
-    })),
+    staff: (Array.isArray(data.staff) ? data.staff : STAFF).map(withStaffDefaults),
     appointments: Array.isArray(data.appointments) ? data.appointments : [],
   }
 }
@@ -751,7 +770,9 @@ function createDemoError(message, status = 400) {
 }
 
 function validateDemoStaff(staffMember) {
-  const issue = getStaffDataIssues(staffMember)[0]
+  const issue =
+    validateEmail(staffMember.email) ||
+    getStaffDataIssues(staffMember)[0]
 
   if (issue) {
     createDemoError(issue)
@@ -1224,12 +1245,22 @@ export function createDemoDoctor(doctor) {
   )
   const firstName = String(doctor.first_name || '').trim()
   const lastName = String(doctor.last_name || '').trim()
+  const emailError = validateEmail(normalizedEmail)
+
+  if (emailError) {
+    createDemoError(emailError)
+  }
 
   if (
     data.doctors.some(
       (currentDoctor) =>
         currentDoctor.is_active !== false &&
         String(currentDoctor.email || '').trim().toLowerCase() === normalizedEmail,
+    ) ||
+    data.staff.some(
+      (currentStaff) =>
+        currentStaff.is_deleted !== true &&
+        String(currentStaff.email || '').trim().toLowerCase() === normalizedEmail,
     )
   ) {
     createDemoError('Email already registered')
@@ -1257,6 +1288,7 @@ export function createDemoDoctor(doctor) {
       String(doctor.full_name || '').trim() ||
       doctor.username ||
       'Doctor',
+    has_account: true,
     qualification: qualifications.map((qualification) => qualification.name).join(', '),
     qualifications,
     today_checkin: null,
@@ -1271,7 +1303,10 @@ export function createDemoDoctor(doctor) {
   data.doctors = [createdDoctor, ...data.doctors]
   writeDemoData(data)
 
-  return clone(decorateDoctor(data, createdDoctor))
+  return clone({
+    ...decorateDoctor(data, createdDoctor),
+    email_sent: true,
+  })
 }
 
 export function updateDemoDoctor(id, doctor) {
@@ -1286,6 +1321,11 @@ export function updateDemoDoctor(id, doctor) {
   )
   const firstName = String(doctor.first_name || '').trim()
   const lastName = String(doctor.last_name || '').trim()
+  const emailError = validateEmail(normalizedEmail)
+
+  if (emailError) {
+    createDemoError(emailError)
+  }
 
   if (
     data.doctors.some(
@@ -1293,6 +1333,11 @@ export function updateDemoDoctor(id, doctor) {
         currentDoctor.is_active !== false &&
         String(currentDoctor.id) !== doctorId &&
         String(currentDoctor.email || '').trim().toLowerCase() === normalizedEmail,
+    ) ||
+    data.staff.some(
+      (currentStaff) =>
+        currentStaff.is_deleted !== true &&
+        String(currentStaff.email || '').trim().toLowerCase() === normalizedEmail,
     )
   ) {
     createDemoError('Email already registered')
@@ -1421,6 +1466,7 @@ export function getDemoStaff(params = {}) {
     staff = staff.filter((staffMember) => {
       const searchableText = [
         staffMember.full_name,
+        staffMember.email,
         staffMember.phone,
         staffMember.address,
         staffMember.role,
@@ -1478,6 +1524,7 @@ export function getDemoStaffById(id) {
 
 export function createDemoStaff(staffMember) {
   const data = readDemoData()
+  const normalizedEmail = String(staffMember.email || '').trim().toLowerCase()
   const normalizedPhone = String(staffMember.phone || '').trim()
   const roleResult = ensureDemoRoleName(staffMember.role)
   const createdAt = new Date().toISOString()
@@ -1487,6 +1534,21 @@ export function createDemoStaff(staffMember) {
   }
 
   validateDemoStaff(nextStaffMember)
+
+  if (
+    data.staff.some(
+      (currentStaff) =>
+        currentStaff.is_deleted !== true &&
+        String(currentStaff.email || '').trim().toLowerCase() === normalizedEmail,
+    ) ||
+    data.doctors.some(
+      (currentDoctor) =>
+        currentDoctor.is_active !== false &&
+        String(currentDoctor.email || '').trim().toLowerCase() === normalizedEmail,
+    )
+  ) {
+    createDemoError('Email already registered')
+  }
 
   if (
     data.staff.some(
@@ -1502,6 +1564,8 @@ export function createDemoStaff(staffMember) {
     ...staffMember,
     id: getNextId(data.staff),
     age: Number(staffMember.age),
+    email: normalizedEmail,
+    has_account: true,
     address: staffMember.address || null,
     notes: staffMember.notes || null,
     shift_start: staffMember.shift_start || null,
@@ -1514,6 +1578,7 @@ export function createDemoStaff(staffMember) {
 
   return clone({
     ...createdStaff,
+    email_sent: true,
     role_created: roleResult.created,
   })
 }
@@ -1521,8 +1586,25 @@ export function createDemoStaff(staffMember) {
 export function updateDemoStaff(id, staffMember) {
   const data = readDemoData()
   const staffId = String(id)
+  const normalizedEmail = String(staffMember.email || '').trim().toLowerCase()
   const normalizedPhone = String(staffMember.phone || '').trim()
   const roleResult = ensureDemoRoleName(staffMember.role)
+
+  if (
+    data.staff.some(
+      (currentStaff) =>
+        currentStaff.is_deleted !== true &&
+        String(currentStaff.id) !== staffId &&
+        String(currentStaff.email || '').trim().toLowerCase() === normalizedEmail,
+    ) ||
+    data.doctors.some(
+      (currentDoctor) =>
+        currentDoctor.is_active !== false &&
+        String(currentDoctor.email || '').trim().toLowerCase() === normalizedEmail,
+    )
+  ) {
+    createDemoError('Email already registered')
+  }
 
   if (
     data.staff.some(
@@ -1546,6 +1628,7 @@ export function updateDemoStaff(id, staffMember) {
       ...currentStaff,
       ...staffMember,
       age: Number(staffMember.age),
+      email: normalizedEmail,
       address: staffMember.address || null,
       notes: staffMember.notes || null,
       shift_start: staffMember.shift_start || null,

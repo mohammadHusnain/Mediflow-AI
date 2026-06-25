@@ -10,6 +10,7 @@ import {
 import { getStaffJoiningDateWarning } from '@shared/lib/staffUtils'
 
 const OTHER_ROLE_VALUE = '__other__'
+const EMAIL_HELPER_TEXT = 'Login credentials will be sent to this email address.'
 
 export function StaffFormFields({
   data,
@@ -23,6 +24,7 @@ export function StaffFormFields({
 }) {
   const [showCustomRole, setShowCustomRole] = useState(false)
   const roleValue = String(data.role || '')
+  const emailReadOnly = data.has_account === true
   const joinDateWarning = !errors.joining_date
     ? getStaffJoiningDateWarning(data.joining_date)
     : ''
@@ -178,6 +180,30 @@ export function StaffFormFields({
             type="tel"
             value={data.phone}
           />
+        </FormField>
+
+        <FormField error={touched.email ? errors.email : ''} label="Email">
+          <input
+            className={getFieldClass(
+              touched.email ? errors.email : '',
+              emailReadOnly ? 'cursor-not-allowed bg-mist text-slate' : '',
+            )}
+            name="email"
+            onBlur={onBlur}
+            onChange={onChange}
+            placeholder="name@clinic.com"
+            readOnly={emailReadOnly}
+            type="email"
+            value={data.email}
+          />
+          <p className="mt-1.5 text-[11px] font-normal text-slate/60">
+            {EMAIL_HELPER_TEXT}
+          </p>
+          {emailReadOnly ? (
+            <FieldError tone="warning">
+              Email cannot be changed after account creation.
+            </FieldError>
+          ) : null}
         </FormField>
 
         <div className="md:col-span-2">

@@ -134,11 +134,11 @@ textarea {
 }
 
 .dashboard-stage::before {
-  animation: dashboardAurora 18s ease-in-out infinite alternate;
   background:
-    radial-gradient(circle at 10% 20%, rgba(125, 211, 252, 0.22), transparent 34%),
-    radial-gradient(circle at 82% 4%, rgba(124, 58, 237, 0.16), transparent 28%),
-    radial-gradient(circle at 56% 66%, rgba(16, 185, 129, 0.12), transparent 32%);
+    linear-gradient(120deg, rgba(224, 242, 254, 0.72), rgba(238, 242, 255, 0.42) 42%, rgba(236, 253, 245, 0.44)),
+    linear-gradient(rgba(91,100,114,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(91,100,114,0.04) 1px, transparent 1px);
+  background-size: auto, 48px 48px, 48px 48px;
   content: "";
   inset: -42px;
   pointer-events: none;
@@ -148,8 +148,8 @@ textarea {
 
 .analytics-surface {
   background:
-    linear-gradient(135deg, rgba(255,255,255,0.94), rgba(248,250,252,0.84)),
-    radial-gradient(circle at top right, rgba(67,56,202,0.12), transparent 36%);
+    linear-gradient(135deg, rgba(255,255,255,0.96), rgba(248,250,252,0.88)),
+    linear-gradient(90deg, rgba(67,56,202,0.06), rgba(14,165,233,0.04));
   position: relative;
 }
 

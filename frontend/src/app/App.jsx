@@ -1,5 +1,5 @@
 /* src/app/App.jsx - Defines MediFlow portal routes. */
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 
 import AppointmentBooking from '@features/appointments/pages/AppointmentBooking.jsx'
 import AppointmentEdit from '@features/appointments/pages/AppointmentEdit.jsx'
@@ -25,21 +25,22 @@ import ModuleRoute from '@shared/components/ModuleRoute.jsx'
 import PortalLayout from '@shared/components/PortalLayout.jsx'
 import ProtectedRoute from '@shared/components/ProtectedRoute.jsx'
 import RootRedirect from '@shared/components/RootRedirect.jsx'
+import ChangePassword from '../pages/ChangePassword.jsx'
 import Login from '../pages/Login.jsx'
 import NotAvailable from '../pages/NotAvailable.jsx'
 import NotFound from '../pages/NotFound.jsx'
 
 export function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/not-available" element={<NotAvailable />} />
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/not-available" element={<NotAvailable />} />
 
-        <Route element={<ProtectedRoute />}>
-          <Route path="/" element={<RootRedirect />} />
+      <Route element={<ProtectedRoute />}>
+        <Route path="/" element={<RootRedirect />} />
+        <Route path="/change-password" element={<ChangePassword />} />
 
-          <Route element={<PortalLayout />}>
+        <Route element={<PortalLayout />}>
             <Route
               path="/dashboard/general"
               element={<GeneralDashboard />}
@@ -197,12 +198,11 @@ export function App() {
                 </AdminOnlyRoute>
               }
             />
-          </Route>
         </Route>
+      </Route>
 
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </BrowserRouter>
+      <Route path="*" element={<NotFound />} />
+    </Routes>
   )
 }
 

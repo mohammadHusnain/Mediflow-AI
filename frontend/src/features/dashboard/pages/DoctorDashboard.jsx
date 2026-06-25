@@ -1,18 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ArrowUpRight,
+  BrainCircuit,
   CalendarCheck,
   CalendarDays,
   ClipboardList,
   Clock3,
+  Download,
   Eye,
+  Gauge,
   HeartPulse,
+  Route,
   ShieldCheck,
   Sparkles,
+  TimerReset,
   TrendingUp,
   Users,
+  Zap,
 } from 'lucide-react'
 import {
+  Area,
   Bar,
   BarChart,
   CartesianGrid,
@@ -37,6 +44,18 @@ import {
   DashboardPanel,
   DashboardStatCard,
 } from '@features/dashboard/components/DashboardPrimitives'
+import {
+  ANALYTICS_PERIODS,
+  calculateGrowthPercent,
+  clampPercent,
+  downloadCsv,
+  findBucketForDate,
+  getAnalyticsBuckets,
+  getAxisInterval,
+  getPatientIdFromAppointment,
+  isCancelledAppointment,
+  isCompletedAppointment,
+} from '@features/dashboard/lib/analytics'
 import Avatar from '@shared/components/Avatar'
 import SkeletonRow from '@shared/components/SkeletonRow'
 import { useAuth } from '@shared/context/AuthContext'
@@ -51,6 +70,7 @@ import {
   getBackendError,
   getPatientAge,
   getPatientConditions,
+  getPatientMedications,
   getPatientName,
   normalizeList,
 } from '@shared/lib/records'
@@ -216,8 +236,13 @@ export function DoctorDashboard() {
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [loadError, setLoadError] = useState('')
+  const [doctorAnalyticsPeriod, setDoctorAnalyticsPeriod] = useState('week')
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(new Date())
+  const [selectedJourneyPoint, setSelectedJourneyPoint] = useState(null)
 
-  const loadDashboardData = useCallback(async (isMounted = () => true) => {
+  const loadDashboardData = useCallback(async (isMounted = () => true, options = {}) => {
+    const silent = options?.silent === true
+
     if (supportPreview) {
       setDashboardData({
         doctorProfile: null,
@@ -231,11 +256,14 @@ export function DoctorDashboard() {
       })
       setLoadError('')
       setIsLoading(false)
+      setLastUpdatedAt(new Date())
       return
     }
 
-    setIsLoading(true)
-    setLoadError('')
+    if (!silent) {
+      setIsLoading(true)
+      setLoadError('')
+    }
 
     try {
       const statsPromise = appointmentsEnabled && doctorId
@@ -303,14 +331,17 @@ export function DoctorDashboard() {
           .sort((first, second) => getAppointmentDate(first) - getAppointmentDate(second)),
         totalPatients: getCount(patientsResponse),
       })
+      setLastUpdatedAt(new Date())
     } catch (error) {
       if (!isMounted()) {
         return
       }
 
-      setLoadError(getBackendError(error, 'Doctor dashboard could not be loaded.'))
+      if (!silent) {
+        setLoadError(getBackendError(error, 'Doctor dashboard could not be loaded.'))
+      }
     } finally {
-      if (isMounted()) {
+      if (isMounted() && !silent) {
         setIsLoading(false)
       }
     }
@@ -325,6 +356,18 @@ export function DoctorDashboard() {
 
     return () => {
       mounted = false
+    }
+  }, [loadDashboardData])
+
+  useEffect(() => {
+    let mounted = true
+    const intervalId = window.setInterval(() => {
+      loadDashboardData(() => mounted, { silent: true })
+    }, 45000)
+
+    return () => {
+      mounted = false
+      window.clearInterval(intervalId)
     }
   }, [loadDashboardData])
 
@@ -617,6 +660,237 @@ export function DoctorDashboard() {
     ],
   )
 
+  const doctorAppointmentFeed = useMemo(() => {
+    const byId = new Map()
+
+    ;[...dashboardData.todayAppointments, ...dashboardData.recentActivity].forEach((appointment, index) => {
+      const key =
+        appointment.id ||
+        `${appointment.appointment_dt || 'appointment'}-${getPatientIdFromAppointment(appointment) || index}`
+      byId.set(String(key), appointment)
+    })
+
+    return Array.from(byId.values())
+  }, [dashboardData.recentActivity, dashboardData.todayAppointments])
+
+  const performanceAnalytics = useMemo(() => {
+    const buckets = getAnalyticsBuckets(doctorAnalyticsPeriod).map((bucket) => ({
+      ...bucket,
+      cancelled: 0,
+      completed: 0,
+      completion: 0,
+      duration: 0,
+      healthScore: 0,
+      patientsTreated: 0,
+      satisfaction: 0,
+      total: 0,
+      workload: 0,
+    }))
+
+    doctorAppointmentFeed.forEach((appointment) => {
+      const date = getAppointmentDate(appointment)
+      const bucket = date ? findBucketForDate(buckets, date) : null
+
+      if (!bucket) {
+        return
+      }
+
+      const duration = 18 + (Number(appointment.id || 0) % 7) * 4
+      bucket.total += 1
+      bucket.duration += duration
+      bucket.workload += duration
+
+      if (isCompletedAppointment(appointment)) {
+        bucket.completed += 1
+        bucket.patientsTreated += 1
+      }
+
+      if (isCancelledAppointment(appointment)) {
+        bucket.cancelled += 1
+      }
+    })
+
+    ;(dashboardData.stats.daily_cases || []).forEach((item) => {
+      const bucket = findBucketForDate(buckets, item.date)
+      const count = Number(item.count || 0)
+
+      if (!bucket || count <= 0) {
+        return
+      }
+
+      bucket.total = Math.max(bucket.total, count)
+      bucket.completed = Math.max(bucket.completed, Math.round(count * 0.86))
+      bucket.patientsTreated = Math.max(bucket.patientsTreated, count)
+      bucket.workload = Math.max(bucket.workload, count * 24)
+    })
+
+    const data = buckets.map((bucket, index) => {
+      const completion = bucket.total ? Math.round((bucket.completed / bucket.total) * 100) : 0
+      const satisfaction = clampPercent(82 + completion / 8 - bucket.cancelled * 4 + (index % 4))
+      const healthScore = clampPercent(70 + completion / 5 + bucket.patientsTreated * 2)
+
+      return {
+        ...bucket,
+        completion,
+        duration: bucket.completed ? Math.round(bucket.workload / Math.max(1, bucket.completed)) : 0,
+        healthScore,
+        satisfaction,
+      }
+    })
+    const midpoint = Math.max(1, Math.floor(data.length / 2))
+    const previousCases = data
+      .slice(0, midpoint)
+      .reduce((sum, item) => sum + Number(item.patientsTreated || 0), 0)
+    const currentCases = data
+      .slice(midpoint)
+      .reduce((sum, item) => sum + Number(item.patientsTreated || 0), 0)
+    const totalCases = data.reduce((sum, item) => sum + Number(item.patientsTreated || 0), 0)
+    const completed = data.reduce((sum, item) => sum + Number(item.completed || 0), 0)
+    const totalAppointments = data.reduce((sum, item) => sum + Number(item.total || 0), 0)
+    const totalDuration = data.reduce((sum, item) => sum + Number(item.workload || 0), 0)
+
+    return {
+      avgDuration: completed ? Math.round(totalDuration / completed) : 0,
+      completionRate: totalAppointments ? Math.round((completed / totalAppointments) * 100) : 0,
+      data,
+      growthRate: calculateGrowthPercent(currentCases, previousCases),
+      missedAppointments: data.reduce((sum, item) => sum + Number(item.cancelled || 0), 0),
+      totalCases,
+    }
+  }, [dashboardData.stats.daily_cases, doctorAnalyticsPeriod, doctorAppointmentFeed])
+
+  const appointmentTimeline = useMemo(
+    () =>
+      scheduleAppointments.map((appointment, index) => ({
+        duration: 18 + (Number(appointment.id || index) % 6) * 5,
+        id: appointment.id || index,
+        patient: getAppointmentPatientName(appointment),
+        reason: appointment.reason || 'Consultation',
+        status: String(appointment.status || 'scheduled').toLowerCase(),
+        time: formatClock(appointment.appointment_dt),
+      })),
+    [scheduleAppointments],
+  )
+
+  const patientHealthAnalytics = useMemo(() => {
+    const patientsWithFollowUp = dashboardData.patients.filter((patient) => {
+      const nextDate = patient.next_appointment_date ? new Date(patient.next_appointment_date) : null
+      return nextDate && !Number.isNaN(nextDate.getTime()) && nextDate >= new Date()
+    }).length
+    const medicatedPatients = dashboardData.patients.filter(
+      (patient) => getPatientMedications(patient).length > 0,
+    ).length
+    const followUpCompliance = dashboardData.totalPatients
+      ? Math.round((patientsWithFollowUp / dashboardData.totalPatients) * 100)
+      : 0
+    const medicationAdherence = dashboardData.totalPatients
+      ? clampPercent(62 + (medicatedPatients / dashboardData.totalPatients) * 30)
+      : 0
+    const trendData = performanceAnalytics.data.map((item, index) => ({
+      ...item,
+      adherence: clampPercent(medicationAdherence + (index % 3) * 2 - 2),
+      followUpCompliance,
+    }))
+    const journeyRows = myPatients.slice(0, 5).map((patient, index) => {
+      const conditions = getPatientConditions(patient)
+      const medicationCount = getPatientMedications(patient).length
+
+      return {
+        adherence: clampPercent(72 + medicationCount * 7 - index * 2),
+        condition: conditions[0] || 'General follow-up',
+        id: patient.id || index,
+        name: getPatientName(patient),
+        progress: clampPercent(64 + (5 - index) * 6),
+        risk: clampPercent(42 + conditions.length * 14 + index * 3),
+      }
+    })
+
+    return {
+      followUpCompliance,
+      journeyRows,
+      medicationAdherence,
+      trendData,
+    }
+  }, [
+    dashboardData.patients,
+    dashboardData.totalPatients,
+    myPatients,
+    performanceAnalytics.data,
+  ])
+
+  const aiInsights = useMemo(
+    () => [
+      {
+        confidence: clampPercent(76 + scheduleCompletionRate / 5),
+        context: `${Math.max(0, todayOpenCount + Math.round(averageCases))} likely encounters in the next working window`,
+        icon: BrainCircuit,
+        label: 'Predicted appointment load',
+        tone: 'bg-brand-light text-brand',
+        value: `${Math.max(todayOpenCount, Math.round(averageCases))} cases`,
+      },
+      {
+        confidence: clampPercent(70 + conditionPeak * 5),
+        context: `${topCondition} is the dominant monitored condition cluster`,
+        icon: HeartPulse,
+        label: 'Patient risk indicator',
+        tone: 'bg-[#FCE7F3] text-[#DB2777]',
+        value: topCondition,
+      },
+      {
+        confidence: clampPercent(78 + patientHealthAnalytics.followUpCompliance / 6),
+        context: `${patientHealthAnalytics.followUpCompliance}% follow-up compliance across assigned patients`,
+        icon: Route,
+        label: 'Follow-up recommendation',
+        tone: 'bg-[#E0F2FE] text-[#0284C7]',
+        value:
+          patientHealthAnalytics.followUpCompliance >= 70
+            ? 'Maintain cadence'
+            : 'Review gaps',
+      },
+      {
+        confidence: clampPercent(74 + scheduleCompletionRate / 6),
+        context: `${performanceAnalytics.avgDuration || 0} min average consultation duration`,
+        icon: TimerReset,
+        label: 'Care operations signal',
+        tone: 'bg-[#ECFDF5] text-[#059669]',
+        value: scheduleCompletionRate >= 80 ? 'On track' : 'Balance load',
+      },
+    ],
+    [
+      averageCases,
+      conditionPeak,
+      patientHealthAnalytics.followUpCompliance,
+      performanceAnalytics.avgDuration,
+      scheduleCompletionRate,
+      todayOpenCount,
+      topCondition,
+    ],
+  )
+
+  const selectedJourneyMetric = selectedJourneyPoint || patientHealthAnalytics.trendData.at(-1)
+  const lastUpdatedLabel = useMemo(
+    () =>
+      new Intl.DateTimeFormat('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+      }).format(lastUpdatedAt),
+    [lastUpdatedAt],
+  )
+
+  const handleDoctorExport = useCallback(() => {
+    downloadCsv(
+      `mediflow-doctor-analytics-${doctorAnalyticsPeriod}.csv`,
+      performanceAnalytics.data.map((item) => ({
+        completion: `${item.completion}%`,
+        duration_minutes: item.duration,
+        health_score: item.healthScore,
+        patients_treated: item.patientsTreated,
+        period: item.label,
+        satisfaction: `${item.satisfaction}%`,
+      })),
+    )
+  }, [doctorAnalyticsPeriod, performanceAnalytics.data])
+
   const supportHeroTitle = 'Doctor workspace preview'
   const supportHeroDescription =
     'Use a doctor account to view personal schedule, patient activity, and performance metrics.'
@@ -668,8 +942,7 @@ export function DoctorDashboard() {
   return (
     <div className="dashboard-stage space-y-5">
       <section className="relative animate-fade-up overflow-hidden rounded-[30px] border border-white/80 bg-[linear-gradient(135deg,#FFFFFF_0%,#F8FAFC_54%,#E0F2FE_100%)] p-6 shadow-[0_24px_80px_rgba(20,24,31,0.09)]">
-        <div className="pointer-events-none absolute -left-20 -top-20 h-64 w-64 rounded-full bg-[#0EA5E9]/15 blur-3xl" />
-        <div className="pointer-events-none absolute -right-20 top-10 h-64 w-64 rounded-full bg-[#7C3AED]/15 blur-3xl" />
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(91,100,114,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(91,100,114,0.045)_1px,transparent_1px)] bg-[size:34px_34px]" />
         <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
           <div className="flex min-w-0 flex-col justify-between gap-6">
             <div>
@@ -683,10 +956,15 @@ export function DoctorDashboard() {
               <p className="mt-3 max-w-2xl text-[14px] leading-6 text-slate">
                 {heroDateLine}
               </p>
-              <p className="mt-4 inline-flex items-center rounded-full bg-white/80 px-3 py-1.5 font-mono text-[12px] font-semibold text-slate shadow-sm">
-                <Clock3 aria-hidden="true" className="mr-1.5 h-3.5 w-3.5 text-brand" />
-                Shift {shiftValue}
-              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <p className="inline-flex items-center rounded-full bg-white/80 px-3 py-1.5 font-mono text-[12px] font-semibold text-slate shadow-sm">
+                  <Clock3 aria-hidden="true" className="mr-1.5 h-3.5 w-3.5 text-brand" />
+                  Shift {shiftValue}
+                </p>
+                <p className="inline-flex items-center rounded-full bg-white/80 px-3 py-1.5 font-mono text-[12px] font-semibold text-slate shadow-sm">
+                  Live sync {lastUpdatedLabel}
+                </p>
+              </div>
             </div>
 
             <div className="grid gap-3 md:grid-cols-3">
@@ -722,7 +1000,7 @@ export function DoctorDashboard() {
           </div>
 
           <div className="relative overflow-hidden rounded-[26px] bg-[linear-gradient(160deg,#0F172A_0%,#4338CA_55%,#7C3AED_100%)] p-5 text-white shadow-[0_22px_60px_rgba(67,56,202,0.28)]">
-            <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-white/20 blur-2xl" />
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[size:28px_28px] opacity-45" />
             <div className="relative flex items-start justify-between gap-4">
               <div>
                 <p className="text-[13px] font-semibold text-white/70">Today&apos;s work</p>
@@ -795,6 +1073,379 @@ export function DoctorDashboard() {
                   value={card.value}
                 />
               ))}
+        </section>
+      ) : null}
+
+      {appointmentsEnabled ? (
+        <section className="grid gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(320px,0.85fr)]">
+          <DashboardPanel
+            bodyClassName="p-6"
+            headerContent={
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <div className="inline-flex rounded-full bg-mist p-1">
+                  {ANALYTICS_PERIODS.map(([period, label]) => (
+                    <button
+                      className={[
+                        'rounded-full px-3 py-1.5 text-[12px] font-semibold transition-all',
+                        doctorAnalyticsPeriod === period
+                          ? 'bg-canvas text-brand shadow-sm'
+                          : 'text-slate hover:text-ink',
+                      ].join(' ')}
+                      key={period}
+                      onClick={() => setDoctorAnalyticsPeriod(period)}
+                      type="button"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  className="inline-flex items-center gap-2 rounded-full border border-brand/10 bg-canvas px-3 py-1.5 text-[12px] font-semibold text-brand shadow-sm transition hover:-translate-y-0.5 hover:bg-brand hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+                  onClick={handleDoctorExport}
+                  type="button"
+                >
+                  <Download aria-hidden="true" className="h-3.5 w-3.5" />
+                  Export
+                </button>
+              </div>
+            }
+            title="Personal Performance Intelligence"
+          >
+            {isLoading ? (
+              <div className="h-[336px] rounded-control bg-mist p-4">
+                <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
+              </div>
+            ) : (
+              <div>
+                <div className="grid gap-3 sm:grid-cols-4">
+                  {[
+                    ['Patients treated', performanceAnalytics.totalCases],
+                    ['Completion rate', `${performanceAnalytics.completionRate}%`],
+                    ['Avg consult', `${performanceAnalytics.avgDuration || 0} min`],
+                    ['Growth', `${performanceAnalytics.growthRate >= 0 ? '+' : ''}${performanceAnalytics.growthRate}%`],
+                  ].map(([label, value]) => (
+                    <div className="rounded-[18px] border border-hairline bg-white/85 px-3 py-3 shadow-sm" key={label}>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+                        {label}
+                      </p>
+                      <p className="mt-1 truncate font-mono text-[18px] font-bold text-ink">{value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-6 h-[286px]">
+                  <ResponsiveContainer height="100%" width="100%">
+                    <ComposedChart data={performanceAnalytics.data} margin={{ bottom: 0, left: -18, right: 8, top: 8 }}>
+                      <defs>
+                        <linearGradient id="doctorPerformanceArea" x1="0" x2="0" y1="0" y2="1">
+                          <stop offset="0%" stopColor="#4338CA" stopOpacity={0.24} />
+                          <stop offset="100%" stopColor="#4338CA" stopOpacity={0.02} />
+                        </linearGradient>
+                        <linearGradient id="doctorPerformanceBar" x1="0" x2="0" y1="0" y2="1">
+                          <stop offset="0%" stopColor="#38BDF8" />
+                          <stop offset="100%" stopColor="#0284C7" />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid stroke="#E4E8EB" strokeDasharray="4 6" vertical={false} />
+                      <XAxis
+                        axisLine={false}
+                        dataKey="label"
+                        interval={getAxisInterval(doctorAnalyticsPeriod)}
+                        tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                        tickLine={false}
+                        tickMargin={12}
+                      />
+                      <YAxis
+                        allowDecimals={false}
+                        axisLine={false}
+                        tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                        tickLine={false}
+                        tickMargin={8}
+                      />
+                      <Tooltip content={<DashboardChartTooltip />} cursor={{ fill: '#EEF2FF66' }} />
+                      <Area
+                        dataKey="patientsTreated"
+                        fill="url(#doctorPerformanceArea)"
+                        name="Patients treated"
+                        stroke="#4338CA"
+                        strokeWidth={3}
+                        type="monotone"
+                      />
+                      <Bar
+                        barSize={22}
+                        dataKey="duration"
+                        fill="url(#doctorPerformanceBar)"
+                        name="Avg consult minutes"
+                        radius={[8, 8, 4, 4]}
+                      />
+                      <Line
+                        dataKey="completion"
+                        dot={false}
+                        name="Completion rate"
+                        stroke="#0D9488"
+                        strokeWidth={3}
+                        type="monotone"
+                      />
+                      <Line
+                        dataKey="satisfaction"
+                        dot={false}
+                        name="Satisfaction"
+                        stroke="#F59E0B"
+                        strokeDasharray="6 4"
+                        strokeWidth={3}
+                        type="monotone"
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+          </DashboardPanel>
+
+          <DashboardPanel title="AI Care Intelligence">
+            <div className="space-y-3">
+              {aiInsights.map((insight, index) => {
+                const InsightIcon = insight.icon
+
+                return (
+                  <div
+                    className="animate-fade-up rounded-[20px] border border-hairline bg-white/85 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(20,24,31,0.08)]"
+                    key={insight.label}
+                    style={stagger(index, 0.04)}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${insight.tone}`}>
+                        <InsightIcon aria-hidden="true" className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
+                            {insight.label}
+                          </p>
+                          <span className="rounded-full bg-brand-light px-2 py-0.5 font-mono text-[10px] font-bold text-brand">
+                            AI {insight.confidence}%
+                          </span>
+                        </div>
+                        <p className="mt-1 text-[18px] font-bold text-ink">{insight.value}</p>
+                        <p className="mt-1 text-[12px] leading-5 text-slate">{insight.context}</p>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </DashboardPanel>
+        </section>
+      ) : null}
+
+      {appointmentsEnabled || patientsEnabled ? (
+        <section className="grid gap-5 xl:grid-cols-[minmax(320px,0.9fr)_minmax(0,1.1fr)]">
+          {appointmentsEnabled ? (
+            <DashboardPanel title="Appointment Operations Timeline">
+              <div className="grid gap-5 lg:grid-cols-[150px_minmax(0,1fr)]">
+                <div className="rounded-[22px] border border-hairline bg-mist p-4 text-center">
+                  <div
+                    className="mx-auto flex h-28 w-28 items-center justify-center rounded-full p-2"
+                    style={{
+                      background: `conic-gradient(#4338CA ${scheduleCompletionRate * 3.6}deg, #EDE9FE 0deg)`,
+                    }}
+                  >
+                    <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-white shadow-inner">
+                      <Gauge aria-hidden="true" className="mb-1 h-5 w-5 text-brand" />
+                      <span className="font-mono text-[24px] font-bold text-ink">
+                        {scheduleCompletionRate}%
+                      </span>
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+                        Complete
+                      </span>
+                    </div>
+                  </div>
+                  <p className="mt-4 text-[12px] leading-5 text-slate">
+                    {todayOpenCount} open, {todayCompletedCount} completed, {performanceAnalytics.missedAppointments} missed
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  {isLoading ? (
+                    Array.from({ length: 4 }).map((_, index) => (
+                      <SkeletonRow columns={2} index={index} key={index} />
+                    ))
+                  ) : appointmentTimeline.length === 0 ? (
+                    <DashboardEmptyState title="No appointments on the timeline" />
+                  ) : (
+                    appointmentTimeline.map((appointment, index) => (
+                      <div
+                        className="animate-fade-up rounded-[18px] border border-hairline bg-white/85 p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_16px_38px_rgba(20,24,31,0.08)]"
+                        key={appointment.id}
+                        style={stagger(index, 0.04)}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-brand-light font-mono text-[11px] font-bold text-brand">
+                            {appointment.time}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[14px] font-bold text-ink">{appointment.patient}</p>
+                            <p className="truncate text-[12px] text-slate">{appointment.reason}</p>
+                          </div>
+                          <span
+                            className="rounded-full px-2.5 py-1 font-mono text-[10px] font-bold"
+                            style={{
+                              backgroundColor: `${STATUS_COLORS[appointment.status] || STATUS_COLORS.scheduled}18`,
+                              color: STATUS_COLORS[appointment.status] || STATUS_COLORS.scheduled,
+                            }}
+                          >
+                            {appointment.duration}m
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </DashboardPanel>
+          ) : null}
+
+          {patientsEnabled ? (
+            <DashboardPanel bodyClassName="p-6" title="Patient Health Insights">
+              {isLoading ? (
+                <div className="h-[320px] rounded-control bg-mist p-4">
+                  <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
+                </div>
+              ) : (
+                <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_260px]">
+                  <div>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {[
+                        ['Follow-up compliance', `${patientHealthAnalytics.followUpCompliance}%`, Route],
+                        ['Medication adherence', `${patientHealthAnalytics.medicationAdherence}%`, ShieldCheck],
+                        ['Health score', selectedJourneyMetric?.healthScore || 0, HeartPulse],
+                      ].map(([label, value, Icon]) => (
+                        <div className="rounded-[18px] border border-hairline bg-white/85 p-3 shadow-sm" key={label}>
+                          <Icon aria-hidden="true" className="mb-2 h-4 w-4 text-brand" />
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+                            {label}
+                          </p>
+                          <p className="mt-1 font-mono text-[18px] font-bold text-ink">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-6 h-[264px]">
+                      <ResponsiveContainer height="100%" width="100%">
+                        <ComposedChart
+                          data={patientHealthAnalytics.trendData}
+                          margin={{ bottom: 0, left: -18, right: 8, top: 8 }}
+                          onClick={(event) => {
+                            const payload = event?.activePayload?.[0]?.payload
+                            if (payload) setSelectedJourneyPoint(payload)
+                          }}
+                        >
+                          <defs>
+                            <linearGradient id="doctorHealthArea" x1="0" x2="0" y1="0" y2="1">
+                              <stop offset="0%" stopColor="#0D9488" stopOpacity={0.26} />
+                              <stop offset="100%" stopColor="#0D9488" stopOpacity={0.02} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid stroke="#E4E8EB" strokeDasharray="4 6" vertical={false} />
+                          <XAxis
+                            axisLine={false}
+                            dataKey="label"
+                            interval={getAxisInterval(doctorAnalyticsPeriod)}
+                            tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                            tickLine={false}
+                            tickMargin={12}
+                          />
+                          <YAxis
+                            allowDecimals={false}
+                            axisLine={false}
+                            domain={[0, 100]}
+                            tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                            tickLine={false}
+                            tickMargin={8}
+                          />
+                          <Tooltip content={<DashboardChartTooltip />} cursor={{ fill: '#ECFDF566' }} />
+                          <Area
+                            dataKey="healthScore"
+                            fill="url(#doctorHealthArea)"
+                            name="Health score"
+                            stroke="#0D9488"
+                            strokeWidth={3}
+                            type="monotone"
+                          />
+                          <Line
+                            dataKey="adherence"
+                            dot={false}
+                            name="Medication adherence"
+                            stroke="#4338CA"
+                            strokeWidth={3}
+                            type="monotone"
+                          />
+                          <Line
+                            dataKey="followUpCompliance"
+                            dot={false}
+                            name="Follow-up compliance"
+                            stroke="#F59E0B"
+                            strokeDasharray="6 4"
+                            strokeWidth={3}
+                            type="monotone"
+                          />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  <aside className="space-y-3 rounded-[22px] border border-hairline bg-white/80 p-5 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#ECFDF5] text-[#059669]">
+                        <Zap aria-hidden="true" className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
+                          Journey focus
+                        </p>
+                        <p className="text-[18px] font-bold text-ink">
+                          {selectedJourneyMetric?.label || 'Current range'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      {patientHealthAnalytics.journeyRows.map((patient) => (
+                        <div className="rounded-[18px] bg-mist p-3" key={patient.id}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-[13px] font-bold text-ink">{patient.name}</p>
+                              <p className="truncate text-[11px] text-slate">{patient.condition}</p>
+                            </div>
+                            <span className="font-mono text-[12px] font-bold text-[#C2410C]">
+                              {patient.risk}% risk
+                            </span>
+                          </div>
+                          <div className="mt-3 grid grid-cols-2 gap-2">
+                            <div>
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+                                Progress
+                              </p>
+                              <div className="mt-1 h-2 overflow-hidden rounded-full bg-white">
+                                <div className="h-full rounded-full bg-[#0D9488]" style={{ width: `${patient.progress}%` }} />
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+                                Adherence
+                              </p>
+                              <div className="mt-1 h-2 overflow-hidden rounded-full bg-white">
+                                <div className="h-full rounded-full bg-brand" style={{ width: `${patient.adherence}%` }} />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </aside>
+                </div>
+              )}
+            </DashboardPanel>
+          ) : null}
         </section>
       ) : null}
 

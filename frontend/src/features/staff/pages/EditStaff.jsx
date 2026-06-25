@@ -135,6 +135,10 @@ export function EditStaff() {
 
   function handleChange(event) {
     const { name, value } = event.target
+    if (name === 'email' && data?.has_account) {
+      return
+    }
+
     const nextData = {
       ...data,
       [name]: value,

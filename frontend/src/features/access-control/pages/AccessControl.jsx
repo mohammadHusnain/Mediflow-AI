@@ -17,9 +17,14 @@ import {
 
 import { ErrorBanner } from '@shared/components/FormPrimitives'
 import { useToast } from '@shared/components/Toast'
-import { ACCESS_LEVELS, MODULES } from '@shared/lib/accessControlData'
+import { MODULES } from '@shared/lib/accessControlData'
 import { getBackendError } from '@shared/lib/records'
 import { stagger } from '@shared/lib/motion'
+import {
+  ACCESS_LEVELS,
+  getAccessLevelMeta,
+  normalizeAccessLevel,
+} from '@shared/lib/permissions'
 import {
   createRole,
   deleteRole,
@@ -27,13 +32,6 @@ import {
   setRolePermissions,
   updateRole,
 } from '@shared/services/api'
-
-const ACCESS_LABELS = {
-  both: 'Read & Write',
-  none: 'No Access',
-  read: 'Read',
-  write: 'Write',
-}
 
 const MODULE_META = {
   appointments: {
@@ -74,15 +72,16 @@ function getRolePermissions(role) {
   const permissions = role?.module_permissions || role?.permissions || {}
 
   return MODULES.reduce((nextPermissions, module) => {
-    const access = permissions[module] || 'none'
-    nextPermissions[module] = ACCESS_LEVELS.includes(access) ? access : 'none'
+    const access = permissions[module] || 'no_access'
+    nextPermissions[module] = normalizeAccessLevel(access)
     return nextPermissions
   }, {})
 }
 
 function permissionsEqual(first = {}, second = {}) {
   return MODULES.every(
-    (module) => (first[module] || 'none') === (second[module] || 'none'),
+    (module) =>
+      normalizeAccessLevel(first[module]) === normalizeAccessLevel(second[module]),
   )
 }
 
@@ -363,7 +362,7 @@ export function AccessControl() {
   function updatePermission(module, access) {
     setEditorPermissions((currentPermissions) => ({
       ...currentPermissions,
-      [module]: access,
+      [module]: normalizeAccessLevel(access),
     }))
     setSaveError('')
   }
@@ -379,7 +378,7 @@ export function AccessControl() {
     const previousPermissions = savedPermissions
     const payload = {
       permissions: MODULES.map((module) => ({
-        access: editorPermissions[module] || 'none',
+        access: normalizeAccessLevel(editorPermissions[module]),
         module,
       })),
     }
@@ -678,22 +677,26 @@ export function AccessControl() {
                         </span>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {ACCESS_LEVELS.map((access) => {
-                          const active = editorPermissions[module] === access
+                        {ACCESS_LEVELS.map((accessLevel) => {
+                          const active =
+                            normalizeAccessLevel(editorPermissions[module]) ===
+                            accessLevel.value
+                          const meta = getAccessLevelMeta(accessLevel.value)
 
                           return (
                             <button
                               className={[
-                                'rounded-control px-3 py-1.5 text-[12px] font-medium transition',
+                                'rounded-control border px-3 py-1.5 text-[12px] font-medium transition',
+                                meta.chipClass,
                                 active
-                                  ? 'bg-brand text-white'
-                                  : 'border border-hairline bg-mist text-slate hover:bg-hairline',
+                                  ? 'ring-2 ring-brand/30'
+                                  : 'opacity-70 hover:opacity-100',
                               ].join(' ')}
-                              key={access}
-                              onClick={() => updatePermission(module, access)}
+                              key={accessLevel.value}
+                              onClick={() => updatePermission(module, accessLevel.value)}
                               type="button"
                             >
-                              {ACCESS_LABELS[access]}
+                              {accessLevel.label}
                             </button>
                           )
                         })}

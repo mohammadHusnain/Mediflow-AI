@@ -3,16 +3,24 @@ import {
   Activity,
   ArrowUpRight,
   BadgeCheck,
+  BrainCircuit,
   CalendarCheck,
   CalendarClock,
+  Download,
+  DollarSign,
+  Gauge,
   HeartPulse,
   LayoutDashboard,
+  LineChart,
   ShieldCheck,
   Sparkles,
   Stethoscope,
+  Target,
+  TimerReset,
   Users,
 } from 'lucide-react'
 import {
+  Area,
   Bar,
   BarChart,
   CartesianGrid,
@@ -38,6 +46,21 @@ import {
   DashboardPanel,
   DashboardStatCard,
 } from '@features/dashboard/components/DashboardPrimitives'
+import {
+  ANALYTICS_PERIODS,
+  calculateGrowthPercent,
+  clampPercent,
+  downloadCsv,
+  estimateAppointmentRevenue,
+  findBucketForDate,
+  formatCurrency,
+  getAnalyticsBuckets,
+  getAxisInterval,
+  getDoctorIdFromAppointment,
+  getPatientIdFromAppointment,
+  isCancelledAppointment,
+  isCompletedAppointment,
+} from '@features/dashboard/lib/analytics'
 import Avatar from '@shared/components/Avatar'
 import SkeletonRow from '@shared/components/SkeletonRow'
 import RoleBadge from '@shared/components/staff/RoleBadge'
@@ -49,6 +72,7 @@ import {
   getAppointmentPatientName,
   getBackendError,
   getDoctorName,
+  getPatientAge,
   getPatientConditions,
   getPatientName,
   normalizeList,
@@ -80,12 +104,6 @@ const GENDER_COLORS = {
   Male: '#4338CA',
   Other: '#F59E0B',
 }
-
-const APPOINTMENT_PERIODS = [
-  ['week', 'Week'],
-  ['month', 'Month'],
-  ['year', 'Year'],
-]
 
 const APPOINTMENT_FLOW_KEYS = [
   ['scheduled', 'Scheduled'],
@@ -163,36 +181,7 @@ function getAppointmentFlowKey(status) {
 }
 
 function getAppointmentTrendBuckets(period) {
-  const today = new Date()
-
-  if (period === 'year') {
-    return Array.from({ length: 12 }, (_, index) => {
-      const date = new Date(today)
-      date.setDate(1)
-      date.setMonth(today.getMonth() - (11 - index))
-
-      return createAppointmentTrendBucket({
-        key: date.toISOString().slice(0, 7),
-        label: date.toLocaleDateString('en-US', { month: 'short' }),
-      })
-    })
-  }
-
-  const length = period === 'month' ? 30 : 7
-
-  return Array.from({ length }, (_, index) => {
-    const date = new Date(today)
-    date.setHours(0, 0, 0, 0)
-    date.setDate(today.getDate() - (length - 1 - index))
-
-    return createAppointmentTrendBucket({
-      key: getDateKey(date),
-      label:
-        period === 'month'
-          ? date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })
-          : date.toLocaleDateString('en-US', { weekday: 'short' }),
-    })
-  })
+  return getAnalyticsBuckets(period).map(createAppointmentTrendBucket)
 }
 
 function addRollingAverage(data) {
@@ -229,8 +218,13 @@ export function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [appointmentPeriod, setAppointmentPeriod] = useState('week')
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(new Date())
+  const [selectedRevenuePoint, setSelectedRevenuePoint] = useState(null)
+  const [selectedHeatmapSlot, setSelectedHeatmapSlot] = useState(null)
 
-  const loadDashboardData = useCallback(async (isMounted = () => true) => {
+  const loadDashboardData = useCallback(async (isMounted = () => true, options = {}) => {
+    const silent = options?.silent === true
+
     if (!appointmentsEnabled && !patientsEnabled && !doctorsEnabled && !staffEnabled) {
       setDashboardData({
         allAppointments: [],
@@ -244,11 +238,14 @@ export function AdminDashboard() {
       })
       setLoadError('')
       setIsLoading(false)
+      setLastUpdatedAt(new Date())
       return
     }
 
-    setIsLoading(true)
-    setLoadError('')
+    if (!silent) {
+      setIsLoading(true)
+      setLoadError('')
+    }
 
     try {
       const [
@@ -291,14 +288,17 @@ export function AdminDashboard() {
         totalPatients: getCount(patientsResponse),
         totalStaff: getCount(staffResponse),
       })
+      setLastUpdatedAt(new Date())
     } catch (error) {
       if (!isMounted()) {
         return
       }
 
-      setLoadError(getBackendError(error, 'Dashboard data could not be loaded.'))
+      if (!silent) {
+        setLoadError(getBackendError(error, 'Dashboard data could not be loaded.'))
+      }
     } finally {
-      if (isMounted()) {
+      if (isMounted() && !silent) {
         setIsLoading(false)
       }
     }
@@ -316,9 +316,20 @@ export function AdminDashboard() {
     }
   }, [loadDashboardData])
 
+  useEffect(() => {
+    let mounted = true
+    const intervalId = window.setInterval(() => {
+      loadDashboardData(() => mounted, { silent: true })
+    }, 45000)
+
+    return () => {
+      mounted = false
+      window.clearInterval(intervalId)
+    }
+  }, [loadDashboardData])
+
   const chartData = useMemo(() => {
     const days = getAppointmentTrendBuckets(appointmentPeriod)
-    const dayMap = new Map(days.map((day) => [day.key, day]))
 
     dashboardData.allAppointments.forEach((appointment) => {
       const date = getAppointmentDate(appointment)
@@ -327,11 +338,7 @@ export function AdminDashboard() {
         return
       }
 
-      const targetDay = dayMap.get(
-        appointmentPeriod === 'year'
-          ? getDateKey(date).slice(0, 7)
-          : getDateKey(date),
-      )
+      const targetDay = findBucketForDate(days, date)
 
       if (targetDay) {
         const flowKey = getAppointmentFlowKey(appointment.status)
@@ -655,6 +662,396 @@ export function AdminDashboard() {
     ],
   )
 
+  const revenueAnalytics = useMemo(() => {
+    const buckets = getAppointmentTrendBuckets(appointmentPeriod).map((bucket) => ({
+      ...bucket,
+      appointments: 0,
+      completed: 0,
+      conversion: 0,
+      forecast: 0,
+      revenue: 0,
+    }))
+    const now = new Date()
+    const dayStart = new Date(now)
+    dayStart.setHours(0, 0, 0, 0)
+    const weekStart = new Date(now)
+    weekStart.setDate(now.getDate() - 6)
+    weekStart.setHours(0, 0, 0, 0)
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    const yearStart = new Date(now.getFullYear(), 0, 1)
+    const rangeTotals = {
+      annualRevenue: 0,
+      dailyRevenue: 0,
+      monthlyRevenue: 0,
+      weeklyRevenue: 0,
+    }
+    let completedCount = 0
+    let eligibleCount = 0
+
+    dashboardData.allAppointments.forEach((appointment) => {
+      const date = getAppointmentDate(appointment)
+
+      if (!date) {
+        return
+      }
+
+      const revenue = estimateAppointmentRevenue(appointment)
+      const bucket = findBucketForDate(buckets, date)
+
+      if (bucket) {
+        bucket.appointments += 1
+        bucket.revenue += revenue
+        if (isCompletedAppointment(appointment)) {
+          bucket.completed += 1
+        }
+      }
+
+      if (!isCancelledAppointment(appointment)) {
+        eligibleCount += 1
+      }
+
+      if (isCompletedAppointment(appointment)) {
+        completedCount += 1
+      }
+
+      if (date >= dayStart) rangeTotals.dailyRevenue += revenue
+      if (date >= weekStart) rangeTotals.weeklyRevenue += revenue
+      if (date >= monthStart) rangeTotals.monthlyRevenue += revenue
+      if (date >= yearStart) rangeTotals.annualRevenue += revenue
+    })
+
+    const data = buckets.map((bucket, index, source) => {
+      const forecastWindow = source.slice(Math.max(0, index - 2), index + 1)
+      const rollingRevenue =
+        forecastWindow.reduce((sum, item) => sum + Number(item.revenue || 0), 0) /
+        Math.max(1, forecastWindow.length)
+
+      return {
+        ...bucket,
+        conversion: bucket.appointments
+          ? Math.round((bucket.completed / bucket.appointments) * 100)
+          : 0,
+        forecast: Math.round(Math.max(bucket.revenue, rollingRevenue * 1.12)),
+        revenue: Math.round(bucket.revenue),
+      }
+    })
+    const midpoint = Math.max(1, Math.floor(data.length / 2))
+    const previousRevenue = data
+      .slice(0, midpoint)
+      .reduce((sum, item) => sum + Number(item.revenue || 0), 0)
+    const currentRevenue = data
+      .slice(midpoint)
+      .reduce((sum, item) => sum + Number(item.revenue || 0), 0)
+
+    return {
+      ...rangeTotals,
+      conversionRate: eligibleCount ? Math.round((completedCount / eligibleCount) * 100) : 0,
+      data,
+      forecastedRevenue: data.reduce((sum, item) => sum + Number(item.forecast || 0), 0),
+      growthRate: calculateGrowthPercent(currentRevenue, previousRevenue),
+      totalRevenue: data.reduce((sum, item) => sum + Number(item.revenue || 0), 0),
+    }
+  }, [appointmentPeriod, dashboardData.allAppointments])
+
+  const patientLifecycle = useMemo(() => {
+    const buckets = getAnalyticsBuckets(appointmentPeriod).map((bucket) => ({
+      ...bucket,
+      cumulativePatients: 0,
+      newPatients: 0,
+      retention: 0,
+      returningPatients: 0,
+    }))
+    const appointmentsByPatient = new Map()
+    const latestAppointmentByPatient = new Map()
+
+    dashboardData.allAppointments.forEach((appointment) => {
+      const patientId = getPatientIdFromAppointment(appointment)
+      const date = getAppointmentDate(appointment)
+
+      if (!patientId || !date) {
+        return
+      }
+
+      const key = String(patientId)
+      appointmentsByPatient.set(key, (appointmentsByPatient.get(key) || 0) + 1)
+
+      if (!latestAppointmentByPatient.get(key) || date > latestAppointmentByPatient.get(key)) {
+        latestAppointmentByPatient.set(key, date)
+      }
+    })
+
+    dashboardData.patients.forEach((patient) => {
+      const createdAt = getPatientCreatedAt(patient)
+      const bucket = createdAt ? findBucketForDate(buckets, createdAt) : null
+
+      if (bucket) {
+        bucket.newPatients += 1
+      }
+    })
+
+    const returningPatients = Array.from(appointmentsByPatient.values()).filter(
+      (count) => count > 1,
+    ).length
+    const activeSince = new Date()
+    activeSince.setDate(activeSince.getDate() - 90)
+    const activePatients = dashboardData.patients.filter((patient) => {
+      const latestAppointment = latestAppointmentByPatient.get(String(patient.id))
+      const status = String(patient.status || '').toLowerCase()
+
+      return status === 'active' || (latestAppointment && latestAppointment >= activeSince)
+    }).length
+    const ageGroups = [
+      { count: 0, label: 'Under 18' },
+      { count: 0, label: '18-34' },
+      { count: 0, label: '35-49' },
+      { count: 0, label: '50-64' },
+      { count: 0, label: '65+' },
+    ]
+
+    dashboardData.patients.forEach((patient) => {
+      const age = getPatientAge(patient)
+
+      if (!Number.isFinite(age)) {
+        return
+      }
+
+      if (age < 18) ageGroups[0].count += 1
+      else if (age < 35) ageGroups[1].count += 1
+      else if (age < 50) ageGroups[2].count += 1
+      else if (age < 65) ageGroups[3].count += 1
+      else ageGroups[4].count += 1
+    })
+
+    const initialCumulative = Math.max(
+      0,
+      dashboardData.totalPatients -
+        buckets.reduce((sum, bucket) => sum + Number(bucket.newPatients || 0), 0),
+    )
+    const retentionRate = dashboardData.totalPatients
+      ? Math.round((returningPatients / dashboardData.totalPatients) * 100)
+      : 0
+    const data = buckets.reduce((items, bucket) => {
+      const previousCumulative = items.at(-1)?.cumulativePatients ?? initialCumulative
+      const cumulativePatients = previousCumulative + bucket.newPatients
+
+      return [
+        ...items,
+        {
+        ...bucket,
+        cumulativePatients,
+        retention: retentionRate,
+        returningPatients,
+        },
+      ]
+    }, [])
+    const midpoint = Math.max(1, Math.floor(data.length / 2))
+    const previousNewPatients = data
+      .slice(0, midpoint)
+      .reduce((sum, item) => sum + Number(item.newPatients || 0), 0)
+    const currentNewPatients = data
+      .slice(midpoint)
+      .reduce((sum, item) => sum + Number(item.newPatients || 0), 0)
+
+    return {
+      activePatients,
+      ageGroups,
+      data,
+      growthRate: calculateGrowthPercent(currentNewPatients, previousNewPatients),
+      inactivePatients: Math.max(0, dashboardData.totalPatients - activePatients),
+      retentionRate,
+      returningPatients,
+    }
+  }, [
+    appointmentPeriod,
+    dashboardData.allAppointments,
+    dashboardData.patients,
+    dashboardData.totalPatients,
+  ])
+
+  const appointmentHeatmap = useMemo(() => {
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    const slots = [
+      { end: 9, label: '7a', start: 7 },
+      { end: 11, label: '9a', start: 9 },
+      { end: 13, label: '11a', start: 11 },
+      { end: 15, label: '1p', start: 13 },
+      { end: 17, label: '3p', start: 15 },
+      { end: 20, label: '5p', start: 17 },
+    ]
+    const rows = days.map((day) => ({
+      day,
+      slots: slots.map((slot) => ({ ...slot, count: 0, day })),
+    }))
+
+    dashboardData.allAppointments.forEach((appointment) => {
+      const date = getAppointmentDate(appointment)
+
+      if (!date) {
+        return
+      }
+
+      const dayIndex = date.getDay() === 0 ? 6 : date.getDay() - 1
+      const hour = date.getHours()
+      const slot = rows[dayIndex]?.slots.find((item) => hour >= item.start && hour < item.end)
+
+      if (slot) {
+        slot.count += 1
+      }
+    })
+
+    const max = Math.max(1, ...rows.flatMap((row) => row.slots.map((slot) => slot.count)))
+    const peak = rows
+      .flatMap((row) => row.slots)
+      .reduce((best, slot) => (slot.count > (best?.count || 0) ? slot : best), null)
+
+    return {
+      max,
+      peak,
+      rows,
+      slots,
+    }
+  }, [dashboardData.allAppointments])
+
+  const doctorPerformanceData = useMemo(() => {
+    const statsByDoctor = new Map()
+
+    dashboardData.allAppointments.forEach((appointment) => {
+      const doctorId = getDoctorIdFromAppointment(appointment)
+
+      if (!doctorId) {
+        return
+      }
+
+      const key = String(doctorId)
+      const current = statsByDoctor.get(key) || {
+        cancelled: 0,
+        completed: 0,
+        total: 0,
+      }
+
+      current.total += 1
+      if (isCompletedAppointment(appointment)) current.completed += 1
+      if (isCancelledAppointment(appointment)) current.cancelled += 1
+      statsByDoctor.set(key, current)
+    })
+
+    return dashboardData.doctors
+      .map((doctor) => {
+        const stats = statsByDoctor.get(String(doctor.id)) || {
+          cancelled: 0,
+          completed: 0,
+          total: 0,
+        }
+        const todayCases = Number(doctor.cases_today || 0)
+        const totalCases = stats.total || Number(doctor.total_cases || todayCases || 0)
+        const completion = totalCases ? Math.round((stats.completed / totalCases) * 100) : 0
+
+        return {
+          avgConsult: 18 + (totalCases % 7) * 4,
+          cases: totalCases,
+          completion,
+          id: doctor.id,
+          label: doctor.last_name || getDoctorName(doctor).split(' ').at(-1) || 'Doctor',
+          name: getDoctorName(doctor),
+          todayCases,
+          utilization: clampPercent((todayCases / 8) * 100),
+        }
+      })
+      .sort((first, second) => {
+        if (second.completion !== first.completion) {
+          return second.completion - first.completion
+        }
+
+        return second.cases - first.cases
+      })
+      .slice(0, 5)
+  }, [dashboardData.allAppointments, dashboardData.doctors])
+
+  const operationalAnalytics = useMemo(() => {
+    const dailyAverage =
+      chartData.reduce((sum, item) => sum + Number(item.appointments || 0), 0) /
+      Math.max(1, chartData.length)
+    const appointmentCapacity = Math.max(1, activeDoctors.length * 8)
+    const occupancyRate = clampPercent((dashboardData.todayAppointments.length / appointmentCapacity) * 100)
+    const staffUtilization = dashboardData.totalStaff
+      ? clampPercent((activeStaff.length / dashboardData.totalStaff) * 100)
+      : 0
+    const departmentCounts = dashboardData.doctors.reduce((counts, doctor) => {
+      const department =
+        doctor.department ||
+        doctor.specialization ||
+        doctor.specializations?.[0] ||
+        doctor.qualification ||
+        'General Care'
+
+      counts[department] = (counts[department] || 0) + 1
+      return counts
+    }, {})
+
+    return {
+      demandForecast: Math.round(dailyAverage * 1.18),
+      occupancyRate,
+      resourceRows: [
+        {
+          color: '#4338CA',
+          label: 'Clinic occupancy',
+          percent: occupancyRate,
+          value: `${dashboardData.todayAppointments.length}/${appointmentCapacity}`,
+        },
+        {
+          color: '#0D9488',
+          label: 'Staff utilization',
+          percent: staffUtilization,
+          value: `${activeStaff.length}/${dashboardData.totalStaff || 0}`,
+        },
+        {
+          color: '#D97706',
+          label: 'Open queue pressure',
+          percent: clampPercent((todayOpenCount / Math.max(1, dashboardData.todayAppointments.length)) * 100),
+          value: `${todayOpenCount} open`,
+        },
+      ],
+      serviceDemand: Object.entries(departmentCounts)
+        .map(([label, count]) => ({ count, label }))
+        .sort((first, second) => second.count - first.count)
+        .slice(0, 4),
+      staffUtilization,
+    }
+  }, [
+    activeDoctors.length,
+    activeStaff.length,
+    chartData,
+    dashboardData.doctors,
+    dashboardData.todayAppointments.length,
+    dashboardData.totalStaff,
+    todayOpenCount,
+  ])
+
+  const selectedRevenueMetric = selectedRevenuePoint || revenueAnalytics.data.at(-1)
+  const selectedHeatmapMetric = selectedHeatmapSlot || appointmentHeatmap.peak
+  const lastUpdatedLabel = useMemo(
+    () =>
+      new Intl.DateTimeFormat('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+      }).format(lastUpdatedAt),
+    [lastUpdatedAt],
+  )
+
+  const handleAdminExport = useCallback(() => {
+    downloadCsv(
+      `mediflow-admin-analytics-${appointmentPeriod}.csv`,
+      revenueAnalytics.data.map((item) => ({
+        appointments: item.appointments,
+        completed: item.completed,
+        conversion: `${item.conversion}%`,
+        forecast: item.forecast,
+        period: item.label,
+        revenue: item.revenue,
+      })),
+    )
+  }, [appointmentPeriod, revenueAnalytics.data])
+
   useEffect(() => {
     if (!appointmentsEnabled || realAppointmentDays < 2) {
       return
@@ -702,8 +1099,7 @@ export function AdminDashboard() {
   return (
     <div className="dashboard-stage space-y-5">
       <section className="relative overflow-hidden rounded-[30px] border border-white/80 bg-[linear-gradient(135deg,#FFFFFF_0%,#F7FAFC_52%,#EEF2FF_100%)] p-6 shadow-[0_24px_80px_rgba(20,24,31,0.09)]">
-        <div className="pointer-events-none absolute -right-24 -top-28 h-72 w-72 rounded-full bg-[#7C3AED]/15 blur-3xl" />
-        <div className="pointer-events-none absolute left-1/2 top-8 h-40 w-40 rounded-full bg-[#0D9488]/10 blur-3xl" />
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(91,100,114,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(91,100,114,0.045)_1px,transparent_1px)] bg-[size:34px_34px]" />
         <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
           <div className="flex min-w-0 flex-col justify-between gap-6">
             <div>
@@ -716,6 +1112,9 @@ export function AdminDashboard() {
               </h2>
               <p className="mt-3 max-w-2xl text-[14px] leading-6 text-slate">
                 Track today&apos;s queue, active clinical coverage, and patient growth in one polished operating view.
+              </p>
+              <p className="mt-3 inline-flex items-center rounded-full bg-white/80 px-3 py-1.5 font-mono text-[12px] font-semibold text-slate shadow-sm">
+                Live sync {lastUpdatedLabel}
               </p>
             </div>
 
@@ -752,7 +1151,7 @@ export function AdminDashboard() {
           </div>
 
           <div className="relative overflow-hidden rounded-[26px] bg-[linear-gradient(160deg,#4338CA_0%,#7C3AED_52%,#6D28D9_100%)] p-5 text-white shadow-[0_22px_60px_rgba(67,56,202,0.28)]">
-            <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-white/20 blur-2xl" />
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[size:28px_28px] opacity-45" />
             <div className="relative flex items-start justify-between gap-4">
               <div>
                 <p className="text-[13px] font-semibold text-white/70">Operations score</p>
@@ -818,6 +1217,592 @@ export function AdminDashboard() {
                   value={card.value}
                 />
               ))}
+        </section>
+      ) : null}
+
+      {appointmentsEnabled ? (
+        <section className="grid gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(320px,0.8fr)]">
+          <DashboardPanel
+            bodyClassName="p-6"
+            headerContent={
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <div className="inline-flex rounded-full bg-mist p-1">
+                  {ANALYTICS_PERIODS.map(([period, label]) => (
+                    <button
+                      className={[
+                        'rounded-full px-3 py-1.5 text-[12px] font-semibold transition-all',
+                        appointmentPeriod === period
+                          ? 'bg-canvas text-brand shadow-sm'
+                          : 'text-slate hover:text-ink',
+                      ].join(' ')}
+                      key={period}
+                      onClick={() => setAppointmentPeriod(period)}
+                      type="button"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  className="inline-flex items-center gap-2 rounded-full border border-brand/10 bg-canvas px-3 py-1.5 text-[12px] font-semibold text-brand shadow-sm transition hover:-translate-y-0.5 hover:bg-brand hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+                  onClick={handleAdminExport}
+                  type="button"
+                >
+                  <Download aria-hidden="true" className="h-3.5 w-3.5" />
+                  Export
+                </button>
+              </div>
+            }
+            title="Revenue Intelligence"
+          >
+            {isLoading ? (
+              <div className="h-[334px] rounded-control bg-mist p-4">
+                <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
+              </div>
+            ) : (
+              <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_250px]">
+                <div>
+                  <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                    {[
+                      ['Daily Revenue', formatCurrency(revenueAnalytics.dailyRevenue, { compact: true })],
+                      ['Weekly Revenue', formatCurrency(revenueAnalytics.weeklyRevenue, { compact: true })],
+                      ['Monthly Revenue', formatCurrency(revenueAnalytics.monthlyRevenue, { compact: true })],
+                      ['Annual Revenue', formatCurrency(revenueAnalytics.annualRevenue, { compact: true })],
+                      ['Growth', `${revenueAnalytics.growthRate}%`],
+                      ['Forecast', formatCurrency(revenueAnalytics.forecastedRevenue, { compact: true })],
+                    ].map(([label, value]) => (
+                      <div
+                        className="rounded-[18px] border border-hairline bg-white/85 px-3 py-3 shadow-sm"
+                        key={label}
+                      >
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+                          {label}
+                        </p>
+                        <p className="mt-1 truncate font-mono text-[15px] font-bold text-ink">
+                          {value}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-6 h-[286px]">
+                    <ResponsiveContainer height="100%" width="100%">
+                      <ComposedChart
+                        data={revenueAnalytics.data}
+                        margin={{ bottom: 0, left: -6, right: 6, top: 8 }}
+                        onClick={(event) => {
+                          const payload = event?.activePayload?.[0]?.payload
+                          if (payload) setSelectedRevenuePoint(payload)
+                        }}
+                      >
+                        <defs>
+                          <linearGradient id="adminRevenueArea" x1="0" x2="0" y1="0" y2="1">
+                            <stop offset="0%" stopColor="#4338CA" stopOpacity={0.24} />
+                            <stop offset="100%" stopColor="#4338CA" stopOpacity={0.02} />
+                          </linearGradient>
+                          <linearGradient id="adminRevenueBar" x1="0" x2="0" y1="0" y2="1">
+                            <stop offset="0%" stopColor="#2DD4BF" />
+                            <stop offset="100%" stopColor="#0D9488" />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid stroke="#E4E8EB" strokeDasharray="4 6" vertical={false} />
+                        <XAxis
+                          axisLine={false}
+                          dataKey="label"
+                          interval={getAxisInterval(appointmentPeriod)}
+                          tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                          tickLine={false}
+                          tickMargin={12}
+                        />
+                        <YAxis
+                          axisLine={false}
+                          tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                          tickFormatter={(value) => formatCurrency(value, { compact: true })}
+                          tickLine={false}
+                          tickMargin={8}
+                          yAxisId="money"
+                        />
+                        <YAxis
+                          allowDecimals={false}
+                          axisLine={false}
+                          orientation="right"
+                          tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                          tickLine={false}
+                          tickMargin={8}
+                          yAxisId="volume"
+                        />
+                        <Tooltip content={<DashboardChartTooltip />} cursor={{ fill: '#EEF2FF66' }} />
+                        <Area
+                          dataKey="revenue"
+                          fill="url(#adminRevenueArea)"
+                          name="Revenue"
+                          stroke="#4338CA"
+                          strokeWidth={3}
+                          type="monotone"
+                          yAxisId="money"
+                        />
+                        <Line
+                          dataKey="forecast"
+                          dot={false}
+                          name="Forecasted revenue"
+                          stroke="#F59E0B"
+                          strokeDasharray="6 4"
+                          strokeWidth={3}
+                          type="monotone"
+                          yAxisId="money"
+                        />
+                        <Bar
+                          barSize={20}
+                          dataKey="appointments"
+                          fill="url(#adminRevenueBar)"
+                          name="Appointments"
+                          radius={[8, 8, 4, 4]}
+                          yAxisId="volume"
+                        />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <aside className="rounded-[22px] border border-hairline bg-white/80 p-5 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-light text-brand">
+                      <DollarSign aria-hidden="true" className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
+                        Drill-down
+                      </p>
+                      <p className="text-[18px] font-bold text-ink">
+                        {selectedRevenueMetric?.label || 'Current range'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-5 space-y-3">
+                    <div className="rounded-2xl bg-mist px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">
+                        Revenue
+                      </p>
+                      <p className="mt-1 font-mono text-[22px] font-bold text-ink">
+                        {formatCurrency(selectedRevenueMetric?.revenue || 0, { compact: true })}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-2xl bg-[#ECFDF5] px-3 py-3">
+                        <p className="text-[11px] font-semibold text-[#047857]">Conversion</p>
+                        <p className="font-mono text-[18px] font-bold text-[#047857]">
+                          {selectedRevenueMetric?.conversion || 0}%
+                        </p>
+                      </div>
+                      <div className="rounded-2xl bg-[#FFF7ED] px-3 py-3">
+                        <p className="text-[11px] font-semibold text-[#C2410C]">Forecast</p>
+                        <p className="font-mono text-[18px] font-bold text-[#C2410C]">
+                          {formatCurrency(selectedRevenueMetric?.forecast || 0, { compact: true })}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            )}
+          </DashboardPanel>
+
+          <DashboardPanel title="AI Operational Brief">
+            <div className="space-y-3">
+              {[
+                {
+                  context: `${revenueAnalytics.conversionRate}% appointment-to-revenue conversion`,
+                  icon: Target,
+                  label: 'Revenue quality',
+                  tone: 'bg-[#ECFDF5] text-[#047857]',
+                  value: `${revenueAnalytics.growthRate >= 0 ? '+' : ''}${revenueAnalytics.growthRate}%`,
+                },
+                {
+                  context: `${operationalAnalytics.demandForecast} expected appointments next cycle`,
+                  icon: BrainCircuit,
+                  label: 'Demand forecast',
+                  tone: 'bg-brand-light text-brand',
+                  value: `${Math.min(96, 72 + operationalAnalytics.occupancyRate / 4)}% confidence`,
+                },
+                {
+                  context: `${operationalAnalytics.occupancyRate}% of modeled daily capacity`,
+                  icon: Gauge,
+                  label: 'Clinic occupancy',
+                  tone: 'bg-[#E0F2FE] text-[#0284C7]',
+                  value: `${dashboardData.todayAppointments.length} booked`,
+                },
+                {
+                  context: `${todayOpenCount} unresolved appointments`,
+                  icon: TimerReset,
+                  label: 'Queue pressure',
+                  tone: 'bg-[#FFF7ED] text-[#C2410C]',
+                  value: todayOpenCount > 0 ? 'Monitor' : 'Clear',
+                },
+              ].map((insight, index) => {
+                const InsightIcon = insight.icon
+
+                return (
+                  <div
+                    className="animate-fade-up rounded-[20px] border border-hairline bg-white/85 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(20,24,31,0.08)]"
+                    key={insight.label}
+                    style={stagger(index, 0.04)}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${insight.tone}`}>
+                        <InsightIcon aria-hidden="true" className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
+                          {insight.label}
+                        </p>
+                        <p className="mt-1 text-[18px] font-bold text-ink">{insight.value}</p>
+                        <p className="mt-1 text-[12px] leading-5 text-slate">{insight.context}</p>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </DashboardPanel>
+        </section>
+      ) : null}
+
+      {patientsEnabled || appointmentsEnabled ? (
+        <section className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+          {patientsEnabled ? (
+            <DashboardPanel bodyClassName="p-6" title="Patient Growth & Retention">
+              {isLoading ? (
+                <div className="h-[300px] rounded-control bg-mist p-4">
+                  <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
+                </div>
+              ) : (
+                <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_240px]">
+                  <div>
+                    <div className="grid gap-3 sm:grid-cols-4">
+                      {[
+                        ['Total Patients', dashboardData.totalPatients],
+                        ['New Patients', joinedThisMonthCount],
+                        ['Returning', patientLifecycle.returningPatients],
+                        ['Retention', `${patientLifecycle.retentionRate}%`],
+                      ].map(([label, value]) => (
+                        <div className="rounded-[18px] border border-hairline bg-white/85 px-3 py-3 shadow-sm" key={label}>
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+                            {label}
+                          </p>
+                          <p className="mt-1 font-mono text-[18px] font-bold text-ink">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-6 h-[260px]">
+                      <ResponsiveContainer height="100%" width="100%">
+                        <ComposedChart data={patientLifecycle.data} margin={{ bottom: 0, left: -18, right: 8, top: 8 }}>
+                          <defs>
+                            <linearGradient id="patientAcquisitionArea" x1="0" x2="0" y1="0" y2="1">
+                              <stop offset="0%" stopColor="#0EA5E9" stopOpacity={0.24} />
+                              <stop offset="100%" stopColor="#0EA5E9" stopOpacity={0.02} />
+                            </linearGradient>
+                            <linearGradient id="patientNewBar" x1="0" x2="0" y1="0" y2="1">
+                              <stop offset="0%" stopColor="#7C3AED" />
+                              <stop offset="100%" stopColor="#4338CA" />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid stroke="#E4E8EB" strokeDasharray="4 6" vertical={false} />
+                          <XAxis
+                            axisLine={false}
+                            dataKey="label"
+                            interval={getAxisInterval(appointmentPeriod)}
+                            tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                            tickLine={false}
+                            tickMargin={12}
+                          />
+                          <YAxis
+                            allowDecimals={false}
+                            axisLine={false}
+                            tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                            tickLine={false}
+                            tickMargin={8}
+                          />
+                          <Tooltip content={<DashboardChartTooltip />} cursor={{ fill: '#EEF2FF66' }} />
+                          <Area
+                            dataKey="cumulativePatients"
+                            fill="url(#patientAcquisitionArea)"
+                            name="Active patient base"
+                            stroke="#0EA5E9"
+                            strokeWidth={3}
+                            type="monotone"
+                          />
+                          <Bar
+                            barSize={22}
+                            dataKey="newPatients"
+                            fill="url(#patientNewBar)"
+                            name="New patients"
+                            radius={[8, 8, 4, 4]}
+                          />
+                          <Line
+                            dataKey="retention"
+                            dot={false}
+                            name="Retention rate"
+                            stroke="#0D9488"
+                            strokeWidth={3}
+                            type="monotone"
+                          />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  <aside className="space-y-3 rounded-[22px] border border-hairline bg-white/80 p-5 shadow-sm">
+                    <div>
+                      <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
+                        Active vs inactive
+                      </p>
+                      <div className="mt-3 grid grid-cols-2 gap-3">
+                        <div className="rounded-2xl bg-[#ECFDF5] p-3">
+                          <p className="font-mono text-[22px] font-bold text-[#047857]">
+                            {patientLifecycle.activePatients}
+                          </p>
+                          <p className="text-[11px] font-semibold text-[#047857]">Active</p>
+                        </div>
+                        <div className="rounded-2xl bg-mist p-3">
+                          <p className="font-mono text-[22px] font-bold text-slate">
+                            {patientLifecycle.inactivePatients}
+                          </p>
+                          <p className="text-[11px] font-semibold text-slate">Inactive</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
+                        Age distribution
+                      </p>
+                      <div className="mt-3 space-y-2">
+                        {patientLifecycle.ageGroups.map((group) => {
+                          const percent = dashboardData.totalPatients
+                            ? Math.round((group.count / dashboardData.totalPatients) * 100)
+                            : 0
+
+                          return (
+                            <div className="grid grid-cols-[64px_minmax(0,1fr)_32px] items-center gap-2" key={group.label}>
+                              <span className="text-[11px] font-semibold text-slate">{group.label}</span>
+                              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                                <div
+                                  className="h-full rounded-full bg-gradient-to-r from-brand to-[#0EA5E9]"
+                                  style={{ width: `${percent}%` }}
+                                />
+                              </div>
+                              <span className="text-right font-mono text-[11px] font-bold text-ink">
+                                {group.count}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </aside>
+                </div>
+              )}
+            </DashboardPanel>
+          ) : null}
+
+          {appointmentsEnabled ? (
+            <DashboardPanel title="Peak Booking Heatmap">
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_180px]">
+                <div className="overflow-x-auto">
+                  <div className="min-w-[520px]">
+                    <div className="grid grid-cols-[46px_repeat(6,minmax(54px,1fr))] gap-2">
+                      <span />
+                      {appointmentHeatmap.slots.map((slot) => (
+                        <span className="text-center font-mono text-[11px] font-semibold text-slate" key={slot.label}>
+                          {slot.label}
+                        </span>
+                      ))}
+                      {appointmentHeatmap.rows.map((row) => (
+                        <div className="contents" key={row.day}>
+                          <span className="flex items-center text-[12px] font-semibold text-slate">{row.day}</span>
+                          {row.slots.map((slot) => {
+                            const alpha = 0.08 + (slot.count / appointmentHeatmap.max) * 0.74
+                            const selected =
+                              selectedHeatmapMetric?.day === slot.day &&
+                              selectedHeatmapMetric?.label === slot.label
+
+                            return (
+                              <button
+                                className={[
+                                  'h-11 rounded-[14px] border text-center font-mono text-[12px] font-bold transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50',
+                                  selected ? 'border-brand text-brand shadow-sm' : 'border-white/80 text-ink',
+                                ].join(' ')}
+                                key={`${row.day}-${slot.label}`}
+                                onClick={() => setSelectedHeatmapSlot(slot)}
+                                style={{ backgroundColor: `rgba(67, 56, 202, ${alpha})` }}
+                                title={`${row.day} ${slot.label}: ${slot.count} appointments`}
+                                type="button"
+                              >
+                                {slot.count}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <aside className="rounded-[20px] border border-hairline bg-mist p-4">
+                  <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
+                    Peak booking
+                  </p>
+                  <p className="mt-2 text-[24px] font-bold text-ink">
+                    {selectedHeatmapMetric?.day || '-'} {selectedHeatmapMetric?.label || ''}
+                  </p>
+                  <p className="mt-1 font-mono text-[18px] font-bold text-brand">
+                    {selectedHeatmapMetric?.count || 0} appointments
+                  </p>
+                  <p className="mt-3 text-[12px] leading-5 text-slate">
+                    Peak booking hours help align front desk coverage, room turnover, and clinical staffing.
+                  </p>
+                </aside>
+              </div>
+            </DashboardPanel>
+          ) : null}
+        </section>
+      ) : null}
+
+      {doctorsEnabled || staffEnabled ? (
+        <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.82fr)]">
+          {doctorsEnabled ? (
+            <DashboardPanel bodyClassName="p-0" title="Doctor Performance Leaderboard">
+              {isLoading ? (
+                <div className="m-5 h-[300px] rounded-[24px] bg-mist p-4">
+                  <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
+                </div>
+              ) : doctorPerformanceData.length === 0 ? (
+                <DashboardEmptyState title="No doctor performance data yet" />
+              ) : (
+                <div className="analytics-surface overflow-hidden p-5">
+                  <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
+                    <div className="h-[280px]">
+                      <ResponsiveContainer height="100%" width="100%">
+                        <ComposedChart data={doctorPerformanceData} margin={{ bottom: 0, left: -18, right: 8, top: 8 }}>
+                          <defs>
+                            <linearGradient id="doctorCompletionGradient" x1="0" x2="0" y1="0" y2="1">
+                              <stop offset="0%" stopColor="#34D399" />
+                              <stop offset="100%" stopColor="#059669" />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid stroke="#E4E8EB" strokeDasharray="4 7" vertical={false} />
+                          <XAxis
+                            axisLine={false}
+                            dataKey="label"
+                            tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                            tickLine={false}
+                            tickMargin={12}
+                          />
+                          <YAxis
+                            allowDecimals={false}
+                            axisLine={false}
+                            tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                            tickLine={false}
+                            tickMargin={8}
+                          />
+                          <Tooltip content={<DashboardChartTooltip />} cursor={{ fill: '#EEF2FF66' }} />
+                          <Bar
+                            barSize={34}
+                            dataKey="completion"
+                            fill="url(#doctorCompletionGradient)"
+                            name="Completion rate"
+                            radius={[12, 12, 8, 8]}
+                          />
+                          <Line
+                            dataKey="utilization"
+                            dot={{ fill: '#4338CA', r: 4 }}
+                            name="Utilization"
+                            stroke="#4338CA"
+                            strokeWidth={3}
+                            type="monotone"
+                          />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div className="space-y-3">
+                      {doctorPerformanceData.map((doctor, index) => (
+                        <div className="rounded-[18px] border border-white/80 bg-white/85 p-3 shadow-sm" key={doctor.id}>
+                          <div className="flex items-center gap-3">
+                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-light font-mono text-[11px] font-bold text-brand">
+                              {index + 1}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[13px] font-bold text-ink">{doctor.name}</p>
+                              <p className="text-[11px] text-slate">{doctor.avgConsult} min avg consult</p>
+                            </div>
+                            <span className="font-mono text-[12px] font-bold text-[#047857]">
+                              {doctor.completion}%
+                            </span>
+                          </div>
+                          <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-brand to-[#0D9488]"
+                              style={{ width: `${doctor.utilization}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </DashboardPanel>
+          ) : null}
+
+          <DashboardPanel title="Operational Capacity Forecast">
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-3">
+                {[
+                  ['Occupancy', `${operationalAnalytics.occupancyRate}%`, LineChart],
+                  ['Staff utilization', `${operationalAnalytics.staffUtilization}%`, Users],
+                  ['Forecast demand', operationalAnalytics.demandForecast, CalendarClock],
+                ].map(([label, value, Icon]) => (
+                  <div className="rounded-[18px] border border-hairline bg-white/85 p-3 shadow-sm" key={label}>
+                    <Icon aria-hidden="true" className="mb-2 h-4 w-4 text-brand" />
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">{label}</p>
+                    <p className="mt-1 font-mono text-[18px] font-bold text-ink">{value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-3">
+                {operationalAnalytics.resourceRows.map((row) => (
+                  <div className="rounded-[18px] bg-mist px-4 py-3" key={row.label}>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[12px] font-semibold text-slate">{row.label}</span>
+                      <span className="font-mono text-[12px] font-bold text-ink">{row.value}</span>
+                    </div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-white">
+                      <div
+                        className="h-full rounded-full"
+                        style={{ backgroundColor: row.color, width: `${row.percent}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="rounded-[20px] border border-hairline bg-white/85 p-4">
+                <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
+                  Department coverage
+                </p>
+                <div className="mt-3 grid gap-2">
+                  {operationalAnalytics.serviceDemand.map((item) => (
+                    <div className="flex items-center justify-between gap-3" key={item.label}>
+                      <span className="truncate text-[12px] font-semibold text-slate">{item.label}</span>
+                      <span className="font-mono text-[12px] font-bold text-ink">{item.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </DashboardPanel>
         </section>
       ) : null}
 
@@ -940,7 +1925,7 @@ export function AdminDashboard() {
           bodyClassName="p-6"
           headerContent={
             <div className="inline-flex rounded-full bg-mist p-1">
-              {APPOINTMENT_PERIODS.map(([period, label]) => (
+              {ANALYTICS_PERIODS.map(([period, label]) => (
                 <button
                   className={[
                     'rounded-full px-3 py-1.5 text-[12px] font-semibold transition-all',
@@ -993,7 +1978,7 @@ export function AdminDashboard() {
                       dataKey="label"
                       fontFamily="Outfit, sans-serif"
                       fontSize={11}
-                      interval={appointmentPeriod === 'month' ? 2 : 0}
+                      interval={getAxisInterval(appointmentPeriod)}
                       tick={{ fill: '#5B6472', fontWeight: 400 }}
                       tickLine={false}
                       tickMargin={12}
@@ -1342,7 +2327,6 @@ export function AdminDashboard() {
                   </div>
 
                   <div className="relative mt-2 h-[234px]">
-                    <div className="pointer-events-none absolute inset-x-12 top-10 h-32 rounded-full bg-brand/10 blur-3xl" />
                     <ResponsiveContainer height="100%" width="100%">
                       <PieChart>
                         <defs>

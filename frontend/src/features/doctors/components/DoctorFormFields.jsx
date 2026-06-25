@@ -38,6 +38,7 @@ function Field({ children, error, label }) {
 
 const INPUT_CLASS =
   'w-full rounded-control border border-hairline bg-mist px-3 py-2.5 text-[13px] text-ink outline-none transition-colors placeholder:text-slate/50 focus:border-brand'
+const EMAIL_HELPER_TEXT = 'Login credentials will be sent to this email address.'
 
 const SPECIALIZATION_OPTIONS = [
   'Cardiology',
@@ -59,6 +60,7 @@ const SPECIALIZATION_OPTIONS = [
 
 export function DoctorFormFields({
   data,
+  emailReadOnly = false,
   errors,
   onBlur,
   onChange,
@@ -243,14 +245,28 @@ export function DoctorFormFields({
 
       <Field error={touched.email && errors.email} label="Email *">
         <input
-          className={INPUT_CLASS}
+          className={[
+            INPUT_CLASS,
+            emailReadOnly ? 'cursor-not-allowed bg-mist text-slate' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
           name="email"
           onBlur={onBlur}
           onChange={onChange}
           placeholder="name@clinic.com"
+          readOnly={emailReadOnly}
           type="email"
           value={data.email}
         />
+        <p className="mt-1 text-[11px] font-normal text-slate/60">
+          {EMAIL_HELPER_TEXT}
+        </p>
+        {emailReadOnly ? (
+          <FieldError tone="warning">
+            Email cannot be changed after account creation.
+          </FieldError>
+        ) : null}
       </Field>
 
       <Field error={touched.phone && errors.phone} label="Phone *">

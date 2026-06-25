@@ -44,7 +44,6 @@ export function DashboardStatCard({
       className="group relative animate-fade-up overflow-hidden rounded-[24px] border border-white/80 bg-[linear-gradient(135deg,#FFFFFF_0%,rgba(255,255,255,0.9)_100%)] p-5 shadow-[0_18px_50px_rgba(20,24,31,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_26px_70px_rgba(20,24,31,0.12)]"
       style={stagger(index, 0.08)}
     >
-      <div className="pointer-events-none absolute -right-12 -top-14 h-32 w-32 rounded-full bg-brand-light/70 blur-2xl transition duration-300 group-hover:scale-125" />
       <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent" />
       <div className="relative flex items-start justify-between gap-4">
         <div className="min-w-0">
@@ -78,8 +77,6 @@ export function DashboardPanel({
 }) {
   return (
     <section className="group/panel relative overflow-hidden rounded-[28px] border border-white/85 bg-[linear-gradient(145deg,rgba(255,255,255,0.98)_0%,rgba(248,250,252,0.94)_100%)] shadow-[0_24px_70px_rgba(20,24,31,0.09)] backdrop-blur">
-      <div className="pointer-events-none absolute -right-20 -top-24 h-48 w-48 rounded-full bg-brand-light/70 opacity-0 blur-3xl transition duration-500 group-hover/panel:opacity-100" />
-      <div className="pointer-events-none absolute -bottom-24 left-8 h-44 w-44 rounded-full bg-[#CCFBF1]/40 blur-3xl" />
       <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent" />
       <div className="relative flex min-h-16 items-center justify-between gap-3 border-b border-hairline/70 px-5 py-4">
         <div className="flex min-w-0 items-center gap-3">

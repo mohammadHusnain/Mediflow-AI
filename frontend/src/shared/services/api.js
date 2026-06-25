@@ -235,6 +235,19 @@ export async function refreshToken(refreshTokenValue) {
   return data
 }
 
+export async function changePassword(newPassword, confirmPassword) {
+  return withDemoFallback(
+    async () => {
+      const { data } = await api.post('/auth/change-password/', {
+        new_password: newPassword,
+        confirm_password: confirmPassword,
+      })
+      return data
+    },
+    () => ({ detail: 'Password updated successfully.' }),
+  )
+}
+
 // DOCTOR ROLE — automatic server-side scoping (no frontend param needed):
 // GET /api/patients/          → returns only patients who have had appointments with this doctor
 // GET /api/appointments/      → returns only this doctor's appointments

@@ -1,5 +1,5 @@
 /* src/features/staff/lib/staffForm.js - Staff form validation and payload mapping. */
-import { validatePhone } from '@shared/lib/validation'
+import { validateEmail, validatePhone } from '@shared/lib/validation'
 import {
   STAFF_MAX_AGE,
   STAFF_MIN_AGE,
@@ -11,6 +11,7 @@ export const INITIAL_STAFF_FORM_DATA = {
   full_name: '',
   age: '',
   phone: '',
+  email: '',
   address: '',
   role: '',
   status: 'active',
@@ -23,6 +24,7 @@ export const INITIAL_STAFF_FORM_DATA = {
 export const TOUCHED_ALL_STAFF_FIELDS = {
   address: true,
   age: true,
+  email: true,
   full_name: true,
   joining_date: true,
   notes: true,
@@ -35,6 +37,7 @@ export const TOUCHED_ALL_STAFF_FIELDS = {
 
 export function validateStaffForm(data) {
   const errors = {}
+  const emailError = validateEmail(data.email)
   const phoneError = validatePhone(data.phone)
 
   if (String(data.full_name || '').trim().length < 2) {
@@ -49,6 +52,10 @@ export function validateStaffForm(data) {
 
   if (phoneError) {
     errors.phone = phoneError
+  }
+
+  if (emailError) {
+    errors.email = emailError
   }
 
   const role = String(data.role || '').trim()
@@ -89,6 +96,8 @@ export function mapStaffToForm(staffMember) {
     full_name: staffMember.full_name || '',
     age: staffMember.age ?? '',
     phone: staffMember.phone || '',
+    email: staffMember.email || '',
+    has_account: staffMember.has_account === true,
     address: staffMember.address || '',
     role: staffMember.role || '',
     status: staffMember.status || 'active',
@@ -107,6 +116,7 @@ export function prepareStaffPayload(data) {
       Math.max(STAFF_MIN_AGE, Number.parseInt(data.age, 10)),
     ),
     phone: String(data.phone || '').trim(),
+    email: String(data.email || '').trim(),
     address: String(data.address || '').trim() || null,
     role: String(data.role || '').trim(),
     status: data.status,

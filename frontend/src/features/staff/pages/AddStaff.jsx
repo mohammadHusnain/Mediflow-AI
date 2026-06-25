@@ -10,6 +10,7 @@ import {
   prepareStaffPayload,
   validateStaffForm,
 } from '@features/staff/lib/staffForm'
+import AccountCreatedModal from '@shared/components/AccountCreatedModal'
 import { ErrorBanner, LoadingSpinner } from '@shared/components/FormPrimitives'
 import { useToast } from '@shared/components/Toast'
 import { getBackendError, getRecordId } from '@shared/lib/records'
@@ -55,6 +56,7 @@ export function AddStaff() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [roleOptions, setRoleOptions] = useState(null)
   const [roleOptionsFailed, setRoleOptionsFailed] = useState(false)
+  const [createdAccount, setCreatedAccount] = useState(null)
 
   useEffect(() => {
     if (!canWrite('staff')) {
@@ -139,24 +141,28 @@ export function AddStaff() {
         role: canonicalizeRoleName(data.role, roleOptions),
       })
       const response = await createStaff(payload)
-
-      if (response?.role_created) {
-        toast.custom(
-          <>
-            Staff member added. New role "{payload.role}" saved to Access Control.{' '}
-            <a className="font-semibold underline" href="/access-control">
-              Go to Access Control
-            </a>{' '}
-            to set permissions for this role.
-          </>,
-        )
-      } else {
-        toast.success('Staff member added')
-      }
-
       const staffId = getRecordId(response)
 
-      navigate(staffId ? `/staff/${staffId}` : '/staff', { replace: true })
+      if (response?.email_sent === false) {
+        toast.warning(
+          'Profile created but email delivery failed. Share credentials manually.',
+        )
+        window.setTimeout(() => {
+          if (response?.role_created) {
+            showRoleCreatedToast(payload.role)
+          }
+          navigate(staffId ? `/staff/${staffId}` : '/staff', { replace: true })
+        }, 2000)
+        return
+      }
+
+      setCreatedAccount({
+        email: String(data.email || '').trim(),
+        fullName: String(data.full_name || '').trim(),
+        id: staffId,
+        role: payload.role,
+        roleCreated: response?.role_created === true,
+      })
     } catch (error) {
       const message = getBackendError(error, 'Staff member could not be created.')
       toast.error(message)
@@ -165,6 +171,28 @@ export function AddStaff() {
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  function showRoleCreatedToast(roleName) {
+    toast.custom(
+      <>
+        Staff member added. New role "{roleName}" saved to Access Control.{' '}
+        <a className="font-semibold underline" href="/access-control">
+          Go to Access Control
+        </a>{' '}
+        to set permissions for this role.
+      </>,
+    )
+  }
+
+  function handleViewProfile() {
+    if (createdAccount?.roleCreated) {
+      showRoleCreatedToast(createdAccount.role)
+    }
+
+    navigate(createdAccount?.id ? `/staff/${createdAccount.id}` : '/staff', {
+      replace: true,
+    })
   }
 
   return (
@@ -228,6 +256,15 @@ export function AddStaff() {
           </div>
         </div>
       </form>
+
+      {createdAccount ? (
+        <AccountCreatedModal
+          email={createdAccount.email}
+          entityLabel="Staff"
+          fullName={createdAccount.fullName}
+          onViewProfile={handleViewProfile}
+        />
+      ) : null}
     </div>
   )
 }

@@ -4,10 +4,12 @@ import { ChevronLeft } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 import DoctorFormFields from '@features/doctors/components/DoctorFormFields'
+import AccountCreatedModal from '@shared/components/AccountCreatedModal'
+import { ErrorBanner, LoadingSpinner } from '@shared/components/FormPrimitives'
 import { useToast } from '@shared/components/Toast'
-import { getBackendError } from '@shared/lib/records'
+import { getBackendError, getRecordId } from '@shared/lib/records'
 import { usePermission } from '@shared/lib/usePermission'
-import { validatePhone } from '@shared/lib/validation'
+import { validateEmail, validatePhone } from '@shared/lib/validation'
 import { createDoctor } from '@shared/services/api'
 
 const INITIAL_FORM_DATA = {
@@ -54,8 +56,10 @@ function validateDoctorForm(data) {
     errors.last_name = 'Last name is required'
   }
 
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-    errors.email = 'Please enter a valid email'
+  const emailError = validateEmail(trimmedEmail)
+
+  if (emailError) {
+    errors.email = emailError
   }
 
   if (phoneError) {
@@ -123,8 +127,10 @@ export function AddDoctor() {
   const { canWrite } = usePermission()
   const [data, setData] = useState(INITIAL_FORM_DATA)
   const [errors, setErrors] = useState({})
+  const [generalError, setGeneralError] = useState('')
   const [touched, setTouched] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [createdAccount, setCreatedAccount] = useState(null)
 
   useEffect(() => {
     if (!canWrite('doctors')) {
@@ -138,6 +144,7 @@ export function AddDoctor() {
       ...currentData,
       [name]: value,
     }))
+    setGeneralError('')
 
     if (errors[name]) {
       setErrors((currentErrors) => ({
@@ -170,10 +177,27 @@ export function AddDoctor() {
 
     try {
       const response = await createDoctor(prepareDoctorPayload(data))
-      toast.success('Doctor added')
-      navigate(`/doctors/${response.id}`)
+      const doctorId = getRecordId(response)
+
+      if (response?.email_sent === false) {
+        toast.warning(
+          'Profile created but email delivery failed. Share credentials manually.',
+        )
+        window.setTimeout(() => {
+          navigate(doctorId ? `/doctors/${doctorId}` : '/doctors', { replace: true })
+        }, 2000)
+        return
+      }
+
+      setCreatedAccount({
+        email: String(data.email || '').trim(),
+        fullName: [data.first_name, data.last_name].filter(Boolean).join(' '),
+        id: doctorId,
+      })
     } catch (error) {
-      toast.error(getBackendError(error, 'Doctor could not be created.'))
+      const message = getBackendError(error, 'Doctor could not be created.')
+      toast.error(message)
+      setGeneralError(message)
       setErrors(error?.response?.data || { general: 'Doctor could not be created.' })
     } finally {
       setIsSubmitting(false)
@@ -212,6 +236,8 @@ export function AddDoctor() {
           touched={touched}
         />
 
+        <ErrorBanner message={generalError} />
+
         <div className="flex gap-3 pt-4">
           <button
             className="flex-1 rounded-control border border-hairline px-4 py-2.5 text-[13px] font-medium text-slate transition hover:bg-mist hover:text-ink"
@@ -221,14 +247,28 @@ export function AddDoctor() {
             Cancel
           </button>
           <button
-            className="flex-1 rounded-control bg-brand px-4 py-2.5 text-[13px] font-medium text-white transition hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex flex-1 items-center justify-center rounded-control bg-brand px-4 py-2.5 text-[13px] font-medium text-white transition hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isSubmitting}
             type="submit"
           >
-            {isSubmitting ? 'Adding...' : 'Add Doctor'}
+            {isSubmitting ? <LoadingSpinner light /> : 'Add Doctor'}
           </button>
         </div>
       </form>
+
+      {createdAccount ? (
+        <AccountCreatedModal
+          email={createdAccount.email}
+          entityLabel="Doctor"
+          fullName={createdAccount.fullName}
+          onViewProfile={() =>
+            navigate(
+              createdAccount.id ? `/doctors/${createdAccount.id}` : '/doctors',
+              { replace: true },
+            )
+          }
+        />
+      ) : null}
     </div>
   )
 }

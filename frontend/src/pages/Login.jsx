@@ -8,7 +8,6 @@ import {
   Lock,
   User,
 } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
 
 import { useAuth } from '@shared/context/AuthContext'
 
@@ -73,8 +72,7 @@ function LoginField({
 }
 
 export function Login() {
-  const navigate = useNavigate()
-  const { homePath, login } = useAuth()
+  const { login } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -88,7 +86,6 @@ export function Login() {
 
     try {
       await login(email, password)
-      navigate(homePath(), { replace: true })
     } catch (loginError) {
       setError(
         loginError?.response?.data?.detail ||

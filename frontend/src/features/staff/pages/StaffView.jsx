@@ -274,6 +274,11 @@ export function StaffView() {
                 {staffMember.phone || '-'}
               </p>
             </DetailItem>
+            <DetailItem label="Email">
+              <p className="font-mono text-[14px] font-semibold text-ink">
+                {staffMember.email || '-'}
+              </p>
+            </DetailItem>
             <DetailItem label="Age">
               {ageIssue ? (
                 <>

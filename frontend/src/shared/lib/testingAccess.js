@@ -4,11 +4,11 @@ export const PUBLIC_ROUTES_FOR_TESTING = true
 const TESTING_ROLE_STORAGE_KEY = 'mediflow_testing_role'
 
 export const FULL_ACCESS_PERMISSIONS = {
-  appointments: 'both',
-  doctors: 'both',
-  patients: 'both',
+  appointments: 'full_access',
+  doctors: 'full_access',
+  patients: 'full_access',
   reports: 'read',
-  staff: 'both',
+  staff: 'full_access',
 }
 
 const TESTING_SESSIONS = {
@@ -34,8 +34,8 @@ const TESTING_SESSIONS = {
       appointments: 'read',
       doctors: 'read',
       patients: 'read',
-      reports: 'none',
-      staff: 'none',
+      reports: 'no_access',
+      staff: 'no_access',
     },
     role: {
       id: 2,
@@ -56,11 +56,11 @@ const TESTING_SESSIONS = {
   },
   receptionist: {
     permissions: {
-      appointments: 'both',
-      doctors: 'both',
-      patients: 'both',
+      appointments: 'full_access',
+      doctors: 'full_access',
+      patients: 'full_access',
       reports: 'read',
-      staff: 'none',
+      staff: 'no_access',
     },
     role: {
       id: 3,
