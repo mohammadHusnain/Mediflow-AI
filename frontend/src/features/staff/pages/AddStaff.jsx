@@ -1,7 +1,7 @@
 /* src/features/staff/pages/AddStaff.jsx - Add new staff member form. */
 import { useEffect, useState } from 'react'
 import { ChevronLeft, UserPlus } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
 import StaffFormFields from '@features/staff/components/StaffFormFields'
 import {
@@ -12,7 +12,7 @@ import {
 } from '@features/staff/lib/staffForm'
 import { ErrorBanner, LoadingSpinner } from '@shared/components/FormPrimitives'
 import { useToast } from '@shared/components/Toast'
-import { getBackendError } from '@shared/lib/records'
+import { getBackendError, getRecordId } from '@shared/lib/records'
 import { usePermission } from '@shared/lib/usePermission'
 import { createStaff, getRoleNames } from '@shared/services/api'
 
@@ -144,9 +144,9 @@ export function AddStaff() {
         toast.custom(
           <>
             Staff member added. New role "{payload.role}" saved to Access Control.{' '}
-            <Link className="font-semibold underline" to="/access-control">
+            <a className="font-semibold underline" href="/access-control">
               Go to Access Control
-            </Link>{' '}
+            </a>{' '}
             to set permissions for this role.
           </>,
         )
@@ -154,7 +154,9 @@ export function AddStaff() {
         toast.success('Staff member added')
       }
 
-      navigate(`/staff/${response.id}`)
+      const staffId = getRecordId(response)
+
+      navigate(staffId ? `/staff/${staffId}` : '/staff', { replace: true })
     } catch (error) {
       const message = getBackendError(error, 'Staff member could not be created.')
       toast.error(message)

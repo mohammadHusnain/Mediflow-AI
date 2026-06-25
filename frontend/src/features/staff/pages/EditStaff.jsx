@@ -1,7 +1,7 @@
 /* src/features/staff/pages/EditStaff.jsx - Edit existing staff member. */
 import { useEffect, useState } from 'react'
 import { ChevronLeft, Pencil } from 'lucide-react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 
 import StaffFormFields from '@features/staff/components/StaffFormFields'
 import {
@@ -217,9 +217,9 @@ export function EditStaff() {
         toast.custom(
           <>
             Staff member updated. New role "{payload.role}" saved to Access Control.{' '}
-            <Link className="font-semibold underline" to="/access-control">
+            <a className="font-semibold underline" href="/access-control">
               Go to Access Control
-            </Link>{' '}
+            </a>{' '}
             to set permissions for this role.
           </>,
         )

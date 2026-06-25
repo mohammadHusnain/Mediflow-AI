@@ -39,11 +39,31 @@ function DetailItem({ children, label }) {
   )
 }
 
+function normalizeStaffResponse(response) {
+  if (!response || typeof response !== 'object') {
+    return null
+  }
+
+  if (response.data && typeof response.data === 'object') {
+    return normalizeStaffResponse(response.data)
+  }
+
+  if (response.staff && typeof response.staff === 'object') {
+    return normalizeStaffResponse(response.staff)
+  }
+
+  if (response.staff_member && typeof response.staff_member === 'object') {
+    return normalizeStaffResponse(response.staff_member)
+  }
+
+  return response
+}
+
 export function StaffView() {
   const { id } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
-  const { clearPageMeta, setPageMeta } = useOutletContext()
+  const outletContext = useOutletContext()
   const { canDelete, canRead, canWrite } = usePermission()
   const [staffMember, setStaffMember] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -77,9 +97,11 @@ export function StaffView() {
 
       try {
         const response = await getStaffById(id)
+        const staffRecord = normalizeStaffResponse(response)
 
         if (mounted) {
-          setStaffMember(response)
+          setStaffMember(staffRecord)
+          setNotFound(!staffRecord)
         }
       } catch (error) {
         if (!mounted) return
@@ -107,7 +129,7 @@ export function StaffView() {
   useEffect(() => {
     if (!staffMember) return undefined
 
-    setPageMeta({
+    outletContext?.setPageMeta?.({
       title: staffMember.full_name || 'Staff Profile',
       subtitle: (
         <span className="inline-flex items-center gap-2">
@@ -117,8 +139,8 @@ export function StaffView() {
       ),
     })
 
-    return clearPageMeta
-  }, [clearPageMeta, setPageMeta, staffMember])
+    return outletContext?.clearPageMeta
+  }, [outletContext, staffMember])
 
   async function handleConfirmDelete() {
     setIsDeleting(true)
