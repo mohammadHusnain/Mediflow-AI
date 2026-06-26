@@ -42,12 +42,12 @@ export default {
         },
       },
       fontFamily: {
-        display: ['"DM Serif Display"', 'serif'],
+        display: ['Outfit', 'sans-serif'],
         sans: ['Outfit', 'sans-serif'],
-        mono: ['"JetBrains Mono"', 'monospace'],
+        mono: ['Outfit', 'sans-serif'],
       },
       borderRadius: {
-        card: '12px',
+        card: '8px',
         control: '8px',
       },
       boxShadow: {

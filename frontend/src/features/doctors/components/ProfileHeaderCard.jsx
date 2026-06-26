@@ -52,7 +52,7 @@ export function ProfileHeaderCard({ doctor }) {
               </div>
             ) : null}
             {doctor.join_date ? (
-              <p className="mt-3 flex items-center gap-1 font-mono text-[12px] text-slate">
+              <p className="mt-3 flex items-center gap-1 font-sans text-[12px] text-slate">
                 <Calendar aria-hidden="true" className="h-[13px] w-[13px]" />
                 Joined {formatDate(doctor.join_date)}
               </p>
@@ -64,7 +64,7 @@ export function ProfileHeaderCard({ doctor }) {
           {canViewFull && doctor.email ? (
             <DetailItem label="Email">
               <a
-                className="block truncate font-mono text-[13px] text-brand hover:underline"
+                className="block truncate font-sans text-[13px] text-brand hover:underline"
                 href={`mailto:${doctor.email}`}
               >
                 {doctor.email}
@@ -73,11 +73,11 @@ export function ProfileHeaderCard({ doctor }) {
           ) : null}
           {canViewFull && doctor.phone ? (
             <DetailItem label="Phone">
-              <span className="font-mono text-[13px]">{doctor.phone}</span>
+              <span className="font-sans text-[13px]">{doctor.phone}</span>
             </DetailItem>
           ) : null}
           <DetailItem label="Shift">
-            <span className="font-mono text-[13px]">
+            <span className="font-sans text-[13px]">
               {formatShiftTime(doctor.shift_start)} - {formatShiftTime(doctor.shift_end)}
             </span>
           </DetailItem>

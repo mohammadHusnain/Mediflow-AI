@@ -175,7 +175,7 @@ export function AppointmentsTable({ doctorId }) {
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-4 font-mono text-[13px] text-ink">
+                    <td className="px-5 py-4 font-sans text-[13px] text-ink">
                       {dateParts.date}
                       {dateParts.time ? (
                         <>

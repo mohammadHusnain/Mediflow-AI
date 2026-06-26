@@ -1,6 +1,11 @@
 import { MoreHorizontal, ServerCrash } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
+import {
+  emptyStateClass,
+  panelHeaderClass,
+  surfaceClass,
+} from '@shared/components/FormPrimitives'
 import DarkTooltip from '@shared/components/charts/DarkTooltip'
 import { useCountUp } from '@shared/lib/countUp'
 import { stagger } from '@shared/lib/motion'
@@ -41,13 +46,12 @@ export function DashboardStatCard({
 
   return (
     <article
-      className="group relative animate-fade-up overflow-hidden rounded-[24px] border border-white/80 bg-[linear-gradient(135deg,#FFFFFF_0%,rgba(255,255,255,0.9)_100%)] p-5 shadow-[0_18px_50px_rgba(20,24,31,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_26px_70px_rgba(20,24,31,0.12)]"
+      className={`${surfaceClass} group relative h-full animate-fade-up overflow-hidden p-5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(20,24,31,0.07)]`}
       style={stagger(index, 0.08)}
     >
-      <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent" />
       <div className="relative flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="animate-count-up font-display text-[36px] font-normal leading-none text-ink">
+          <p className="animate-count-up font-sans text-[36px] font-extrabold leading-none text-ink">
             {count}
           </p>
           <p className="mt-3 text-[13px] font-medium text-slate">{label}</p>
@@ -56,7 +60,7 @@ export function DashboardStatCard({
         <div className="flex shrink-0 flex-col items-end gap-4">
           <MoreHorizontal aria-hidden="true" className="h-5 w-5 text-slate/35" />
           <div
-            className={`flex h-12 w-12 items-center justify-center rounded-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] ${tone}`}
+            className={`flex h-12 w-12 items-center justify-center rounded-control ${tone}`}
           >
             <Icon aria-hidden="true" className="h-5 w-5" />
           </div>
@@ -76,12 +80,11 @@ export function DashboardPanel({
   title,
 }) {
   return (
-    <section className="group/panel relative overflow-hidden rounded-[28px] border border-white/85 bg-[linear-gradient(145deg,rgba(255,255,255,0.98)_0%,rgba(248,250,252,0.94)_100%)] shadow-[0_24px_70px_rgba(20,24,31,0.09)] backdrop-blur">
-      <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent" />
-      <div className="relative flex min-h-16 items-center justify-between gap-3 border-b border-hairline/70 px-5 py-4">
+    <section className={`${surfaceClass} group/panel relative h-full overflow-hidden`}>
+      <div className={panelHeaderClass}>
         <div className="flex min-w-0 items-center gap-3">
           <span className="h-2.5 w-2.5 rounded-full bg-brand shadow-[0_0_0_6px_rgba(67,56,202,0.08)]" />
-          <h2 className="truncate text-[16px] font-bold tracking-[-0.02em] text-ink">
+          <h2 className="truncate text-[16px] font-bold text-ink">
             {title}
           </h2>
         </div>
@@ -108,9 +111,9 @@ export function DashboardPanel({
 
 export function DashboardErrorState({ message, onRetry }) {
   return (
-    <section className="rounded-[24px] border border-white/80 bg-canvas p-10 text-center shadow-[0_18px_55px_rgba(20,24,31,0.07)]">
+    <section className={`${surfaceClass} p-10 text-center`}>
       <ServerCrash aria-hidden="true" className="mx-auto mb-4 h-10 w-10 text-slate/30" />
-      <h2 className="font-display text-[18px] font-normal italic text-slate">Something went wrong</h2>
+      <h2 className="font-sans text-[18px] font-normal italic text-slate">Something went wrong</h2>
       <p className="mt-1 text-[14px] font-normal text-slate">{message}</p>
       <button
         className="mt-5 rounded-control border border-hairline bg-canvas px-4 py-2 text-sm font-semibold text-slate transition hover:bg-mist hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 focus-visible:ring-offset-2"
@@ -132,12 +135,12 @@ export function DashboardEmptyState({
   return (
     <div
       className={[
-        'flex min-h-[180px] flex-col items-center justify-center rounded-[20px] px-6 py-8 text-center',
+        emptyStateClass,
         className,
       ].join(' ')}
     >
       {Icon ? <Icon aria-hidden="true" className="mb-3 h-9 w-9 text-brand/25" /> : null}
-      <p className="font-display text-[18px] font-normal italic text-slate">{title}</p>
+      <p className="font-sans text-[18px] font-normal italic text-slate">{title}</p>
       {description ? (
         <p className="mt-1 max-w-sm text-[13px] font-normal leading-6 text-slate">
           {description}

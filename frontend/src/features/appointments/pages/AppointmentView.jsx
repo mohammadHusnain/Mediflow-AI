@@ -185,7 +185,7 @@ export function AppointmentView() {
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate">
                 Date & Time
               </p>
-              <p className="mt-1 font-mono text-[13px] font-medium text-ink">
+              <p className="mt-1 font-sans text-[13px] font-medium text-ink">
                 {formatDateTime(appointment.appointment_dt)}
               </p>
             </div>
@@ -204,7 +204,7 @@ export function AppointmentView() {
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate">
                 Vitals
               </p>
-              <span className="rounded bg-mist px-2 py-0.5 font-mono text-[12px] text-ink">
+              <span className="rounded bg-mist px-2 py-0.5 font-sans text-[12px] text-ink">
                 {vitalsText}
               </span>
             </section>

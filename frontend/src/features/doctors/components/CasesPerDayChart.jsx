@@ -132,7 +132,7 @@ export function CasesPerDayChart({
               <XAxis
                 dataKey="label"
                 interval={view === '30d' ? 4 : 0}
-                tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
                 tickLine={false}
               />
               <YAxis
@@ -149,7 +149,7 @@ export function CasesPerDayChart({
                   value: `Avg ${Number(avgCasesPerDay || 0)}`,
                   fill: '#F59E0B',
                   fontSize: 10,
-                  fontFamily: 'JetBrains Mono',
+                  fontFamily: 'Outfit, sans-serif',
                 }}
               />
               <Bar dataKey="count" fill="#EEF2FF" name="Daily Cases" radius={[4, 4, 0, 0]} />

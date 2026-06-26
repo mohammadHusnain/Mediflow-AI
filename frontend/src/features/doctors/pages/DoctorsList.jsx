@@ -431,7 +431,7 @@ export function DoctorsList() {
                               <p className="truncate text-[14px] font-semibold text-ink">
                                 {doctorName}
                               </p>
-                              <p className="truncate font-mono text-[11px] text-slate">
+                              <p className="truncate font-sans text-[11px] text-slate">
                                 {doctor.email || '-'}
                               </p>
                             </div>
@@ -457,16 +457,16 @@ export function DoctorsList() {
                             }
                           />
                         </td>
-                        <td className="px-5 py-4 font-mono text-[13px] text-ink">
+                        <td className="px-5 py-4 font-sans text-[13px] text-ink">
                           {doctor.experience_years ?? 0} yrs
                         </td>
-                        <td className="px-5 py-4 font-mono text-[12px] text-slate">
+                        <td className="px-5 py-4 font-sans text-[12px] text-slate">
                           {formatShiftRange(doctor.shift_start, doctor.shift_end)}
                         </td>
-                        <td className="px-5 py-4 font-mono text-[12px] text-slate">
+                        <td className="px-5 py-4 font-sans text-[12px] text-slate">
                           {formatArrival(doctor.today_checkin)}
                         </td>
-                        <td className="px-5 py-4 font-mono text-[13px] font-medium text-ink">
+                        <td className="px-5 py-4 font-sans text-[13px] font-medium text-ink">
                           {Number(doctor.cases_today || 0)}
                         </td>
                         <td className="px-5 py-4">

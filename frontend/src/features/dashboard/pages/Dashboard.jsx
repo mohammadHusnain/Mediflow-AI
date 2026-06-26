@@ -599,7 +599,7 @@ export function Dashboard() {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="font-mono text-[12px] font-medium text-slate">
+                      <p className="font-sans text-[12px] font-medium text-slate">
                         {formatTime(appointment.appointment_dt)}
                       </p>
                       <div className="mt-1">
@@ -634,7 +634,7 @@ export function Dashboard() {
                       {getPatientConditions(patient)[0] || 'No condition recorded'}
                     </p>
                   </div>
-                  <p className="font-mono text-[12px] font-medium text-slate">
+                  <p className="font-sans text-[12px] font-medium text-slate">
                     {Number.isFinite(getPatientAge(patient))
                       ? `${getPatientAge(patient)} yrs`
                       : '-'}

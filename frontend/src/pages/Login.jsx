@@ -167,11 +167,11 @@ export function Login() {
         </a>
 
         <form
-          className="w-full max-w-md animate-fade-up rounded-2xl bg-canvas p-8 shadow-card md:p-10"
+          className="w-full max-w-md animate-fade-up rounded-card border border-hairline/70 bg-canvas p-8 shadow-card md:p-10"
           onSubmit={handleSubmit}
           style={{ animationDelay: '0.1s' }}
         >
-          <h1 className="font-display text-[32px] font-normal tracking-[-0.02em] text-ink">
+          <h1 className="text-[32px] font-bold text-ink">
             Welcome back
           </h1>
           <p className="mt-1 text-sm font-medium text-slate">

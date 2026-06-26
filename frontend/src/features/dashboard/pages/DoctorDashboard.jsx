@@ -21,12 +21,9 @@ import {
 import {
   Area,
   Bar,
-  BarChart,
   CartesianGrid,
-  Cell,
   ComposedChart,
   Line,
-  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -57,6 +54,7 @@ import {
   isCompletedAppointment,
 } from '@features/dashboard/lib/analytics'
 import Avatar from '@shared/components/Avatar'
+import { surfaceClass } from '@shared/components/FormPrimitives'
 import SkeletonRow from '@shared/components/SkeletonRow'
 import { useAuth } from '@shared/context/AuthContext'
 import { buildGreeting } from '@shared/lib/greeting'
@@ -102,22 +100,6 @@ const STATUS_COLORS = {
   in_progress: '#D97706',
   completed: '#059669',
   cancelled: '#DC2626',
-}
-
-const SCHEDULE_TIME_BUCKETS = [
-  { end: 9, key: 'early', label: '7-9a', start: 7 },
-  { end: 11, key: 'morning', label: '9-11a', start: 9 },
-  { end: 13, key: 'midday', label: '11-1p', start: 11 },
-  { end: 15, key: 'afternoon', label: '1-3p', start: 13 },
-  { end: 18, key: 'late', label: '3-6p', start: 15 },
-]
-
-function formatStatusLabel(status) {
-  return String(status || 'scheduled')
-    .split('_')
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ')
 }
 
 function getCount(response) {
@@ -436,90 +418,6 @@ export function DoctorDashboard() {
     ]
   }, [casesChartData])
 
-  const weeklyCasesTotal = useMemo(
-    () => casesChartData.reduce((sum, day) => sum + day.count, 0),
-    [casesChartData],
-  )
-
-  const bestCaseDay = useMemo(
-    () =>
-      casesChartData.reduce(
-        (best, day) => (day.count > (best?.count || 0) ? day : best),
-        null,
-      ),
-    [casesChartData],
-  )
-
-  const hourlyScheduleData = useMemo(() => {
-    const buckets = SCHEDULE_TIME_BUCKETS.map((bucket) => ({
-      ...bucket,
-      cancelled: 0,
-      completed: 0,
-      count: 0,
-      inProgress: 0,
-      scheduled: 0,
-    }))
-
-    dashboardData.todayAppointments.forEach((appointment) => {
-      const appointmentDate = getAppointmentDate(appointment)
-
-      if (!appointmentDate) {
-        return
-      }
-
-      const hour = appointmentDate.getHours()
-      const targetBucket =
-        buckets.find((bucket) => hour >= bucket.start && hour < bucket.end) ||
-        (hour < buckets[0].start ? buckets[0] : buckets.at(-1))
-      const status = String(appointment.status || 'scheduled').toLowerCase()
-
-      targetBucket.count += 1
-
-      if (status === 'completed') {
-        targetBucket.completed += 1
-      } else if (status === 'cancelled') {
-        targetBucket.cancelled += 1
-      } else if (status === 'in_progress') {
-        targetBucket.inProgress += 1
-      } else {
-        targetBucket.scheduled += 1
-      }
-    })
-
-    return buckets
-  }, [dashboardData.todayAppointments])
-
-  const hourlyScheduleTotal = useMemo(
-    () => hourlyScheduleData.reduce((sum, item) => sum + item.count, 0),
-    [hourlyScheduleData],
-  )
-
-  const busiestScheduleSlot = useMemo(
-    () =>
-      hourlyScheduleData.reduce(
-        (best, item) => (item.count > (best?.count || 0) ? item : best),
-        null,
-      ),
-    [hourlyScheduleData],
-  )
-
-  const todayStatusData = useMemo(() => {
-    const statusCounts = dashboardData.todayAppointments.reduce((counts, appointment) => {
-      const status = String(appointment.status || 'scheduled').toLowerCase()
-      counts[status] = (counts[status] || 0) + 1
-      return counts
-    }, {})
-
-    return ['scheduled', 'in_progress', 'completed', 'cancelled']
-      .map((status) => ({
-        color: STATUS_COLORS[status],
-        count: statusCounts[status] || 0,
-        label: formatStatusLabel(status),
-        status,
-      }))
-      .filter((item) => item.count > 0)
-  }, [dashboardData.todayAppointments])
-
   const todayCompletedCount = useMemo(
     () =>
       dashboardData.todayAppointments.filter(
@@ -555,21 +453,6 @@ export function DoctorDashboard() {
   }, [dashboardData.patients])
 
   const topCondition = patientConditionData[0]?.label || 'No condition mix'
-
-  const todayStatusTotal = useMemo(
-    () => todayStatusData.reduce((sum, item) => sum + item.count, 0),
-    [todayStatusData],
-  )
-
-  const todayStatusPeak = useMemo(
-    () => Math.max(1, ...todayStatusData.map((item) => item.count)),
-    [todayStatusData],
-  )
-
-  const conditionTotal = useMemo(
-    () => patientConditionData.reduce((sum, item) => sum + item.count, 0),
-    [patientConditionData],
-  )
 
   const conditionPeak = useMemo(
     () => Math.max(1, ...patientConditionData.map((item) => item.count)),
@@ -941,8 +824,7 @@ export function DoctorDashboard() {
 
   return (
     <div className="dashboard-stage space-y-5">
-      <section className="relative animate-fade-up overflow-hidden rounded-[30px] border border-white/80 bg-[linear-gradient(135deg,#FFFFFF_0%,#F8FAFC_54%,#E0F2FE_100%)] p-6 shadow-[0_24px_80px_rgba(20,24,31,0.09)]">
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(91,100,114,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(91,100,114,0.045)_1px,transparent_1px)] bg-[size:34px_34px]" />
+      <section className={`${surfaceClass} relative animate-fade-up overflow-hidden p-6`}>
         <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
           <div className="flex min-w-0 flex-col justify-between gap-6">
             <div>
@@ -950,18 +832,18 @@ export function DoctorDashboard() {
                 <Sparkles aria-hidden="true" className="h-3.5 w-3.5" />
                 Clinical cockpit
               </span>
-              <h2 className="mt-4 max-w-2xl text-[28px] font-bold leading-tight tracking-[-0.03em] text-ink md:text-[34px]">
+              <h2 className="mt-4 max-w-2xl text-[28px] font-extrabold leading-tight text-ink md:text-[34px]">
                 {heroGreeting}
               </h2>
               <p className="mt-3 max-w-2xl text-[14px] leading-6 text-slate">
                 {heroDateLine}
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
-                <p className="inline-flex items-center rounded-full bg-white/80 px-3 py-1.5 font-mono text-[12px] font-semibold text-slate shadow-sm">
+                <p className="inline-flex items-center rounded-full bg-white/80 px-3 py-1.5 font-sans text-[12px] font-semibold text-slate shadow-sm">
                   <Clock3 aria-hidden="true" className="mr-1.5 h-3.5 w-3.5 text-brand" />
                   Shift {shiftValue}
                 </p>
-                <p className="inline-flex items-center rounded-full bg-white/80 px-3 py-1.5 font-mono text-[12px] font-semibold text-slate shadow-sm">
+                <p className="inline-flex items-center rounded-full bg-white/80 px-3 py-1.5 font-sans text-[12px] font-semibold text-slate shadow-sm">
                   Live sync {lastUpdatedLabel}
                 </p>
               </div>
@@ -973,7 +855,7 @@ export function DoctorDashboard() {
 
                 return (
                   <div
-                    className="animate-fade-up rounded-[20px] border border-white/75 bg-white/80 p-4 shadow-[0_12px_34px_rgba(20,24,31,0.06)] backdrop-blur"
+                    className="h-full animate-fade-up rounded-card border border-hairline/70 bg-canvas p-4 shadow-card"
                     key={signal.label}
                     style={stagger(index, 0.05)}
                   >
@@ -989,7 +871,7 @@ export function DoctorDashboard() {
                           {isLoading ? 'Syncing schedule' : signal.context}
                         </p>
                       </div>
-                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${signal.tone}`}>
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-control ${signal.tone}`}>
                         <SignalIcon aria-hidden="true" className="h-4 w-4" />
                       </div>
                     </div>
@@ -999,12 +881,11 @@ export function DoctorDashboard() {
             </div>
           </div>
 
-          <div className="relative overflow-hidden rounded-[26px] bg-[linear-gradient(160deg,#0F172A_0%,#4338CA_55%,#7C3AED_100%)] p-5 text-white shadow-[0_22px_60px_rgba(67,56,202,0.28)]">
-            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[size:28px_28px] opacity-45" />
+          <div className="relative overflow-hidden rounded-card bg-brand p-5 text-white shadow-card">
             <div className="relative flex items-start justify-between gap-4">
               <div>
                 <p className="text-[13px] font-semibold text-white/70">Today&apos;s work</p>
-                <p className="mt-3 text-[46px] font-bold leading-none tracking-[-0.04em]">
+                <p className="mt-3 text-[46px] font-extrabold leading-none">
                   {isLoading ? '--' : Number(dashboardData.stats.cases_today || 0)}
                 </p>
                 <p className="mt-2 text-[13px] text-white/70">cases today</p>
@@ -1022,7 +903,7 @@ export function DoctorDashboard() {
                 lineClassName="stroke-white/85"
                 values={doctorHeroSparkline}
               />
-              <div className="absolute bottom-0 left-0 right-0 flex justify-between font-mono text-[11px] text-white/60">
+              <div className="absolute bottom-0 left-0 right-0 flex justify-between font-sans text-[11px] text-white/60">
                 {doctorHeroSparkLabels.map((label) => (
                   <span key={label}>{label}</span>
                 ))}
@@ -1030,18 +911,18 @@ export function DoctorDashboard() {
             </div>
 
             <div className="mt-5 grid grid-cols-2 gap-3">
-              <div className="rounded-2xl bg-white/12 p-3 backdrop-blur">
+              <div className="rounded-control bg-white/12 p-3">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/55">
                   Next patient
                 </p>
                 <p className="mt-1 truncate text-[16px] font-bold">
                   {nextAppointment ? getAppointmentPatientName(nextAppointment) : 'Schedule clear'}
                 </p>
-                <p className="mt-1 font-mono text-[11px] text-white/60">
+                <p className="mt-1 font-sans text-[11px] text-white/60">
                   {nextAppointment ? formatClock(nextAppointment.appointment_dt) : '-'}
                 </p>
               </div>
-              <div className="rounded-2xl bg-white/12 p-3 backdrop-blur">
+              <div className="rounded-control bg-white/12 p-3">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/55">
                   Completion
                 </p>
@@ -1128,7 +1009,7 @@ export function DoctorDashboard() {
                       <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
                         {label}
                       </p>
-                      <p className="mt-1 truncate font-mono text-[18px] font-bold text-ink">{value}</p>
+                      <p className="mt-1 truncate font-sans text-[18px] font-bold text-ink">{value}</p>
                     </div>
                   ))}
                 </div>
@@ -1151,14 +1032,14 @@ export function DoctorDashboard() {
                         axisLine={false}
                         dataKey="label"
                         interval={getAxisInterval(doctorAnalyticsPeriod)}
-                        tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                        tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
                         tickLine={false}
                         tickMargin={12}
                       />
                       <YAxis
                         allowDecimals={false}
                         axisLine={false}
-                        tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                        tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
                         tickLine={false}
                         tickMargin={8}
                       />
@@ -1209,12 +1090,12 @@ export function DoctorDashboard() {
 
                 return (
                   <div
-                    className="animate-fade-up rounded-[20px] border border-hairline bg-white/85 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(20,24,31,0.08)]"
+                    className="animate-fade-up rounded-card border border-hairline/70 bg-canvas p-4 shadow-card transition hover:-translate-y-0.5"
                     key={insight.label}
                     style={stagger(index, 0.04)}
                   >
                     <div className="flex items-start gap-3">
-                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${insight.tone}`}>
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-control ${insight.tone}`}>
                         <InsightIcon aria-hidden="true" className="h-4 w-4" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -1222,7 +1103,7 @@ export function DoctorDashboard() {
                           <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
                             {insight.label}
                           </p>
-                          <span className="rounded-full bg-brand-light px-2 py-0.5 font-mono text-[10px] font-bold text-brand">
+                          <span className="rounded-full bg-brand-light px-2 py-0.5 font-sans text-[10px] font-bold text-brand">
                             AI {insight.confidence}%
                           </span>
                         </div>
@@ -1243,7 +1124,7 @@ export function DoctorDashboard() {
           {appointmentsEnabled ? (
             <DashboardPanel title="Appointment Operations Timeline">
               <div className="grid gap-5 lg:grid-cols-[150px_minmax(0,1fr)]">
-                <div className="rounded-[22px] border border-hairline bg-mist p-4 text-center">
+                <div className="rounded-card border border-hairline/70 bg-mist p-4 text-center">
                   <div
                     className="mx-auto flex h-28 w-28 items-center justify-center rounded-full p-2"
                     style={{
@@ -1252,7 +1133,7 @@ export function DoctorDashboard() {
                   >
                     <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-white shadow-inner">
                       <Gauge aria-hidden="true" className="mb-1 h-5 w-5 text-brand" />
-                      <span className="font-mono text-[24px] font-bold text-ink">
+                      <span className="font-sans text-[24px] font-bold text-ink">
                         {scheduleCompletionRate}%
                       </span>
                       <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
@@ -1280,7 +1161,7 @@ export function DoctorDashboard() {
                         style={stagger(index, 0.04)}
                       >
                         <div className="flex items-center gap-3">
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-brand-light font-mono text-[11px] font-bold text-brand">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-brand-light font-sans text-[11px] font-bold text-brand">
                             {appointment.time}
                           </span>
                           <div className="min-w-0 flex-1">
@@ -1288,7 +1169,7 @@ export function DoctorDashboard() {
                             <p className="truncate text-[12px] text-slate">{appointment.reason}</p>
                           </div>
                           <span
-                            className="rounded-full px-2.5 py-1 font-mono text-[10px] font-bold"
+                            className="rounded-full px-2.5 py-1 font-sans text-[10px] font-bold"
                             style={{
                               backgroundColor: `${STATUS_COLORS[appointment.status] || STATUS_COLORS.scheduled}18`,
                               color: STATUS_COLORS[appointment.status] || STATUS_COLORS.scheduled,
@@ -1325,7 +1206,7 @@ export function DoctorDashboard() {
                           <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
                             {label}
                           </p>
-                          <p className="mt-1 font-mono text-[18px] font-bold text-ink">{value}</p>
+                          <p className="mt-1 font-sans text-[18px] font-bold text-ink">{value}</p>
                         </div>
                       ))}
                     </div>
@@ -1351,7 +1232,7 @@ export function DoctorDashboard() {
                             axisLine={false}
                             dataKey="label"
                             interval={getAxisInterval(doctorAnalyticsPeriod)}
-                            tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                            tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
                             tickLine={false}
                             tickMargin={12}
                           />
@@ -1359,7 +1240,7 @@ export function DoctorDashboard() {
                             allowDecimals={false}
                             axisLine={false}
                             domain={[0, 100]}
-                            tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                            tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
                             tickLine={false}
                             tickMargin={8}
                           />
@@ -1394,9 +1275,9 @@ export function DoctorDashboard() {
                     </div>
                   </div>
 
-                  <aside className="space-y-3 rounded-[22px] border border-hairline bg-white/80 p-5 shadow-sm">
+                  <aside className="space-y-3 rounded-card border border-hairline/70 bg-canvas p-5 shadow-card">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#ECFDF5] text-[#059669]">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-control bg-[#ECFDF5] text-[#059669]">
                         <Zap aria-hidden="true" className="h-4 w-4" />
                       </div>
                       <div>
@@ -1410,13 +1291,13 @@ export function DoctorDashboard() {
                     </div>
                     <div className="space-y-3">
                       {patientHealthAnalytics.journeyRows.map((patient) => (
-                        <div className="rounded-[18px] bg-mist p-3" key={patient.id}>
+                        <div className="rounded-control bg-mist p-3" key={patient.id}>
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <p className="truncate text-[13px] font-bold text-ink">{patient.name}</p>
                               <p className="truncate text-[11px] text-slate">{patient.condition}</p>
                             </div>
-                            <span className="font-mono text-[12px] font-bold text-[#C2410C]">
+                            <span className="font-sans text-[12px] font-bold text-[#C2410C]">
                               {patient.risk}% risk
                             </span>
                           </div>
@@ -1449,308 +1330,11 @@ export function DoctorDashboard() {
         </section>
       ) : null}
 
-      {appointmentsEnabled || patientsEnabled ? (
-        <section className="grid gap-5 xl:grid-cols-3">
-          {appointmentsEnabled ? (
-            <DashboardPanel bodyClassName="p-0" title="Today's Status Mix">
-              {isLoading ? (
-                <div className="m-5 h-[300px] rounded-[24px] bg-mist p-4">
-                  <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
-                </div>
-              ) : todayStatusData.length === 0 ? (
-                <DashboardEmptyState title="No schedule status data yet" />
-              ) : (
-                <div className="analytics-surface overflow-hidden p-5">
-                  <div className="relative flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-slate">
-                        Today&apos;s schedule pulse
-                      </p>
-                      <p className="mt-2 text-[34px] font-bold leading-none tracking-[-0.04em] text-ink">
-                        {todayStatusTotal}
-                      </p>
-                      <p className="mt-1 text-[12px] font-medium text-slate">
-                        appointments on your board
-                      </p>
-                    </div>
-                    <span className="rounded-full bg-[#ECFDF5] px-3 py-1.5 font-mono text-[11px] font-bold text-[#059669]">
-                      {scheduleCompletionRate}% done
-                    </span>
-                  </div>
-
-                  <div className="relative mt-5 h-[224px]">
-                    <ResponsiveContainer height="100%" width="100%">
-                      <BarChart data={todayStatusData} margin={{ bottom: 0, left: -18, right: 8, top: 8 }}>
-                        <defs>
-                          <linearGradient id="doctorStatusGradient-scheduled" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#38BDF8" />
-                            <stop offset="100%" stopColor="#0284C7" />
-                          </linearGradient>
-                          <linearGradient id="doctorStatusGradient-in_progress" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#F59E0B" />
-                            <stop offset="100%" stopColor="#D97706" />
-                          </linearGradient>
-                          <linearGradient id="doctorStatusGradient-completed" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#34D399" />
-                            <stop offset="100%" stopColor="#059669" />
-                          </linearGradient>
-                          <linearGradient id="doctorStatusGradient-cancelled" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#FB7185" />
-                            <stop offset="100%" stopColor="#DC2626" />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid stroke="#E4E8EB" strokeDasharray="4 7" vertical={false} />
-                        <XAxis
-                          axisLine={false}
-                          dataKey="label"
-                          tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
-                          tickLine={false}
-                          tickMargin={12}
-                        />
-                        <YAxis
-                          allowDecimals={false}
-                          axisLine={false}
-                          tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
-                          tickLine={false}
-                          tickMargin={8}
-                        />
-                        <Tooltip content={<DashboardChartTooltip />} cursor={{ fill: '#FFFFFF66' }} />
-                        <Bar
-                          background={{ fill: '#EEF2F7', radius: 10 }}
-                          barSize={58}
-                          dataKey="count"
-                          name="Appointments"
-                          radius={[14, 14, 8, 8]}
-                        >
-                          {todayStatusData.map((item) => (
-                            <Cell fill={`url(#doctorStatusGradient-${item.status})`} key={item.status} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  <div className="relative mt-4 grid gap-2 sm:grid-cols-3">
-                    {todayStatusData.map((item) => (
-                      <div className="rounded-2xl bg-white/80 p-3 shadow-sm" key={item.status}>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-[12px] font-semibold text-slate">
-                            {item.label}
-                          </span>
-                          <span className="font-mono text-[12px] font-bold text-ink">{item.count}</span>
-                        </div>
-                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              backgroundColor: item.color,
-                              width: `${Math.round((item.count / todayStatusPeak) * 100)}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </DashboardPanel>
-          ) : null}
-
-          {appointmentsEnabled ? (
-            <DashboardPanel bodyClassName="p-0" title="Today's Hourly Flow">
-              {isLoading ? (
-                <div className="m-5 h-[300px] rounded-[24px] bg-mist p-4">
-                  <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
-                </div>
-              ) : hourlyScheduleTotal === 0 ? (
-                <DashboardEmptyState title="No hourly schedule data yet" />
-              ) : (
-                <div className="analytics-surface overflow-hidden p-5">
-                  <div className="relative flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-slate">
-                        Bar graph by time
-                      </p>
-                      <p className="mt-2 text-[34px] font-bold leading-none tracking-[-0.04em] text-ink">
-                        {hourlyScheduleTotal}
-                      </p>
-                      <p className="mt-1 text-[12px] font-medium text-slate">
-                        appointments across the day
-                      </p>
-                    </div>
-                    <span className="rounded-full bg-[#E0F2FE] px-3 py-1.5 font-mono text-[11px] font-bold text-[#0284C7]">
-                      Peak {busiestScheduleSlot?.label || '-'}
-                    </span>
-                  </div>
-
-                  <div className="relative mt-5 h-[224px]">
-                    <ResponsiveContainer height="100%" width="100%">
-                      <BarChart data={hourlyScheduleData} margin={{ bottom: 0, left: -18, right: 8, top: 8 }}>
-                        <defs>
-                          <linearGradient id="hourlyFlowScheduled" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#38BDF8" />
-                            <stop offset="100%" stopColor="#0284C7" />
-                          </linearGradient>
-                          <linearGradient id="hourlyFlowCompleted" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#34D399" />
-                            <stop offset="100%" stopColor="#059669" />
-                          </linearGradient>
-                          <linearGradient id="hourlyFlowInProgress" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#FBBF24" />
-                            <stop offset="100%" stopColor="#D97706" />
-                          </linearGradient>
-                          <linearGradient id="hourlyFlowCancelled" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#FB7185" />
-                            <stop offset="100%" stopColor="#DC2626" />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid stroke="#E4E8EB" strokeDasharray="4 7" vertical={false} />
-                        <XAxis
-                          axisLine={false}
-                          dataKey="label"
-                          tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
-                          tickLine={false}
-                          tickMargin={12}
-                        />
-                        <YAxis
-                          allowDecimals={false}
-                          axisLine={false}
-                          tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
-                          tickLine={false}
-                          tickMargin={8}
-                        />
-                        <Tooltip content={<DashboardChartTooltip />} cursor={{ fill: '#FFFFFF66' }} />
-                        <Bar
-                          barSize={38}
-                          dataKey="scheduled"
-                          fill="url(#hourlyFlowScheduled)"
-                          name="Scheduled"
-                          radius={[10, 10, 6, 6]}
-                          stackId="hourly"
-                        />
-                        <Bar
-                          barSize={38}
-                          dataKey="inProgress"
-                          fill="url(#hourlyFlowInProgress)"
-                          name="In Progress"
-                          radius={[10, 10, 6, 6]}
-                          stackId="hourly"
-                        />
-                        <Bar
-                          barSize={38}
-                          dataKey="completed"
-                          fill="url(#hourlyFlowCompleted)"
-                          name="Completed"
-                          radius={[10, 10, 6, 6]}
-                          stackId="hourly"
-                        />
-                        <Bar
-                          barSize={38}
-                          dataKey="cancelled"
-                          fill="url(#hourlyFlowCancelled)"
-                          name="Cancelled"
-                          radius={[10, 10, 6, 6]}
-                          stackId="hourly"
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  <div className="relative mt-4 grid grid-cols-5 gap-2">
-                    {hourlyScheduleData.map((bucket) => (
-                      <div className="rounded-2xl bg-white/80 p-2.5 text-center shadow-sm" key={bucket.key}>
-                        <p className="font-mono text-[11px] font-bold text-ink">{bucket.count}</p>
-                        <p className="mt-1 text-[10px] font-semibold text-slate">{bucket.label}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </DashboardPanel>
-          ) : null}
-
-          {patientsEnabled ? (
-            <DashboardPanel bodyClassName="p-0" title="My Patient Conditions">
-              {isLoading ? (
-                <div className="m-5 h-[300px] rounded-[24px] bg-mist p-4">
-                  <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
-                </div>
-              ) : patientConditionData.length === 0 ? (
-                <DashboardEmptyState title="No condition data yet" />
-              ) : (
-                <div className="analytics-surface overflow-hidden p-5">
-                  <div className="relative flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-slate">
-                        Clinical condition mix
-                      </p>
-                      <p className="mt-2 text-[34px] font-bold leading-none tracking-[-0.04em] text-ink">
-                        {conditionTotal}
-                      </p>
-                      <p className="mt-1 text-[12px] font-medium text-slate">
-                        assigned patient conditions
-                      </p>
-                    </div>
-                    <span className="max-w-[150px] truncate rounded-full bg-brand-light px-3 py-1.5 text-[11px] font-bold text-brand">
-                      Focus {topCondition}
-                    </span>
-                  </div>
-
-                  <div className="relative mt-6 space-y-4">
-                    {patientConditionData.map((condition, index) => {
-                      const palette = ['#4338CA', '#0EA5E9', '#0D9488', '#F59E0B', '#DB2777']
-                      const color = palette[index % palette.length]
-                      const percent = Math.round((condition.count / conditionTotal) * 100)
-
-                      return (
-                        <div
-                          className="animate-fade-up rounded-[20px] border border-white/80 bg-white/80 p-4 shadow-[0_10px_30px_rgba(20,24,31,0.05)]"
-                          key={condition.label}
-                          style={stagger(index, 0.04)}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="truncate text-[14px] font-bold text-ink">
-                                {condition.label}
-                              </p>
-                              <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">
-                                Rank {index + 1}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-mono text-[18px] font-bold text-ink">
-                                {condition.count}
-                              </p>
-                              <p className="font-mono text-[11px] font-semibold text-slate">
-                                {percent}%
-                              </p>
-                            </div>
-                          </div>
-                          <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-100">
-                            <div
-                              className="h-full rounded-full bg-gradient-to-r"
-                              style={{
-                                backgroundImage: `linear-gradient(90deg, ${color}, ${color}99)`,
-                                width: `${Math.max(8, Math.round((condition.count / conditionPeak) * 100))}%`,
-                              }}
-                            />
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-            </DashboardPanel>
-          ) : null}
-        </section>
-      ) : null}
-
       {appointmentsEnabled ? (
         <DashboardPanel
           bodyClassName="p-0"
           headerContent={
-            <span className="font-mono text-[13px] font-medium text-slate">
+            <span className="font-sans text-[13px] font-medium text-slate">
               {formatLongDate()}
             </span>
           }
@@ -1803,7 +1387,7 @@ export function DoctorDashboard() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-4 font-mono text-[13px] font-medium text-ink">
+                      <td className="px-5 py-4 font-sans text-[13px] font-medium text-ink">
                         {formatClock(appointment.appointment_dt)}
                       </td>
                       <td
@@ -1835,7 +1419,7 @@ export function DoctorDashboard() {
         </DashboardPanel>
       ) : null}
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,11fr)_minmax(0,9fr)]">
+      <section className="grid gap-5">
         {patientsEnabled ? (
           <DashboardPanel
             action="View all"
@@ -1843,7 +1427,7 @@ export function DoctorDashboard() {
             bodyClassName="p-0"
             headerContent={
               <div className="flex items-center gap-3">
-                <span className="rounded-full bg-brand-light px-2 py-0.5 font-mono text-[11px] font-semibold text-brand">
+                <span className="rounded-full bg-brand-light px-2 py-0.5 font-sans text-[11px] font-semibold text-brand">
                   {dashboardData.totalPatients}
                 </span>
                 <Link
@@ -1900,16 +1484,16 @@ export function DoctorDashboard() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-5 py-4 font-mono text-[13px] text-ink">
+                        <td className="px-5 py-4 font-sans text-[13px] text-ink">
                           {Number.isFinite(getPatientAge(patient)) ? getPatientAge(patient) : '-'}
                         </td>
                         <td className="px-5 py-4 text-[13px] text-slate">
                           {getPatientConditions(patient)[0] || '-'}
                         </td>
-                        <td className="px-5 py-4 font-mono text-[11px] text-slate">
+                        <td className="px-5 py-4 font-sans text-[11px] text-slate">
                           {formatDate(patient.last_visit_date)}
                         </td>
-                        <td className="px-5 py-4 font-mono text-[11px] text-slate">
+                        <td className="px-5 py-4 font-sans text-[11px] text-slate">
                           {formatDate(patient.next_appointment_date)}
                         </td>
                       </tr>
@@ -1921,93 +1505,6 @@ export function DoctorDashboard() {
           </DashboardPanel>
         ) : null}
 
-        {appointmentsEnabled ? (
-          <DashboardPanel bodyClassName="p-0" title="My Cases - Last 7 Days">
-            {isLoading ? (
-              <div className="m-5 h-[260px] rounded-[24px] bg-mist p-4">
-                <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
-              </div>
-            ) : casesChartData.length < 2 ? (
-              <DashboardEmptyState title="Not enough data yet" />
-            ) : (
-              <div className="analytics-surface overflow-hidden p-5">
-                <div className="relative flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-slate">
-                      Case momentum
-                    </p>
-                    <p className="mt-2 text-[34px] font-bold leading-none tracking-[-0.04em] text-ink">
-                      {weeklyCasesTotal}
-                    </p>
-                    <p className="mt-1 text-[12px] font-medium text-slate">
-                      completed cases this week
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-[#FFF7ED] px-3 py-1.5 font-mono text-[11px] font-bold text-[#C2410C]">
-                    Peak {bestCaseDay?.day || '-'}
-                  </span>
-                </div>
-
-                <div className="relative mt-5 h-[220px]">
-                  <ResponsiveContainer height="100%" width="100%">
-                    <ComposedChart data={casesChartData} margin={{ bottom: 0, left: -18, right: 8, top: 8 }}>
-                      <defs>
-                        <linearGradient id="doctorCasesBarGradient" x1="0" x2="0" y1="0" y2="1">
-                          <stop offset="0%" stopColor="#7C3AED" />
-                          <stop offset="100%" stopColor="#4338CA" />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid stroke="#E4E8EB" strokeDasharray="4 7" vertical={false} />
-                      <XAxis
-                        axisLine={false}
-                        dataKey="day"
-                        tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
-                        tickLine={false}
-                        tickMargin={12}
-                      />
-                      <YAxis
-                        allowDecimals={false}
-                        axisLine={false}
-                        tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
-                        tickLine={false}
-                        tickMargin={8}
-                      />
-                      <Tooltip content={<DashboardChartTooltip />} cursor={{ fill: '#EEF2FF55' }} />
-                      <ReferenceLine
-                        y={averageCases}
-                        stroke="#F59E0B"
-                        strokeDasharray="6 3"
-                        label={{
-                          value: `Avg ${averageCases}`,
-                          fill: '#F59E0B',
-                          fontSize: 10,
-                          fontFamily: 'JetBrains Mono',
-                        }}
-                      />
-                      <Bar
-                        background={{ fill: '#EEF2F7', radius: 8 }}
-                        barSize={28}
-                        dataKey="count"
-                        fill="url(#doctorCasesBarGradient)"
-                        name="Daily cases"
-                        radius={[10, 10, 6, 6]}
-                      />
-                      <Line
-                        dataKey="avg"
-                        dot={false}
-                        name="Average"
-                        stroke="#F59E0B"
-                        strokeDasharray="6 3"
-                        strokeWidth={2}
-                        type="monotone"
-                      />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            )}
-          </DashboardPanel>
-        ) : null}
       </section>
 
       {appointmentsEnabled ? (
@@ -2068,7 +1565,7 @@ export function DoctorDashboard() {
                         <td className="px-5 py-4 text-[14px] font-medium text-ink">
                           {getAppointmentPatientName(appointment)}
                         </td>
-                        <td className="px-5 py-4 font-mono text-[12px] text-ink">
+                        <td className="px-5 py-4 font-sans text-[12px] text-ink">
                           {dateParts.date}
                           {dateParts.time ? (
                             <>

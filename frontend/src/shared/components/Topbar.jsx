@@ -69,7 +69,7 @@ export function Topbar({ onMenuClick, subtitle, title }) {
           <Menu aria-hidden="true" className="h-5 w-5" />
         </button>
         <div className="min-w-0">
-          <h1 className="truncate font-display text-[24px] font-normal leading-7 text-ink">
+          <h1 className="truncate font-sans text-[24px] font-normal leading-7 text-ink">
             {title}
           </h1>
           <p className="mt-0.5 truncate text-[13px] font-medium text-slate">

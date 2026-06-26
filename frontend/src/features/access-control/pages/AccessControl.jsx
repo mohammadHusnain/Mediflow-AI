@@ -15,7 +15,12 @@ import {
   X,
 } from 'lucide-react'
 
-import { ErrorBanner } from '@shared/components/FormPrimitives'
+import {
+  ErrorBanner,
+  emptyStateClass,
+  panelHeaderClass,
+  surfaceClass,
+} from '@shared/components/FormPrimitives'
 import { useToast } from '@shared/components/Toast'
 import { MODULES } from '@shared/lib/accessControlData'
 import { getBackendError } from '@shared/lib/records'
@@ -456,7 +461,7 @@ export function AccessControl() {
 
   if (loadError) {
     return (
-      <section className="rounded-card border border-hairline bg-canvas p-10 text-center shadow-card">
+      <section className={`${surfaceClass} p-10 text-center`}>
         <ShieldCheck aria-hidden="true" className="mx-auto mb-4 h-10 w-10 text-brand/20" />
         <h2 className="text-[18px] font-bold text-ink">Access control unavailable</h2>
         <p className="mt-2 text-[14px] text-slate">{loadError}</p>
@@ -466,9 +471,9 @@ export function AccessControl() {
 
   return (
     <div className="space-y-5">
-      <section className="flex flex-col gap-4 rounded-card border border-white/80 bg-[linear-gradient(135deg,#FFFFFF_0%,#EEF2FF_100%)] p-6 shadow-[0_24px_70px_rgba(20,24,31,0.08)] lg:flex-row lg:items-center lg:justify-between">
+      <section className={`${surfaceClass} flex flex-col gap-4 p-6 lg:flex-row lg:items-center lg:justify-between`}>
         <div>
-          <h1 className="text-[30px] font-bold tracking-[-0.03em] text-ink">
+          <h1 className="text-[30px] font-extrabold text-ink">
             Access Control
           </h1>
           <p className="mt-2 text-[14px] leading-6 text-slate">
@@ -485,141 +490,143 @@ export function AccessControl() {
         </button>
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
-        <aside className="h-fit rounded-card bg-canvas shadow-card">
-          <div className="border-b border-hairline px-4 py-3">
-            <h2 className="text-[13px] font-semibold uppercase tracking-wide text-slate">
+      <section className="grid items-stretch gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
+        <aside className={`${surfaceClass} flex h-full min-h-[520px] flex-col overflow-hidden`}>
+          <div className={panelHeaderClass}>
+            <h2 className="text-[14px] font-semibold text-ink">
               Roles
             </h2>
           </div>
 
-          {isLoading ? (
-            Array.from({ length: 4 }).map((_, index) => <RoleSkeleton key={index} />)
-          ) : (
-            <>
-              {roles.map((role, index) => {
-                const selected = String(role.id) === String(selectedRoleId)
-                const openMenuUp = index >= roles.length - 2
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, index) => <RoleSkeleton key={index} />)
+            ) : (
+              <>
+                {roles.map((role, index) => {
+                  const selected = String(role.id) === String(selectedRoleId)
+                  const openMenuUp = index >= roles.length - 2
 
-                return (
-                  <div
-                    className={[
-                      'group relative flex min-h-[76px] cursor-pointer items-center gap-3 border-b border-hairline px-4 py-3 transition-colors last:border-0 hover:bg-mist',
-                      selected
-                        ? 'border-l-2 border-l-brand bg-brand/5 pl-[14px]'
-                        : '',
-                    ].join(' ')}
-                    key={role.id}
-                    onClick={() => selectRole(role)}
-                    style={stagger(index, 0.03)}
-                  >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-light font-mono text-[12px] font-bold text-brand">
-                      {getInitials(role.name)}
-                    </div>
-                    <div className="min-w-0 flex-1 pr-2">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <p className="truncate text-[14px] font-medium text-ink">
-                          {role.name}
+                  return (
+                    <div
+                      className={[
+                        'group relative flex min-h-[76px] cursor-pointer items-center gap-3 border-b border-hairline px-4 py-3 transition-colors last:border-0 hover:bg-mist',
+                        selected
+                          ? 'border-l-2 border-l-brand bg-brand/5 pl-[14px]'
+                          : '',
+                      ].join(' ')}
+                      key={role.id}
+                      onClick={() => selectRole(role)}
+                      style={stagger(index, 0.03)}
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-light font-sans text-[12px] font-bold text-brand">
+                        {getInitials(role.name)}
+                      </div>
+                      <div className="min-w-0 flex-1 pr-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <p className="truncate text-[14px] font-semibold text-ink">
+                            {role.name}
+                          </p>
+                          {role.is_system ? (
+                            <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate">
+                              System
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-0.5 text-[12px] font-medium text-slate">
+                          {role.user_count || 0} users
                         </p>
-                        {role.is_system ? (
-                          <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate">
-                            System
-                          </span>
-                        ) : null}
                       </div>
-                      <p className="mt-0.5 text-[12px] text-slate">
-                        {role.user_count || 0} users
-                      </p>
-                    </div>
 
-                    {!role.is_system ? (
-                      <div className="relative flex h-9 w-9 shrink-0 items-center justify-center">
-                        <button
-                          className={[
-                            'inline-flex h-8 w-8 items-center justify-center rounded-xl border text-slate transition',
-                            'border-transparent hover:border-hairline hover:bg-canvas hover:text-ink',
-                            String(roleMenuId) === String(role.id)
-                              ? 'border-hairline bg-canvas text-ink shadow-sm'
-                              : 'group-hover:bg-white/70',
-                          ].join(' ')}
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            setRoleMenuId((openId) =>
-                              String(openId) === String(role.id) ? null : role.id,
-                            )
-                          }}
-                          type="button"
-                        >
-                          <span className="sr-only">Role actions</span>
-                          <MoreVertical aria-hidden="true" className="h-4 w-4" />
-                        </button>
-
-                        {String(roleMenuId) === String(role.id) ? (
-                          <div
+                      {!role.is_system ? (
+                        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center">
+                          <button
                             className={[
-                              'absolute right-0 z-30 min-w-[148px] overflow-hidden rounded-xl border border-hairline bg-canvas shadow-[0_18px_40px_rgba(20,24,31,0.14)]',
-                              openMenuUp ? 'bottom-full mb-2' : 'top-full mt-2',
+                              'inline-flex h-8 w-8 items-center justify-center rounded-control border text-slate transition',
+                              'border-transparent hover:border-hairline hover:bg-canvas hover:text-ink',
+                              String(roleMenuId) === String(role.id)
+                                ? 'border-hairline bg-canvas text-ink shadow-sm'
+                                : 'group-hover:bg-white/70',
                             ].join(' ')}
-                            onClick={(event) => event.stopPropagation()}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              setRoleMenuId((openId) =>
+                                String(openId) === String(role.id) ? null : role.id,
+                              )
+                            }}
+                            type="button"
                           >
-                            <button
-                              className="flex w-full items-center gap-2 border-b border-hairline px-3 py-2 text-left text-[13px] font-medium text-ink transition hover:bg-mist"
-                              onClick={() => {
-                                setRoleMenuId(null)
-                                setRoleModal({ mode: 'edit', role })
-                              }}
-                              type="button"
-                            >
-                              <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
-                              Edit name
-                            </button>
-                            <button
-                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] font-medium text-rose-600 transition hover:bg-rose-50"
-                              onClick={() => {
-                                setRoleMenuId(null)
-                                setDeleteTarget(role)
-                              }}
-                              type="button"
-                            >
-                              <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
-                              Delete
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                )
-              })}
+                            <span className="sr-only">Role actions</span>
+                            <MoreVertical aria-hidden="true" className="h-4 w-4" />
+                          </button>
 
-              {customRoleCount === 0 ? (
-                <button
-                  className="m-4 w-[calc(100%-2rem)] rounded-control border border-dashed border-brand/30 bg-brand-light/40 px-4 py-5 text-center transition hover:border-brand/50 hover:bg-brand-light"
-                  onClick={() => setRoleModal({ mode: 'create', role: null })}
-                  type="button"
-                >
-                  <p className="text-[14px] font-semibold text-ink">No custom roles yet</p>
-                  <p className="mt-1 text-[13px] font-semibold text-brand">
-                    Create your first custom role
-                  </p>
-                </button>
-              ) : null}
-            </>
-          )}
+                          {String(roleMenuId) === String(role.id) ? (
+                            <div
+                              className={[
+                                'absolute right-0 z-30 min-w-[148px] overflow-hidden rounded-control border border-hairline bg-canvas shadow-[0_18px_40px_rgba(20,24,31,0.14)]',
+                                openMenuUp ? 'bottom-full mb-2' : 'top-full mt-2',
+                              ].join(' ')}
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <button
+                                className="flex w-full items-center gap-2 border-b border-hairline px-3 py-2 text-left text-[13px] font-medium text-ink transition hover:bg-mist"
+                                onClick={() => {
+                                  setRoleMenuId(null)
+                                  setRoleModal({ mode: 'edit', role })
+                                }}
+                                type="button"
+                              >
+                                <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
+                                Edit name
+                              </button>
+                              <button
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] font-medium text-rose-600 transition hover:bg-rose-50"
+                                onClick={() => {
+                                  setRoleMenuId(null)
+                                  setDeleteTarget(role)
+                                }}
+                                type="button"
+                              >
+                                <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
+                                Delete
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  )
+                })}
+
+                {customRoleCount === 0 ? (
+                  <button
+                    className="m-4 w-[calc(100%-2rem)] rounded-control border border-dashed border-brand/30 bg-brand-light/40 px-4 py-5 text-center transition hover:border-brand/50 hover:bg-brand-light"
+                    onClick={() => setRoleModal({ mode: 'create', role: null })}
+                    type="button"
+                  >
+                    <p className="text-[14px] font-semibold text-ink">No custom roles yet</p>
+                    <p className="mt-1 text-[13px] font-semibold text-brand">
+                      Create your first custom role
+                    </p>
+                  </button>
+                ) : null}
+              </>
+            )}
+          </div>
         </aside>
 
         {!selectedRole ? (
-          <section className="flex min-h-[520px] items-center justify-center rounded-card bg-canvas p-10 text-center shadow-card">
+          <section className={`${surfaceClass} ${emptyStateClass} h-full min-h-[520px]`}>
             <div>
               <ShieldCheck aria-hidden="true" className="mx-auto mb-4 h-10 w-10 text-brand/20" />
-              <p className="text-[14px] font-medium text-slate">
+              <p className="text-[14px] font-semibold text-slate">
                 Select a role to manage its permissions
               </p>
             </div>
           </section>
         ) : (
-          <section className="overflow-hidden rounded-card bg-canvas shadow-card">
-            <div className="p-6">
+          <section className={`${surfaceClass} flex h-full min-h-[520px] flex-col overflow-hidden`}>
+            <div className="min-h-0 flex-1 overflow-y-auto p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -627,7 +634,7 @@ export function AccessControl() {
                       {selectedRole.name}
                     </h2>
                     {selectedRole.is_system ? (
-                      <span className="rounded bg-slate-100 px-2 py-1 font-mono text-[10px] text-slate">
+                      <span className="rounded bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate">
                         System
                       </span>
                     ) : null}
