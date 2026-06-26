@@ -65,7 +65,7 @@ export function CaseTypeBreakdown({ caseTypesData = [] }) {
           </PieChart>
         </ResponsiveContainer>
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="font-mono text-[20px] font-semibold text-ink">
+          <span className="font-sans text-[20px] font-semibold text-ink">
             {total}
           </span>
           <span className="text-[11px] text-slate">Cases</span>
@@ -88,7 +88,7 @@ export function CaseTypeBreakdown({ caseTypesData = [] }) {
               <span className="min-w-0 flex-1 truncate text-[13px] text-ink">
                 {item.type}
               </span>
-              <span className="font-mono text-[13px] text-slate">
+              <span className="font-sans text-[13px] text-slate">
                 {item.count}
               </span>
               <span className="w-10 text-right text-[11px] text-slate/60">

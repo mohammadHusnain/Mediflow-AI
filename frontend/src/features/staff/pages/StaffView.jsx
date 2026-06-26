@@ -270,12 +270,12 @@ export function StaffView() {
         <div className="px-6 py-5">
           <div className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
             <DetailItem label="Phone">
-              <p className="font-mono text-[14px] font-semibold text-ink">
+              <p className="font-sans text-[14px] font-semibold text-ink">
                 {staffMember.phone || '-'}
               </p>
             </DetailItem>
             <DetailItem label="Email">
-              <p className="font-mono text-[14px] font-semibold text-ink">
+              <p className="font-sans text-[14px] font-semibold text-ink">
                 {staffMember.email || '-'}
               </p>
             </DetailItem>
@@ -285,12 +285,12 @@ export function StaffView() {
                   <p className="text-[14px] font-semibold text-rose-600">
                     Needs review
                   </p>
-                  <p className="mt-1 font-mono text-[11px] text-slate">
+                  <p className="mt-1 font-sans text-[11px] text-slate">
                     Recorded value: {staffMember.age}
                   </p>
                 </>
               ) : (
-                <p className="font-mono text-[14px] font-semibold text-ink">
+                <p className="font-sans text-[14px] font-semibold text-ink">
                   {staffMember.age} yrs
                 </p>
               )}
@@ -306,13 +306,13 @@ export function StaffView() {
                   <p className="text-[14px] font-semibold text-rose-600">
                     Check joined date
                   </p>
-                  <p className="mt-1 font-mono text-[11px] text-slate">
+                  <p className="mt-1 font-sans text-[11px] text-slate">
                     Recorded: {formatDate(staffMember.joining_date)}
                   </p>
                 </>
               ) : (
                 <>
-                  <p className="font-mono text-[13px] font-semibold text-ink">
+                  <p className="font-sans text-[13px] font-semibold text-ink">
                     {formatDate(staffMember.joining_date)}
                   </p>
                   <p className="mt-1 text-[11px] text-slate">
@@ -322,12 +322,12 @@ export function StaffView() {
               )}
             </DetailItem>
             <DetailItem label="Working Hours">
-              <p className="font-mono text-[13px] font-semibold text-ink">
+              <p className="font-sans text-[13px] font-semibold text-ink">
                 {formatShiftRange(staffMember.shift_start, staffMember.shift_end)}
               </p>
             </DetailItem>
             <DetailItem label="Added to system">
-              <p className="font-mono text-[11px] text-slate">
+              <p className="font-sans text-[11px] text-slate">
                 {formatDateTime(staffMember.created_at)}
               </p>
               {createdIssue ? (

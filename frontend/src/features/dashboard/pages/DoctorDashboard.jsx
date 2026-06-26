@@ -941,8 +941,7 @@ export function DoctorDashboard() {
 
   return (
     <div className="dashboard-stage space-y-5">
-      <section className="relative animate-fade-up overflow-hidden rounded-[30px] border border-white/80 bg-[linear-gradient(135deg,#FFFFFF_0%,#F8FAFC_54%,#E0F2FE_100%)] p-6 shadow-[0_24px_80px_rgba(20,24,31,0.09)]">
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(91,100,114,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(91,100,114,0.045)_1px,transparent_1px)] bg-[size:34px_34px]" />
+      <section className="relative animate-fade-up overflow-hidden rounded-card border border-hairline/70 bg-canvas p-6 shadow-card">
         <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
           <div className="flex min-w-0 flex-col justify-between gap-6">
             <div>
@@ -950,18 +949,18 @@ export function DoctorDashboard() {
                 <Sparkles aria-hidden="true" className="h-3.5 w-3.5" />
                 Clinical cockpit
               </span>
-              <h2 className="mt-4 max-w-2xl text-[28px] font-bold leading-tight tracking-[-0.03em] text-ink md:text-[34px]">
+              <h2 className="mt-4 max-w-2xl text-[28px] font-bold leading-tight text-ink md:text-[34px]">
                 {heroGreeting}
               </h2>
               <p className="mt-3 max-w-2xl text-[14px] leading-6 text-slate">
                 {heroDateLine}
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
-                <p className="inline-flex items-center rounded-full bg-white/80 px-3 py-1.5 font-mono text-[12px] font-semibold text-slate shadow-sm">
+                <p className="inline-flex items-center rounded-full bg-white/80 px-3 py-1.5 font-sans text-[12px] font-semibold text-slate shadow-sm">
                   <Clock3 aria-hidden="true" className="mr-1.5 h-3.5 w-3.5 text-brand" />
                   Shift {shiftValue}
                 </p>
-                <p className="inline-flex items-center rounded-full bg-white/80 px-3 py-1.5 font-mono text-[12px] font-semibold text-slate shadow-sm">
+                <p className="inline-flex items-center rounded-full bg-white/80 px-3 py-1.5 font-sans text-[12px] font-semibold text-slate shadow-sm">
                   Live sync {lastUpdatedLabel}
                 </p>
               </div>
@@ -973,7 +972,7 @@ export function DoctorDashboard() {
 
                 return (
                   <div
-                    className="animate-fade-up rounded-[20px] border border-white/75 bg-white/80 p-4 shadow-[0_12px_34px_rgba(20,24,31,0.06)] backdrop-blur"
+                    className="animate-fade-up rounded-card border border-white/75 bg-white/80 p-4 shadow-[0_12px_34px_rgba(20,24,31,0.06)] backdrop-blur"
                     key={signal.label}
                     style={stagger(index, 0.05)}
                   >
@@ -999,12 +998,11 @@ export function DoctorDashboard() {
             </div>
           </div>
 
-          <div className="relative overflow-hidden rounded-[26px] bg-[linear-gradient(160deg,#0F172A_0%,#4338CA_55%,#7C3AED_100%)] p-5 text-white shadow-[0_22px_60px_rgba(67,56,202,0.28)]">
-            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[size:28px_28px] opacity-45" />
+          <div className="relative overflow-hidden rounded-card bg-brand p-5 text-white shadow-card">
             <div className="relative flex items-start justify-between gap-4">
               <div>
                 <p className="text-[13px] font-semibold text-white/70">Today&apos;s work</p>
-                <p className="mt-3 text-[46px] font-bold leading-none tracking-[-0.04em]">
+                <p className="mt-3 text-[46px] font-bold leading-none">
                   {isLoading ? '--' : Number(dashboardData.stats.cases_today || 0)}
                 </p>
                 <p className="mt-2 text-[13px] text-white/70">cases today</p>
@@ -1022,7 +1020,7 @@ export function DoctorDashboard() {
                 lineClassName="stroke-white/85"
                 values={doctorHeroSparkline}
               />
-              <div className="absolute bottom-0 left-0 right-0 flex justify-between font-mono text-[11px] text-white/60">
+              <div className="absolute bottom-0 left-0 right-0 flex justify-between font-sans text-[11px] text-white/60">
                 {doctorHeroSparkLabels.map((label) => (
                   <span key={label}>{label}</span>
                 ))}
@@ -1037,7 +1035,7 @@ export function DoctorDashboard() {
                 <p className="mt-1 truncate text-[16px] font-bold">
                   {nextAppointment ? getAppointmentPatientName(nextAppointment) : 'Schedule clear'}
                 </p>
-                <p className="mt-1 font-mono text-[11px] text-white/60">
+                <p className="mt-1 font-sans text-[11px] text-white/60">
                   {nextAppointment ? formatClock(nextAppointment.appointment_dt) : '-'}
                 </p>
               </div>
@@ -1128,7 +1126,7 @@ export function DoctorDashboard() {
                       <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
                         {label}
                       </p>
-                      <p className="mt-1 truncate font-mono text-[18px] font-bold text-ink">{value}</p>
+                      <p className="mt-1 truncate font-sans text-[18px] font-bold text-ink">{value}</p>
                     </div>
                   ))}
                 </div>
@@ -1151,14 +1149,14 @@ export function DoctorDashboard() {
                         axisLine={false}
                         dataKey="label"
                         interval={getAxisInterval(doctorAnalyticsPeriod)}
-                        tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                        tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
                         tickLine={false}
                         tickMargin={12}
                       />
                       <YAxis
                         allowDecimals={false}
                         axisLine={false}
-                        tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                        tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
                         tickLine={false}
                         tickMargin={8}
                       />
@@ -1209,7 +1207,7 @@ export function DoctorDashboard() {
 
                 return (
                   <div
-                    className="animate-fade-up rounded-[20px] border border-hairline bg-white/85 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(20,24,31,0.08)]"
+                    className="animate-fade-up rounded-card border border-hairline bg-white/85 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(20,24,31,0.08)]"
                     key={insight.label}
                     style={stagger(index, 0.04)}
                   >
@@ -1222,7 +1220,7 @@ export function DoctorDashboard() {
                           <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
                             {insight.label}
                           </p>
-                          <span className="rounded-full bg-brand-light px-2 py-0.5 font-mono text-[10px] font-bold text-brand">
+                          <span className="rounded-full bg-brand-light px-2 py-0.5 font-sans text-[10px] font-bold text-brand">
                             AI {insight.confidence}%
                           </span>
                         </div>
@@ -1243,7 +1241,7 @@ export function DoctorDashboard() {
           {appointmentsEnabled ? (
             <DashboardPanel title="Appointment Operations Timeline">
               <div className="grid gap-5 lg:grid-cols-[150px_minmax(0,1fr)]">
-                <div className="rounded-[22px] border border-hairline bg-mist p-4 text-center">
+                <div className="rounded-card border border-hairline bg-mist p-4 text-center">
                   <div
                     className="mx-auto flex h-28 w-28 items-center justify-center rounded-full p-2"
                     style={{
@@ -1252,7 +1250,7 @@ export function DoctorDashboard() {
                   >
                     <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-white shadow-inner">
                       <Gauge aria-hidden="true" className="mb-1 h-5 w-5 text-brand" />
-                      <span className="font-mono text-[24px] font-bold text-ink">
+                      <span className="font-sans text-[24px] font-bold text-ink">
                         {scheduleCompletionRate}%
                       </span>
                       <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
@@ -1280,7 +1278,7 @@ export function DoctorDashboard() {
                         style={stagger(index, 0.04)}
                       >
                         <div className="flex items-center gap-3">
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-brand-light font-mono text-[11px] font-bold text-brand">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-brand-light font-sans text-[11px] font-bold text-brand">
                             {appointment.time}
                           </span>
                           <div className="min-w-0 flex-1">
@@ -1288,7 +1286,7 @@ export function DoctorDashboard() {
                             <p className="truncate text-[12px] text-slate">{appointment.reason}</p>
                           </div>
                           <span
-                            className="rounded-full px-2.5 py-1 font-mono text-[10px] font-bold"
+                            className="rounded-full px-2.5 py-1 font-sans text-[10px] font-bold"
                             style={{
                               backgroundColor: `${STATUS_COLORS[appointment.status] || STATUS_COLORS.scheduled}18`,
                               color: STATUS_COLORS[appointment.status] || STATUS_COLORS.scheduled,
@@ -1325,7 +1323,7 @@ export function DoctorDashboard() {
                           <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
                             {label}
                           </p>
-                          <p className="mt-1 font-mono text-[18px] font-bold text-ink">{value}</p>
+                          <p className="mt-1 font-sans text-[18px] font-bold text-ink">{value}</p>
                         </div>
                       ))}
                     </div>
@@ -1351,7 +1349,7 @@ export function DoctorDashboard() {
                             axisLine={false}
                             dataKey="label"
                             interval={getAxisInterval(doctorAnalyticsPeriod)}
-                            tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                            tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
                             tickLine={false}
                             tickMargin={12}
                           />
@@ -1359,7 +1357,7 @@ export function DoctorDashboard() {
                             allowDecimals={false}
                             axisLine={false}
                             domain={[0, 100]}
-                            tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                            tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
                             tickLine={false}
                             tickMargin={8}
                           />
@@ -1394,7 +1392,7 @@ export function DoctorDashboard() {
                     </div>
                   </div>
 
-                  <aside className="space-y-3 rounded-[22px] border border-hairline bg-white/80 p-5 shadow-sm">
+                  <aside className="space-y-3 rounded-card border border-hairline bg-white/80 p-5 shadow-sm">
                     <div className="flex items-center gap-3">
                       <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#ECFDF5] text-[#059669]">
                         <Zap aria-hidden="true" className="h-4 w-4" />
@@ -1416,7 +1414,7 @@ export function DoctorDashboard() {
                               <p className="truncate text-[13px] font-bold text-ink">{patient.name}</p>
                               <p className="truncate text-[11px] text-slate">{patient.condition}</p>
                             </div>
-                            <span className="font-mono text-[12px] font-bold text-[#C2410C]">
+                            <span className="font-sans text-[12px] font-bold text-[#C2410C]">
                               {patient.risk}% risk
                             </span>
                           </div>
@@ -1454,7 +1452,7 @@ export function DoctorDashboard() {
           {appointmentsEnabled ? (
             <DashboardPanel bodyClassName="p-0" title="Today's Status Mix">
               {isLoading ? (
-                <div className="m-5 h-[300px] rounded-[24px] bg-mist p-4">
+                <div className="m-5 h-[300px] rounded-card bg-mist p-4">
                   <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
                 </div>
               ) : todayStatusData.length === 0 ? (
@@ -1466,14 +1464,14 @@ export function DoctorDashboard() {
                       <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-slate">
                         Today&apos;s schedule pulse
                       </p>
-                      <p className="mt-2 text-[34px] font-bold leading-none tracking-[-0.04em] text-ink">
+                      <p className="mt-2 text-[34px] font-bold leading-none text-ink">
                         {todayStatusTotal}
                       </p>
                       <p className="mt-1 text-[12px] font-medium text-slate">
                         appointments on your board
                       </p>
                     </div>
-                    <span className="rounded-full bg-[#ECFDF5] px-3 py-1.5 font-mono text-[11px] font-bold text-[#059669]">
+                    <span className="rounded-full bg-[#ECFDF5] px-3 py-1.5 font-sans text-[11px] font-bold text-[#059669]">
                       {scheduleCompletionRate}% done
                     </span>
                   </div>
@@ -1503,14 +1501,14 @@ export function DoctorDashboard() {
                         <XAxis
                           axisLine={false}
                           dataKey="label"
-                          tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                          tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
                           tickLine={false}
                           tickMargin={12}
                         />
                         <YAxis
                           allowDecimals={false}
                           axisLine={false}
-                          tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                          tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
                           tickLine={false}
                           tickMargin={8}
                         />
@@ -1537,7 +1535,7 @@ export function DoctorDashboard() {
                           <span className="truncate text-[12px] font-semibold text-slate">
                             {item.label}
                           </span>
-                          <span className="font-mono text-[12px] font-bold text-ink">{item.count}</span>
+                          <span className="font-sans text-[12px] font-bold text-ink">{item.count}</span>
                         </div>
                         <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
                           <div
@@ -1559,7 +1557,7 @@ export function DoctorDashboard() {
           {appointmentsEnabled ? (
             <DashboardPanel bodyClassName="p-0" title="Today's Hourly Flow">
               {isLoading ? (
-                <div className="m-5 h-[300px] rounded-[24px] bg-mist p-4">
+                <div className="m-5 h-[300px] rounded-card bg-mist p-4">
                   <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
                 </div>
               ) : hourlyScheduleTotal === 0 ? (
@@ -1571,14 +1569,14 @@ export function DoctorDashboard() {
                       <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-slate">
                         Bar graph by time
                       </p>
-                      <p className="mt-2 text-[34px] font-bold leading-none tracking-[-0.04em] text-ink">
+                      <p className="mt-2 text-[34px] font-bold leading-none text-ink">
                         {hourlyScheduleTotal}
                       </p>
                       <p className="mt-1 text-[12px] font-medium text-slate">
                         appointments across the day
                       </p>
                     </div>
-                    <span className="rounded-full bg-[#E0F2FE] px-3 py-1.5 font-mono text-[11px] font-bold text-[#0284C7]">
+                    <span className="rounded-full bg-[#E0F2FE] px-3 py-1.5 font-sans text-[11px] font-bold text-[#0284C7]">
                       Peak {busiestScheduleSlot?.label || '-'}
                     </span>
                   </div>
@@ -1608,14 +1606,14 @@ export function DoctorDashboard() {
                         <XAxis
                           axisLine={false}
                           dataKey="label"
-                          tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                          tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
                           tickLine={false}
                           tickMargin={12}
                         />
                         <YAxis
                           allowDecimals={false}
                           axisLine={false}
-                          tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                          tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
                           tickLine={false}
                           tickMargin={8}
                         />
@@ -1659,7 +1657,7 @@ export function DoctorDashboard() {
                   <div className="relative mt-4 grid grid-cols-5 gap-2">
                     {hourlyScheduleData.map((bucket) => (
                       <div className="rounded-2xl bg-white/80 p-2.5 text-center shadow-sm" key={bucket.key}>
-                        <p className="font-mono text-[11px] font-bold text-ink">{bucket.count}</p>
+                        <p className="font-sans text-[11px] font-bold text-ink">{bucket.count}</p>
                         <p className="mt-1 text-[10px] font-semibold text-slate">{bucket.label}</p>
                       </div>
                     ))}
@@ -1672,7 +1670,7 @@ export function DoctorDashboard() {
           {patientsEnabled ? (
             <DashboardPanel bodyClassName="p-0" title="My Patient Conditions">
               {isLoading ? (
-                <div className="m-5 h-[300px] rounded-[24px] bg-mist p-4">
+                <div className="m-5 h-[300px] rounded-card bg-mist p-4">
                   <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
                 </div>
               ) : patientConditionData.length === 0 ? (
@@ -1684,7 +1682,7 @@ export function DoctorDashboard() {
                       <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-slate">
                         Clinical condition mix
                       </p>
-                      <p className="mt-2 text-[34px] font-bold leading-none tracking-[-0.04em] text-ink">
+                      <p className="mt-2 text-[34px] font-bold leading-none text-ink">
                         {conditionTotal}
                       </p>
                       <p className="mt-1 text-[12px] font-medium text-slate">
@@ -1704,7 +1702,7 @@ export function DoctorDashboard() {
 
                       return (
                         <div
-                          className="animate-fade-up rounded-[20px] border border-white/80 bg-white/80 p-4 shadow-[0_10px_30px_rgba(20,24,31,0.05)]"
+                          className="animate-fade-up rounded-card border border-white/80 bg-white/80 p-4 shadow-[0_10px_30px_rgba(20,24,31,0.05)]"
                           key={condition.label}
                           style={stagger(index, 0.04)}
                         >
@@ -1718,10 +1716,10 @@ export function DoctorDashboard() {
                               </p>
                             </div>
                             <div className="text-right">
-                              <p className="font-mono text-[18px] font-bold text-ink">
+                              <p className="font-sans text-[18px] font-bold text-ink">
                                 {condition.count}
                               </p>
-                              <p className="font-mono text-[11px] font-semibold text-slate">
+                              <p className="font-sans text-[11px] font-semibold text-slate">
                                 {percent}%
                               </p>
                             </div>
@@ -1750,7 +1748,7 @@ export function DoctorDashboard() {
         <DashboardPanel
           bodyClassName="p-0"
           headerContent={
-            <span className="font-mono text-[13px] font-medium text-slate">
+            <span className="font-sans text-[13px] font-medium text-slate">
               {formatLongDate()}
             </span>
           }
@@ -1803,7 +1801,7 @@ export function DoctorDashboard() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-4 font-mono text-[13px] font-medium text-ink">
+                      <td className="px-5 py-4 font-sans text-[13px] font-medium text-ink">
                         {formatClock(appointment.appointment_dt)}
                       </td>
                       <td
@@ -1843,7 +1841,7 @@ export function DoctorDashboard() {
             bodyClassName="p-0"
             headerContent={
               <div className="flex items-center gap-3">
-                <span className="rounded-full bg-brand-light px-2 py-0.5 font-mono text-[11px] font-semibold text-brand">
+                <span className="rounded-full bg-brand-light px-2 py-0.5 font-sans text-[11px] font-semibold text-brand">
                   {dashboardData.totalPatients}
                 </span>
                 <Link
@@ -1900,16 +1898,16 @@ export function DoctorDashboard() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-5 py-4 font-mono text-[13px] text-ink">
+                        <td className="px-5 py-4 font-sans text-[13px] text-ink">
                           {Number.isFinite(getPatientAge(patient)) ? getPatientAge(patient) : '-'}
                         </td>
                         <td className="px-5 py-4 text-[13px] text-slate">
                           {getPatientConditions(patient)[0] || '-'}
                         </td>
-                        <td className="px-5 py-4 font-mono text-[11px] text-slate">
+                        <td className="px-5 py-4 font-sans text-[11px] text-slate">
                           {formatDate(patient.last_visit_date)}
                         </td>
-                        <td className="px-5 py-4 font-mono text-[11px] text-slate">
+                        <td className="px-5 py-4 font-sans text-[11px] text-slate">
                           {formatDate(patient.next_appointment_date)}
                         </td>
                       </tr>
@@ -1924,7 +1922,7 @@ export function DoctorDashboard() {
         {appointmentsEnabled ? (
           <DashboardPanel bodyClassName="p-0" title="My Cases - Last 7 Days">
             {isLoading ? (
-              <div className="m-5 h-[260px] rounded-[24px] bg-mist p-4">
+              <div className="m-5 h-[260px] rounded-card bg-mist p-4">
                 <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
               </div>
             ) : casesChartData.length < 2 ? (
@@ -1936,14 +1934,14 @@ export function DoctorDashboard() {
                     <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-slate">
                       Case momentum
                     </p>
-                    <p className="mt-2 text-[34px] font-bold leading-none tracking-[-0.04em] text-ink">
+                    <p className="mt-2 text-[34px] font-bold leading-none text-ink">
                       {weeklyCasesTotal}
                     </p>
                     <p className="mt-1 text-[12px] font-medium text-slate">
                       completed cases this week
                     </p>
                   </div>
-                  <span className="rounded-full bg-[#FFF7ED] px-3 py-1.5 font-mono text-[11px] font-bold text-[#C2410C]">
+                  <span className="rounded-full bg-[#FFF7ED] px-3 py-1.5 font-sans text-[11px] font-bold text-[#C2410C]">
                     Peak {bestCaseDay?.day || '-'}
                   </span>
                 </div>
@@ -1961,14 +1959,14 @@ export function DoctorDashboard() {
                       <XAxis
                         axisLine={false}
                         dataKey="day"
-                        tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                        tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
                         tickLine={false}
                         tickMargin={12}
                       />
                       <YAxis
                         allowDecimals={false}
                         axisLine={false}
-                        tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                        tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
                         tickLine={false}
                         tickMargin={8}
                       />
@@ -1981,7 +1979,7 @@ export function DoctorDashboard() {
                           value: `Avg ${averageCases}`,
                           fill: '#F59E0B',
                           fontSize: 10,
-                          fontFamily: 'JetBrains Mono',
+                          fontFamily: 'Outfit, sans-serif',
                         }}
                       />
                       <Bar
@@ -2068,7 +2066,7 @@ export function DoctorDashboard() {
                         <td className="px-5 py-4 text-[14px] font-medium text-ink">
                           {getAppointmentPatientName(appointment)}
                         </td>
-                        <td className="px-5 py-4 font-mono text-[12px] text-ink">
+                        <td className="px-5 py-4 font-sans text-[12px] text-ink">
                           {dateParts.date}
                           {dateParts.time ? (
                             <>

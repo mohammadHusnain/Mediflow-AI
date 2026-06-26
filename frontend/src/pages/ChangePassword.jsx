@@ -271,7 +271,7 @@ export function ChangePassword() {
           <User aria-hidden="true" className="h-[13px] w-[13px] text-slate" />
           <p className="min-w-0 text-[12px] font-normal text-slate">
             Signed in as{' '}
-            <span className="font-mono text-[12px] text-ink">{signedInEmail}</span>
+            <span className="font-sans text-[12px] text-ink">{signedInEmail}</span>
           </p>
         </div>
 

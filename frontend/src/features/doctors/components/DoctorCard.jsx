@@ -20,7 +20,7 @@ function StatBlock({ context, label, value }) {
       <p className="text-[11px] font-normal uppercase tracking-wide text-slate/70">
         {label}
       </p>
-      <p className="mt-1 font-mono text-[18px] font-bold text-ink">{value}</p>
+      <p className="mt-1 font-sans text-[18px] font-bold text-ink">{value}</p>
       <p className="text-[11px] font-normal text-slate">{context}</p>
     </div>
   )
@@ -172,7 +172,7 @@ export function DoctorCard({ doctor, onDelete }) {
 
         <div className="mt-3 flex items-center justify-between gap-3 border-t border-hairline pt-3">
           <span className="text-[13px] font-medium text-brand">View Details -&gt;</span>
-          <span className="shrink-0 font-mono text-[11px] text-slate">
+          <span className="shrink-0 font-sans text-[11px] text-slate">
             {formatShiftTime(doctor.shift_start)} - {formatShiftTime(doctor.shift_end)}
           </span>
         </div>

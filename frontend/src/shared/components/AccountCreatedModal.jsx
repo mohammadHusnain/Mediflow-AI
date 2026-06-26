@@ -34,7 +34,7 @@ export function AccountCreatedModal({
 
         <div className="mt-3 flex items-center gap-2 rounded-control bg-mist px-4 py-2.5">
           <Mail aria-hidden="true" className="h-[14px] w-[14px] text-slate" />
-          <span className="font-mono text-[14px] text-ink">{email}</span>
+          <span className="font-sans text-[14px] text-ink">{email}</span>
         </div>
 
         <p className="mt-3 text-[13px] font-normal text-slate">

@@ -260,14 +260,14 @@ export function PatientFields({
 
         <FormField error={errors.date_of_birth?.message} label="Date of Birth">
           <input
-            className={getFieldClass(errors.date_of_birth?.message, 'font-mono')}
+            className={getFieldClass(errors.date_of_birth?.message, 'font-sans')}
             type="date"
             {...register('date_of_birth', {
               validate: (value) => validateDateOfBirth(value) || true,
             })}
           />
           {Number.isFinite(age) && !errors.date_of_birth ? (
-            <p className="mt-1.5 font-mono text-[12px] font-medium text-brand">
+            <p className="mt-1.5 font-sans text-[12px] font-medium text-brand">
               Age: {age} years
             </p>
           ) : null}
@@ -296,7 +296,7 @@ export function PatientFields({
         >
           <div className="relative">
             <input
-              className={getFieldClass(phoneError, 'pr-9 font-mono')}
+              className={getFieldClass(phoneError, 'pr-9 font-sans')}
               placeholder="+923001234567"
               type="tel"
               {...phoneRegistration}
@@ -321,7 +321,7 @@ export function PatientFields({
       <FormSection title="Physical Profile">
         <FormField error={errors.weight_kg?.message} label="Weight (kg)">
           <input
-            className={getFieldClass(errors.weight_kg?.message, 'font-mono')}
+            className={getFieldClass(errors.weight_kg?.message, 'font-sans')}
             placeholder="72.5"
             step="0.1"
             type="number"
@@ -338,7 +338,7 @@ export function PatientFields({
 
         <FormField error={errors.height_cm?.message} label="Height (cm)">
           <input
-            className={getFieldClass(errors.height_cm?.message, 'font-mono')}
+            className={getFieldClass(errors.height_cm?.message, 'font-sans')}
             placeholder="175"
             step="1"
             type="number"

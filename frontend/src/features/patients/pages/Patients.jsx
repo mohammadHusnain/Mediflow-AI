@@ -295,10 +295,10 @@ export function Patients() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-4 font-mono text-[14px] font-medium text-ink">
+                      <td className="px-5 py-4 font-sans text-[14px] font-medium text-ink">
                         {Number.isFinite(patient.age) ? patient.age : '-'}
                       </td>
-                      <td className="px-5 py-4 font-mono text-[13px] font-medium text-ink">
+                      <td className="px-5 py-4 font-sans text-[13px] font-medium text-ink">
                         {patient.phone}
                       </td>
                       <td
@@ -309,14 +309,14 @@ export function Patients() {
                       >
                         {patient.condition || '-'}
                       </td>
-                      <td className="px-5 py-4 font-mono text-[12px] font-medium text-slate">
+                      <td className="px-5 py-4 font-sans text-[12px] font-medium text-slate">
                         {patient.lastVisit ? (
                           formatDate(patient.lastVisit)
                         ) : (
                           <span className="text-slate/40">-</span>
                         )}
                       </td>
-                      <td className="px-5 py-4 font-mono text-[12px] font-medium text-slate">
+                      <td className="px-5 py-4 font-sans text-[12px] font-medium text-slate">
                         {patient.nextAppointment ? (
                           formatDate(patient.nextAppointment)
                         ) : (

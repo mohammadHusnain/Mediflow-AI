@@ -33,7 +33,7 @@ function StatCard({ context, icon: Icon, label, value }) {
           <p className="text-[11px] font-medium uppercase tracking-wide text-slate">
             {label}
           </p>
-          <p className="mt-2 font-mono text-[30px] font-bold text-ink">
+          <p className="mt-2 font-sans text-[30px] font-bold text-ink">
             {displayValue}
           </p>
           <p className="mt-1 text-[12px] text-slate">{context}</p>

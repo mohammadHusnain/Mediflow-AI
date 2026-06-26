@@ -316,11 +316,11 @@ export function AppointmentBooking() {
                           <p className="truncate text-[14px] font-semibold text-ink">
                             {getPatientName(patient)}
                           </p>
-                          <p className="mt-0.5 truncate font-mono text-[12px] font-medium text-slate">
+                          <p className="mt-0.5 truncate font-sans text-[12px] font-medium text-slate">
                             {patient.phone || '-'}
                           </p>
                         </div>
-                        <span className="font-mono text-[12px] font-medium text-slate">
+                        <span className="font-sans text-[12px] font-medium text-slate">
                           {Number.isFinite(age) ? `${age} yrs` : '-'}
                         </span>
                       </button>

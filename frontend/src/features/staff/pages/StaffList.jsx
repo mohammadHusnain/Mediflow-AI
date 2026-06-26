@@ -404,7 +404,7 @@ export function StaffList() {
                 {filteredStaff.length} records in view
               </p>
             </div>
-            <div className="font-mono text-[11px] uppercase tracking-wide text-slate">
+            <div className="font-sans text-[11px] uppercase tracking-wide text-slate">
               {statusFilter === 'all' ? 'All statuses' : statusFilter}
             </div>
           </div>
@@ -456,7 +456,7 @@ export function StaffList() {
                             <p className="truncate text-[14px] font-semibold text-ink">
                               {staffMember.full_name}
                             </p>
-                            <p className="mt-0.5 font-mono text-[11px] text-slate">
+                            <p className="mt-0.5 font-sans text-[11px] text-slate">
                               {staffMember.email || staffMember.phone}
                             </p>
                           </div>
@@ -471,12 +471,12 @@ export function StaffList() {
                             <p className="text-[13px] font-semibold text-rose-600">
                               Needs review
                             </p>
-                            <p className="mt-1 font-mono text-[11px] text-slate">
+                            <p className="mt-1 font-sans text-[11px] text-slate">
                               Recorded: {staffMember.age}
                             </p>
                           </>
                         ) : (
-                          <p className="font-mono text-[13px] text-ink">
+                          <p className="font-sans text-[13px] text-ink">
                             {staffMember.age} yrs
                           </p>
                         )}
@@ -487,13 +487,13 @@ export function StaffList() {
                             <p className="text-[13px] font-semibold text-rose-600">
                               Check date
                             </p>
-                            <p className="mt-1 font-mono text-[11px] text-slate">
+                            <p className="mt-1 font-sans text-[11px] text-slate">
                               {formatJoinedMonth(staffMember.joining_date)}
                             </p>
                           </>
                         ) : (
                           <>
-                            <p className="font-mono text-[12px] text-ink">
+                            <p className="font-sans text-[12px] text-ink">
                               {formatJoinedMonth(staffMember.joining_date)}
                             </p>
                             <p className="mt-1 text-[11px] text-slate">
@@ -502,7 +502,7 @@ export function StaffList() {
                           </>
                         )}
                       </td>
-                      <td className="px-5 py-4 font-mono text-[12px] text-slate">
+                      <td className="px-5 py-4 font-sans text-[12px] text-slate">
                         {formatShiftRange(staffMember.shift_start, staffMember.shift_end)}
                       </td>
                       <td className="px-5 py-4">

@@ -15,7 +15,12 @@ import {
   X,
 } from 'lucide-react'
 
-import { ErrorBanner } from '@shared/components/FormPrimitives'
+import {
+  ErrorBanner,
+  emptyStateClass,
+  panelHeaderClass,
+  surfaceClass,
+} from '@shared/components/FormPrimitives'
 import { useToast } from '@shared/components/Toast'
 import { MODULES } from '@shared/lib/accessControlData'
 import { getBackendError } from '@shared/lib/records'
@@ -76,13 +81,6 @@ function getRolePermissions(role) {
     nextPermissions[module] = normalizeAccessLevel(access)
     return nextPermissions
   }, {})
-}
-
-function permissionsEqual(first = {}, second = {}) {
-  return MODULES.every(
-    (module) =>
-      normalizeAccessLevel(first[module]) === normalizeAccessLevel(second[module]),
-  )
 }
 
 function mergeRole(currentRole, nextRole) {
@@ -170,7 +168,7 @@ function RoleModal({ existingRoles = [], mode, onClose, onSubmit, role }) {
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-ink/30 px-4 py-8 backdrop-blur-sm">
       <form
-        className="w-full max-w-md animate-scale-in rounded-card bg-canvas p-6 shadow-[0_28px_90px_rgba(20,24,31,0.22)]"
+        className="w-full max-w-md animate-scale-in rounded-card bg-canvas p-6 shadow-card"
         onSubmit={handleSubmit}
       >
         <div className="mb-5 flex items-start justify-between gap-4">
@@ -248,7 +246,7 @@ function RoleModal({ existingRoles = [], mode, onClose, onSubmit, role }) {
 function DeleteRoleModal({ error, isDeleting, onClose, onConfirm, role }) {
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-ink/30 px-4 py-8 backdrop-blur-sm">
-      <section className="w-full max-w-md animate-scale-in rounded-card bg-canvas p-6 shadow-[0_28px_90px_rgba(20,24,31,0.22)]">
+      <section className="w-full max-w-md animate-scale-in rounded-card bg-canvas p-6 shadow-card">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <h2 className="text-[20px] font-bold text-ink">Delete Role?</h2>
@@ -456,7 +454,7 @@ export function AccessControl() {
 
   if (loadError) {
     return (
-      <section className="rounded-card border border-hairline bg-canvas p-10 text-center shadow-card">
+      <section className={`${surfaceClass} p-10 text-center`}>
         <ShieldCheck aria-hidden="true" className="mx-auto mb-4 h-10 w-10 text-brand/20" />
         <h2 className="text-[18px] font-bold text-ink">Access control unavailable</h2>
         <p className="mt-2 text-[14px] text-slate">{loadError}</p>
@@ -466,9 +464,9 @@ export function AccessControl() {
 
   return (
     <div className="space-y-5">
-      <section className="flex flex-col gap-4 rounded-card border border-white/80 bg-[linear-gradient(135deg,#FFFFFF_0%,#EEF2FF_100%)] p-6 shadow-[0_24px_70px_rgba(20,24,31,0.08)] lg:flex-row lg:items-center lg:justify-between">
+      <section className={`${surfaceClass} flex flex-col gap-4 p-6 lg:flex-row lg:items-center lg:justify-between`}>
         <div>
-          <h1 className="text-[30px] font-bold tracking-[-0.03em] text-ink">
+          <h1 className="text-[30px] font-extrabold text-ink">
             Access Control
           </h1>
           <p className="mt-2 text-[14px] leading-6 text-slate">
@@ -485,18 +483,19 @@ export function AccessControl() {
         </button>
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
-        <aside className="h-fit rounded-card bg-canvas shadow-card">
-          <div className="border-b border-hairline px-4 py-3">
-            <h2 className="text-[13px] font-semibold uppercase tracking-wide text-slate">
+      <section className="grid items-stretch gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
+        <aside className={`${surfaceClass} flex h-full min-h-[520px] flex-col overflow-hidden`}>
+          <div className={panelHeaderClass}>
+            <h2 className="text-[14px] font-semibold text-ink">
               Roles
             </h2>
           </div>
 
-          {isLoading ? (
-            Array.from({ length: 4 }).map((_, index) => <RoleSkeleton key={index} />)
-          ) : (
-            <>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, index) => <RoleSkeleton key={index} />)
+            ) : (
+              <>
               {roles.map((role, index) => {
                 const selected = String(role.id) === String(selectedRoleId)
                 const openMenuUp = index >= roles.length - 2
@@ -513,16 +512,16 @@ export function AccessControl() {
                     onClick={() => selectRole(role)}
                     style={stagger(index, 0.03)}
                   >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-light font-mono text-[12px] font-bold text-brand">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-light text-[12px] font-bold text-brand">
                       {getInitials(role.name)}
                     </div>
                     <div className="min-w-0 flex-1 pr-2">
                       <div className="flex min-w-0 items-center gap-2">
-                        <p className="truncate text-[14px] font-medium text-ink">
+                        <p className="truncate text-[14px] font-semibold text-ink">
                           {role.name}
                         </p>
                         {role.is_system ? (
-                          <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate">
+                          <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate">
                             System
                           </span>
                         ) : null}
@@ -536,7 +535,7 @@ export function AccessControl() {
                       <div className="relative flex h-9 w-9 shrink-0 items-center justify-center">
                         <button
                           className={[
-                            'inline-flex h-8 w-8 items-center justify-center rounded-xl border text-slate transition',
+                            'inline-flex h-8 w-8 items-center justify-center rounded-control border text-slate transition',
                             'border-transparent hover:border-hairline hover:bg-canvas hover:text-ink',
                             String(roleMenuId) === String(role.id)
                               ? 'border-hairline bg-canvas text-ink shadow-sm'
@@ -557,7 +556,7 @@ export function AccessControl() {
                         {String(roleMenuId) === String(role.id) ? (
                           <div
                             className={[
-                              'absolute right-0 z-30 min-w-[148px] overflow-hidden rounded-xl border border-hairline bg-canvas shadow-[0_18px_40px_rgba(20,24,31,0.14)]',
+                              'absolute right-0 z-30 min-w-[148px] overflow-hidden rounded-card border border-hairline bg-canvas shadow-card',
                               openMenuUp ? 'bottom-full mb-2' : 'top-full mt-2',
                             ].join(' ')}
                             onClick={(event) => event.stopPropagation()}
@@ -604,22 +603,23 @@ export function AccessControl() {
                   </p>
                 </button>
               ) : null}
-            </>
-          )}
+              </>
+            )}
+          </div>
         </aside>
 
         {!selectedRole ? (
-          <section className="flex min-h-[520px] items-center justify-center rounded-card bg-canvas p-10 text-center shadow-card">
+          <section className={`${surfaceClass} ${emptyStateClass} h-full min-h-[520px]`}>
             <div>
               <ShieldCheck aria-hidden="true" className="mx-auto mb-4 h-10 w-10 text-brand/20" />
-              <p className="text-[14px] font-medium text-slate">
+              <p className="text-[14px] font-semibold italic text-slate">
                 Select a role to manage its permissions
               </p>
             </div>
           </section>
         ) : (
-          <section className="overflow-hidden rounded-card bg-canvas shadow-card">
-            <div className="p-6">
+          <section className={`${surfaceClass} flex h-full min-h-[520px] flex-col overflow-hidden`}>
+            <div className="min-h-0 flex-1 overflow-y-auto p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -627,7 +627,7 @@ export function AccessControl() {
                       {selectedRole.name}
                     </h2>
                     {selectedRole.is_system ? (
-                      <span className="rounded bg-slate-100 px-2 py-1 font-mono text-[10px] text-slate">
+                      <span className="rounded bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate">
                         System
                       </span>
                     ) : null}

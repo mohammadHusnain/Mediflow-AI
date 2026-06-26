@@ -1098,8 +1098,7 @@ export function AdminDashboard() {
 
   return (
     <div className="dashboard-stage space-y-5">
-      <section className="relative overflow-hidden rounded-[30px] border border-white/80 bg-[linear-gradient(135deg,#FFFFFF_0%,#F7FAFC_52%,#EEF2FF_100%)] p-6 shadow-[0_24px_80px_rgba(20,24,31,0.09)]">
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(91,100,114,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(91,100,114,0.045)_1px,transparent_1px)] bg-[size:34px_34px]" />
+      <section className="relative overflow-hidden rounded-card border border-hairline/70 bg-canvas p-6 shadow-card">
         <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
           <div className="flex min-w-0 flex-col justify-between gap-6">
             <div>
@@ -1107,13 +1106,13 @@ export function AdminDashboard() {
                 <Sparkles aria-hidden="true" className="h-3.5 w-3.5" />
                 Live clinic overview
               </span>
-              <h2 className="mt-4 max-w-2xl text-[28px] font-bold leading-tight tracking-[-0.03em] text-ink md:text-[34px]">
+              <h2 className="mt-4 max-w-2xl text-[28px] font-bold leading-tight text-ink md:text-[34px]">
                 Command center for patient flow, staff capacity, and care momentum.
               </h2>
               <p className="mt-3 max-w-2xl text-[14px] leading-6 text-slate">
                 Track today&apos;s queue, active clinical coverage, and patient growth in one polished operating view.
               </p>
-              <p className="mt-3 inline-flex items-center rounded-full bg-white/80 px-3 py-1.5 font-mono text-[12px] font-semibold text-slate shadow-sm">
+              <p className="mt-3 inline-flex items-center rounded-full bg-white/80 px-3 py-1.5 font-sans text-[12px] font-semibold text-slate shadow-sm">
                 Live sync {lastUpdatedLabel}
               </p>
             </div>
@@ -1124,7 +1123,7 @@ export function AdminDashboard() {
 
                 return (
                   <div
-                    className="animate-fade-up rounded-[20px] border border-white/75 bg-white/80 p-4 shadow-[0_12px_34px_rgba(20,24,31,0.06)] backdrop-blur"
+                    className="animate-fade-up rounded-card border border-white/75 bg-white/80 p-4 shadow-[0_12px_34px_rgba(20,24,31,0.06)] backdrop-blur"
                     key={signal.label}
                     style={stagger(index, 0.05)}
                   >
@@ -1150,12 +1149,11 @@ export function AdminDashboard() {
             </div>
           </div>
 
-          <div className="relative overflow-hidden rounded-[26px] bg-[linear-gradient(160deg,#4338CA_0%,#7C3AED_52%,#6D28D9_100%)] p-5 text-white shadow-[0_22px_60px_rgba(67,56,202,0.28)]">
-            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[size:28px_28px] opacity-45" />
+          <div className="relative overflow-hidden rounded-card bg-brand p-5 text-white shadow-card">
             <div className="relative flex items-start justify-between gap-4">
               <div>
                 <p className="text-[13px] font-semibold text-white/70">Operations score</p>
-                <p className="mt-3 text-[46px] font-bold leading-none tracking-[-0.04em]">
+                <p className="mt-3 text-[46px] font-bold leading-none">
                   {isLoading ? '--' : operationsScore}
                 </p>
                 <p className="mt-2 text-[13px] text-white/70">Weighted from completion, doctors, and staff coverage.</p>
@@ -1173,7 +1171,7 @@ export function AdminDashboard() {
                 lineClassName="stroke-white/85"
                 values={adminHeroSparkline}
               />
-              <div className="absolute bottom-0 left-0 right-0 flex justify-between font-mono text-[11px] text-white/60">
+              <div className="absolute bottom-0 left-0 right-0 flex justify-between font-sans text-[11px] text-white/60">
                 {adminHeroSparkLabels.map((label) => (
                   <span key={label}>{label}</span>
                 ))}
@@ -1278,7 +1276,7 @@ export function AdminDashboard() {
                         <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
                           {label}
                         </p>
-                        <p className="mt-1 truncate font-mono text-[15px] font-bold text-ink">
+                        <p className="mt-1 truncate font-sans text-[15px] font-bold text-ink">
                           {value}
                         </p>
                       </div>
@@ -1310,13 +1308,13 @@ export function AdminDashboard() {
                           axisLine={false}
                           dataKey="label"
                           interval={getAxisInterval(appointmentPeriod)}
-                          tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                          tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
                           tickLine={false}
                           tickMargin={12}
                         />
                         <YAxis
                           axisLine={false}
-                          tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                          tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
                           tickFormatter={(value) => formatCurrency(value, { compact: true })}
                           tickLine={false}
                           tickMargin={8}
@@ -1326,7 +1324,7 @@ export function AdminDashboard() {
                           allowDecimals={false}
                           axisLine={false}
                           orientation="right"
-                          tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                          tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
                           tickLine={false}
                           tickMargin={8}
                           yAxisId="volume"
@@ -1364,7 +1362,7 @@ export function AdminDashboard() {
                   </div>
                 </div>
 
-                <aside className="rounded-[22px] border border-hairline bg-white/80 p-5 shadow-sm">
+                <aside className="rounded-card border border-hairline bg-white/80 p-5 shadow-sm">
                   <div className="flex items-center gap-3">
                     <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-light text-brand">
                       <DollarSign aria-hidden="true" className="h-5 w-5" />
@@ -1383,20 +1381,20 @@ export function AdminDashboard() {
                       <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">
                         Revenue
                       </p>
-                      <p className="mt-1 font-mono text-[22px] font-bold text-ink">
+                      <p className="mt-1 font-sans text-[22px] font-bold text-ink">
                         {formatCurrency(selectedRevenueMetric?.revenue || 0, { compact: true })}
                       </p>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="rounded-2xl bg-[#ECFDF5] px-3 py-3">
                         <p className="text-[11px] font-semibold text-[#047857]">Conversion</p>
-                        <p className="font-mono text-[18px] font-bold text-[#047857]">
+                        <p className="font-sans text-[18px] font-bold text-[#047857]">
                           {selectedRevenueMetric?.conversion || 0}%
                         </p>
                       </div>
                       <div className="rounded-2xl bg-[#FFF7ED] px-3 py-3">
                         <p className="text-[11px] font-semibold text-[#C2410C]">Forecast</p>
-                        <p className="font-mono text-[18px] font-bold text-[#C2410C]">
+                        <p className="font-sans text-[18px] font-bold text-[#C2410C]">
                           {formatCurrency(selectedRevenueMetric?.forecast || 0, { compact: true })}
                         </p>
                       </div>
@@ -1443,7 +1441,7 @@ export function AdminDashboard() {
 
                 return (
                   <div
-                    className="animate-fade-up rounded-[20px] border border-hairline bg-white/85 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(20,24,31,0.08)]"
+                    className="animate-fade-up rounded-card border border-hairline bg-white/85 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(20,24,31,0.08)]"
                     key={insight.label}
                     style={stagger(index, 0.04)}
                   >
@@ -1489,7 +1487,7 @@ export function AdminDashboard() {
                           <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
                             {label}
                           </p>
-                          <p className="mt-1 font-mono text-[18px] font-bold text-ink">{value}</p>
+                          <p className="mt-1 font-sans text-[18px] font-bold text-ink">{value}</p>
                         </div>
                       ))}
                     </div>
@@ -1512,14 +1510,14 @@ export function AdminDashboard() {
                             axisLine={false}
                             dataKey="label"
                             interval={getAxisInterval(appointmentPeriod)}
-                            tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                            tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
                             tickLine={false}
                             tickMargin={12}
                           />
                           <YAxis
                             allowDecimals={false}
                             axisLine={false}
-                            tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                            tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
                             tickLine={false}
                             tickMargin={8}
                           />
@@ -1552,20 +1550,20 @@ export function AdminDashboard() {
                     </div>
                   </div>
 
-                  <aside className="space-y-3 rounded-[22px] border border-hairline bg-white/80 p-5 shadow-sm">
+                  <aside className="space-y-3 rounded-card border border-hairline bg-white/80 p-5 shadow-sm">
                     <div>
                       <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
                         Active vs inactive
                       </p>
                       <div className="mt-3 grid grid-cols-2 gap-3">
                         <div className="rounded-2xl bg-[#ECFDF5] p-3">
-                          <p className="font-mono text-[22px] font-bold text-[#047857]">
+                          <p className="font-sans text-[22px] font-bold text-[#047857]">
                             {patientLifecycle.activePatients}
                           </p>
                           <p className="text-[11px] font-semibold text-[#047857]">Active</p>
                         </div>
                         <div className="rounded-2xl bg-mist p-3">
-                          <p className="font-mono text-[22px] font-bold text-slate">
+                          <p className="font-sans text-[22px] font-bold text-slate">
                             {patientLifecycle.inactivePatients}
                           </p>
                           <p className="text-[11px] font-semibold text-slate">Inactive</p>
@@ -1591,7 +1589,7 @@ export function AdminDashboard() {
                                   style={{ width: `${percent}%` }}
                                 />
                               </div>
-                              <span className="text-right font-mono text-[11px] font-bold text-ink">
+                              <span className="text-right font-sans text-[11px] font-bold text-ink">
                                 {group.count}
                               </span>
                             </div>
@@ -1613,7 +1611,7 @@ export function AdminDashboard() {
                     <div className="grid grid-cols-[46px_repeat(6,minmax(54px,1fr))] gap-2">
                       <span />
                       {appointmentHeatmap.slots.map((slot) => (
-                        <span className="text-center font-mono text-[11px] font-semibold text-slate" key={slot.label}>
+                        <span className="text-center font-sans text-[11px] font-semibold text-slate" key={slot.label}>
                           {slot.label}
                         </span>
                       ))}
@@ -1629,7 +1627,7 @@ export function AdminDashboard() {
                             return (
                               <button
                                 className={[
-                                  'h-11 rounded-[14px] border text-center font-mono text-[12px] font-bold transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50',
+                                  'h-11 rounded-[14px] border text-center font-sans text-[12px] font-bold transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50',
                                   selected ? 'border-brand text-brand shadow-sm' : 'border-white/80 text-ink',
                                 ].join(' ')}
                                 key={`${row.day}-${slot.label}`}
@@ -1648,14 +1646,14 @@ export function AdminDashboard() {
                   </div>
                 </div>
 
-                <aside className="rounded-[20px] border border-hairline bg-mist p-4">
+                <aside className="rounded-card border border-hairline bg-mist p-4">
                   <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
                     Peak booking
                   </p>
                   <p className="mt-2 text-[24px] font-bold text-ink">
                     {selectedHeatmapMetric?.day || '-'} {selectedHeatmapMetric?.label || ''}
                   </p>
-                  <p className="mt-1 font-mono text-[18px] font-bold text-brand">
+                  <p className="mt-1 font-sans text-[18px] font-bold text-brand">
                     {selectedHeatmapMetric?.count || 0} appointments
                   </p>
                   <p className="mt-3 text-[12px] leading-5 text-slate">
@@ -1673,7 +1671,7 @@ export function AdminDashboard() {
           {doctorsEnabled ? (
             <DashboardPanel bodyClassName="p-0" title="Doctor Performance Leaderboard">
               {isLoading ? (
-                <div className="m-5 h-[300px] rounded-[24px] bg-mist p-4">
+                <div className="m-5 h-[300px] rounded-card bg-mist p-4">
                   <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
                 </div>
               ) : doctorPerformanceData.length === 0 ? (
@@ -1694,14 +1692,14 @@ export function AdminDashboard() {
                           <XAxis
                             axisLine={false}
                             dataKey="label"
-                            tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                            tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
                             tickLine={false}
                             tickMargin={12}
                           />
                           <YAxis
                             allowDecimals={false}
                             axisLine={false}
-                            tick={{ fill: '#5B6472', fontFamily: 'JetBrains Mono', fontSize: 10 }}
+                            tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
                             tickLine={false}
                             tickMargin={8}
                           />
@@ -1729,14 +1727,14 @@ export function AdminDashboard() {
                       {doctorPerformanceData.map((doctor, index) => (
                         <div className="rounded-[18px] border border-white/80 bg-white/85 p-3 shadow-sm" key={doctor.id}>
                           <div className="flex items-center gap-3">
-                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-light font-mono text-[11px] font-bold text-brand">
+                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-light font-sans text-[11px] font-bold text-brand">
                               {index + 1}
                             </span>
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-[13px] font-bold text-ink">{doctor.name}</p>
                               <p className="text-[11px] text-slate">{doctor.avgConsult} min avg consult</p>
                             </div>
-                            <span className="font-mono text-[12px] font-bold text-[#047857]">
+                            <span className="font-sans text-[12px] font-bold text-[#047857]">
                               {doctor.completion}%
                             </span>
                           </div>
@@ -1766,7 +1764,7 @@ export function AdminDashboard() {
                   <div className="rounded-[18px] border border-hairline bg-white/85 p-3 shadow-sm" key={label}>
                     <Icon aria-hidden="true" className="mb-2 h-4 w-4 text-brand" />
                     <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">{label}</p>
-                    <p className="mt-1 font-mono text-[18px] font-bold text-ink">{value}</p>
+                    <p className="mt-1 font-sans text-[18px] font-bold text-ink">{value}</p>
                   </div>
                 ))}
               </div>
@@ -1776,7 +1774,7 @@ export function AdminDashboard() {
                   <div className="rounded-[18px] bg-mist px-4 py-3" key={row.label}>
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-[12px] font-semibold text-slate">{row.label}</span>
-                      <span className="font-mono text-[12px] font-bold text-ink">{row.value}</span>
+                      <span className="font-sans text-[12px] font-bold text-ink">{row.value}</span>
                     </div>
                     <div className="mt-2 h-2 overflow-hidden rounded-full bg-white">
                       <div
@@ -1788,7 +1786,7 @@ export function AdminDashboard() {
                 ))}
               </div>
 
-              <div className="rounded-[20px] border border-hairline bg-white/85 p-4">
+              <div className="rounded-card border border-hairline bg-white/85 p-4">
                 <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
                   Department coverage
                 </p>
@@ -1796,7 +1794,7 @@ export function AdminDashboard() {
                   {operationalAnalytics.serviceDemand.map((item) => (
                     <div className="flex items-center justify-between gap-3" key={item.label}>
                       <span className="truncate text-[12px] font-semibold text-slate">{item.label}</span>
-                      <span className="font-mono text-[12px] font-bold text-ink">{item.count}</span>
+                      <span className="font-sans text-[12px] font-bold text-ink">{item.count}</span>
                     </div>
                   ))}
                 </div>
@@ -1849,7 +1847,7 @@ export function AdminDashboard() {
                           <td className="px-5 py-4 text-[13px] text-slate">
                             {getAppointmentDoctorName(appointment, dashboardData.doctors)}
                           </td>
-                          <td className="px-5 py-4 font-mono text-[12px] font-medium text-ink">
+                          <td className="px-5 py-4 font-sans text-[12px] font-medium text-ink">
                             {formatTime(appointment.appointment_dt)}
                           </td>
                           <td className="px-5 py-4">
@@ -1904,11 +1902,11 @@ export function AdminDashboard() {
                         <p className="truncate text-[14px] font-semibold text-ink">
                           {getDoctorName(doctor)}
                         </p>
-                        <p className="font-mono text-[11px] text-slate">
+                        <p className="font-sans text-[11px] text-slate">
                           Arrived {formatTime(doctor.today_checkin)}
                         </p>
                       </div>
-                      <span className="rounded-full bg-brand-light px-2.5 py-1 font-mono text-[11px] font-semibold text-brand">
+                      <span className="rounded-full bg-brand-light px-2.5 py-1 font-sans text-[11px] font-semibold text-brand">
                         {Number(doctor.cases_today || 0)} cases
                       </span>
                     </div>
@@ -2057,7 +2055,7 @@ export function AdminDashboard() {
                 </div>
               </div>
 
-              <aside className="flex flex-col justify-between rounded-[22px] border border-hairline/80 bg-[linear-gradient(180deg,#FFFFFF_0%,#F8FAFC_100%)] p-5">
+              <aside className="flex flex-col justify-between rounded-card border border-hairline/80 bg-canvas p-5">
                 <div className="text-center">
                   <div
                     className="mx-auto flex h-36 w-36 items-center justify-center rounded-full p-3 shadow-[inset_0_0_0_1px_rgba(228,232,235,0.9)]"
@@ -2067,7 +2065,7 @@ export function AdminDashboard() {
                   >
                     <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-white shadow-inner">
                       <Activity aria-hidden="true" className="mb-1 h-5 w-5 text-brand" />
-                      <span className="font-mono text-[26px] font-bold text-ink">
+                      <span className="font-sans text-[26px] font-bold text-ink">
                         {completionRate}%
                       </span>
                       <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">
@@ -2080,11 +2078,11 @@ export function AdminDashboard() {
                 <div className="mt-5 space-y-3">
                   <div className="flex items-center justify-between rounded-2xl bg-brand-light px-4 py-3">
                     <span className="text-[12px] font-semibold text-brand">Open queue</span>
-                    <span className="font-mono text-[14px] font-bold text-brand">{todayOpenCount}</span>
+                    <span className="font-sans text-[14px] font-bold text-brand">{todayOpenCount}</span>
                   </div>
                   <div className="flex items-center justify-between rounded-2xl bg-[#ECFDF5] px-4 py-3">
                     <span className="text-[12px] font-semibold text-[#059669]">Completed today</span>
-                    <span className="font-mono text-[14px] font-bold text-[#059669]">{todayCompletedCount}</span>
+                    <span className="font-sans text-[14px] font-bold text-[#059669]">{todayCompletedCount}</span>
                   </div>
                 </div>
               </aside>
@@ -2098,7 +2096,7 @@ export function AdminDashboard() {
           {appointmentsEnabled ? (
             <DashboardPanel bodyClassName="p-0" title="Appointment Status Mix">
               {isLoading ? (
-                <div className="m-5 h-[300px] rounded-[24px] bg-mist p-4">
+                <div className="m-5 h-[300px] rounded-card bg-mist p-4">
                   <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
                 </div>
               ) : appointmentStatusData.length === 0 ? (
@@ -2110,14 +2108,14 @@ export function AdminDashboard() {
                       <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-slate">
                         Live status distribution
                       </p>
-                      <p className="mt-2 text-[34px] font-bold leading-none tracking-[-0.04em] text-ink">
+                      <p className="mt-2 text-[34px] font-bold leading-none text-ink">
                         {appointmentStatusTotal}
                       </p>
                       <p className="mt-1 text-[12px] font-medium text-slate">
                         appointment records in view
                       </p>
                     </div>
-                    <span className="rounded-full bg-brand-light px-3 py-1.5 font-mono text-[11px] font-bold text-brand">
+                    <span className="rounded-full bg-brand-light px-3 py-1.5 font-sans text-[11px] font-bold text-brand">
                       {completionRate}% complete
                     </span>
                   </div>
@@ -2147,7 +2145,7 @@ export function AdminDashboard() {
                         <XAxis
                           axisLine={false}
                           dataKey="label"
-                          fontFamily="JetBrains Mono, monospace"
+                          fontFamily="Outfit, sans-serif"
                           fontSize={10}
                           tick={{ fill: '#5B6472' }}
                           tickLine={false}
@@ -2156,7 +2154,7 @@ export function AdminDashboard() {
                         <YAxis
                           allowDecimals={false}
                           axisLine={false}
-                          fontFamily="JetBrains Mono, monospace"
+                          fontFamily="Outfit, sans-serif"
                           fontSize={10}
                           tick={{ fill: '#5B6472' }}
                           tickLine={false}
@@ -2193,7 +2191,7 @@ export function AdminDashboard() {
                             }}
                           />
                         </div>
-                        <span className="w-8 text-right font-mono text-[12px] font-bold text-ink">
+                        <span className="w-8 text-right font-sans text-[12px] font-bold text-ink">
                           {item.count}
                         </span>
                       </div>
@@ -2207,7 +2205,7 @@ export function AdminDashboard() {
           {doctorsEnabled ? (
             <DashboardPanel bodyClassName="p-0" title="Doctor Workload Today">
               {isLoading ? (
-                <div className="m-5 h-[300px] rounded-[24px] bg-mist p-4">
+                <div className="m-5 h-[300px] rounded-card bg-mist p-4">
                   <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
                 </div>
               ) : doctorWorkloadData.length === 0 ? (
@@ -2219,14 +2217,14 @@ export function AdminDashboard() {
                       <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-slate">
                         Clinical load today
                       </p>
-                      <p className="mt-2 text-[34px] font-bold leading-none tracking-[-0.04em] text-ink">
+                      <p className="mt-2 text-[34px] font-bold leading-none text-ink">
                         {workloadTotal}
                       </p>
                       <p className="mt-1 text-[12px] font-medium text-slate">
                         cases across active doctors
                       </p>
                     </div>
-                    <span className="rounded-full bg-[#EEF2FF] px-3 py-1.5 font-mono text-[11px] font-bold text-brand">
+                    <span className="rounded-full bg-[#EEF2FF] px-3 py-1.5 font-sans text-[11px] font-bold text-brand">
                       Peak {busiestDoctor?.label || 'Doctor'}
                     </span>
                   </div>
@@ -2245,7 +2243,7 @@ export function AdminDashboard() {
                         <XAxis
                           axisLine={false}
                           dataKey="label"
-                          fontFamily="JetBrains Mono, monospace"
+                          fontFamily="Outfit, sans-serif"
                           fontSize={10}
                           tick={{ fill: '#5B6472' }}
                           tickLine={false}
@@ -2254,7 +2252,7 @@ export function AdminDashboard() {
                         <YAxis
                           allowDecimals={false}
                           axisLine={false}
-                          fontFamily="JetBrains Mono, monospace"
+                          fontFamily="Outfit, sans-serif"
                           fontSize={10}
                           tick={{ fill: '#5B6472' }}
                           tickLine={false}
@@ -2276,7 +2274,7 @@ export function AdminDashboard() {
                   <div className="relative mt-4 grid gap-2">
                     {doctorWorkloadData.slice(0, 3).map((doctor, index) => (
                       <div className="flex items-center gap-3" key={doctor.label}>
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-light font-mono text-[11px] font-bold text-brand">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-light font-sans text-[11px] font-bold text-brand">
                           {index + 1}
                         </span>
                         <span className="w-20 truncate text-[12px] font-semibold text-slate">
@@ -2288,7 +2286,7 @@ export function AdminDashboard() {
                             style={{ width: `${Math.round((doctor.cases / workloadPeak) * 100)}%` }}
                           />
                         </div>
-                        <span className="w-8 text-right font-mono text-[12px] font-bold text-ink">
+                        <span className="w-8 text-right font-sans text-[12px] font-bold text-ink">
                           {doctor.cases}
                         </span>
                       </div>
@@ -2302,7 +2300,7 @@ export function AdminDashboard() {
           {patientsEnabled ? (
             <DashboardPanel bodyClassName="p-0" title="Patients by Gender">
               {isLoading ? (
-                <div className="m-5 h-[300px] rounded-[24px] bg-mist p-4">
+                <div className="m-5 h-[300px] rounded-card bg-mist p-4">
                   <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
                 </div>
               ) : patientGenderData.length === 0 ? (
@@ -2314,14 +2312,14 @@ export function AdminDashboard() {
                       <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-slate">
                         Patient segmentation
                       </p>
-                      <p className="mt-2 text-[34px] font-bold leading-none tracking-[-0.04em] text-ink">
+                      <p className="mt-2 text-[34px] font-bold leading-none text-ink">
                         {totalGenderPatients}
                       </p>
                       <p className="mt-1 text-[12px] font-medium text-slate">
                         total patient profiles
                       </p>
                     </div>
-                    <span className="rounded-full bg-[#CCFBF1] px-3 py-1.5 font-mono text-[11px] font-bold text-[#0F766E]">
+                    <span className="rounded-full bg-[#CCFBF1] px-3 py-1.5 font-sans text-[11px] font-bold text-[#0F766E]">
                       Top {leadingGender?.label || 'Segment'}
                     </span>
                   </div>
@@ -2368,7 +2366,7 @@ export function AdminDashboard() {
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="font-mono text-[30px] font-bold text-ink">
+                      <span className="font-sans text-[30px] font-bold text-ink">
                         {totalGenderPatients}
                       </span>
                       <span className="text-[12px] font-semibold text-slate">Patients</span>
@@ -2397,7 +2395,7 @@ export function AdminDashboard() {
                             }}
                           />
                         </div>
-                        <span className="text-right font-mono text-[12px] font-bold text-ink">
+                        <span className="text-right font-sans text-[12px] font-bold text-ink">
                           {Math.round((item.count / totalGenderPatients) * 100)}%
                         </span>
                       </div>
@@ -2448,7 +2446,7 @@ export function AdminDashboard() {
                         {getPatientConditions(patient)[0] || 'No condition recorded'}
                       </p>
                     </div>
-                    <p className="font-mono text-[11px] text-slate">
+                    <p className="font-sans text-[11px] text-slate">
                       {formatDate(getPatientCreatedAt(patient))}
                     </p>
                   </div>

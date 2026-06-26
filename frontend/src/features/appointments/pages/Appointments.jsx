@@ -519,7 +519,7 @@ export function Appointments() {
                 <span className="truncate text-[12px] font-semibold uppercase tracking-wide">
                   {label}
                 </span>
-                <span className="ml-3 rounded-full bg-canvas/80 px-2 py-0.5 font-mono text-[12px] font-semibold shadow-sm">
+                <span className="ml-3 rounded-full bg-canvas/80 px-2 py-0.5 font-sans text-[12px] font-semibold shadow-sm">
                   {count}
                 </span>
               </button>
@@ -680,7 +680,7 @@ export function Appointments() {
                             {getAppointmentDoctorName(appointment, doctors)}
                           </td>
                         ) : null}
-                        <td className="px-5 py-4 font-mono text-[13px] font-medium text-ink">
+                        <td className="px-5 py-4 font-sans text-[13px] font-medium text-ink">
                           {dateParts.date}
                           {dateParts.time ? (
                             <>
@@ -697,7 +697,7 @@ export function Appointments() {
                         </td>
                         <td className="px-5 py-4">
                           {vitalsText ? (
-                            <span className="rounded bg-mist px-2 py-0.5 font-mono text-[12px] text-ink">
+                            <span className="rounded bg-mist px-2 py-0.5 font-sans text-[12px] text-ink">
                               {vitalsText}
                             </span>
                           ) : (
