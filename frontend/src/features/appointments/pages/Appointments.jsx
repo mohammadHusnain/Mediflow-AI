@@ -184,11 +184,11 @@ function canUserSeeAppointment(appointment, user, role) {
 
 export function Appointments() {
   const { user } = useAuth()
-  const { canDelete: canDeleteRecords, canWrite, role } = usePermission()
+  const { canDelete: canDeleteRecords, canWrite, role, isAdmin } = usePermission()
   const toast = useToast()
   const navigate = useNavigate()
   const doctorUser = role?.slug === 'doctor'
-  const canBook = canWrite('appointments')
+  const canBook = isAdmin
   const canEdit = canWrite('appointments')
   const canUpdateStatus = canWrite('appointments')
   const canUpdatePayment = canWrite('appointments')

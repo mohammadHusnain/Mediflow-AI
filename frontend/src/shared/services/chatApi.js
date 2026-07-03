@@ -22,6 +22,8 @@ export const getGroupMessages = (groupId, page = 1) =>
     })
     .then(unwrap)
 
+export const getGroupDetail = (groupId) => api.get(`/chat/groups/${groupId}/`).then(unwrap)
+
 export const createGroup = (data) => api.post('/chat/groups/', data).then(unwrap)
 
 export const addGroupMember = (groupId, userId) =>

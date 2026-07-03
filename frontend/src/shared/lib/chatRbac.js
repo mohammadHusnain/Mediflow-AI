@@ -1,9 +1,10 @@
-const CHAT_ROLES = ['admin', 'doctor', 'receptionist']
+const CHAT_ROLES = ['admin', 'doctor', 'receptionist', 'staff']
 
 const GROUP_ROLES = {
-  admin: ['admin', 'doctor', 'receptionist'],
-  doctor: ['doctor', 'receptionist'],
-  receptionist: ['receptionist', 'doctor'],
+  admin: ['admin', 'doctor', 'receptionist', 'staff'],
+  doctor: ['doctor', 'receptionist', 'staff'],
+  receptionist: ['receptionist', 'doctor', 'staff'],
+  staff: ['staff', 'doctor'],
 }
 
 export function normalizeRoleSlug(role) {
@@ -16,7 +17,7 @@ export function normalizeRoleSlug(role) {
 }
 
 export function getUserId(user = {}) {
-  return user.user_id || user.id || user.pk
+  return user?.user_id || user?.id || user?.pk
 }
 
 export function getDMableRoles() {

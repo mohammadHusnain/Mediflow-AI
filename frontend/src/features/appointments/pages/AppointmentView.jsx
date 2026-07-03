@@ -8,6 +8,7 @@ import PatientSummaryPanel from '@features/patients/components/PatientSummaryPan
 import SkeletonRow from '@shared/components/SkeletonRow'
 import StatusBadge from '../components/StatusBadge'
 import { usePermission } from '@shared/lib/usePermission'
+import { useAuth } from '@shared/context/AuthContext'
 import {
   formatDateTime,
   getAppointmentDoctorName,
@@ -29,10 +30,13 @@ function getEmbeddedAppointmentPatient(appointment) {
 
 export function AppointmentView() {
   const { id } = useParams()
-  const { canWrite } = usePermission()
+  const { canWrite, role } = usePermission()
+  const { user } = useAuth()
   const navigate = useNavigate()
-  const canEdit = canWrite('appointments')
   const [appointment, setAppointment] = useState(null)
+  const canEdit = canWrite('appointments')
+  const isDoctor = role?.slug === 'doctor'
+  const isOwnAppointment = isDoctor && appointment?.doctor === user?.id
   const [patient, setPatient] = useState(null)
   const [doctors, setDoctors] = useState([])
   const [isLoading, setIsLoading] = useState(true)
@@ -146,14 +150,14 @@ export function AppointmentView() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {canEdit ? (
+            {canEdit || isOwnAppointment ? (
               <button
-                className="inline-flex h-10 items-center justify-center rounded-control border border-brand/20 bg-brand-light px-3 text-[13px] font-semibold text-brand transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+                className="primary-button inline-flex items-center rounded-control px-4 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 focus-visible:ring-offset-2"
                 onClick={() => navigate(`/appointments/${id}/edit`)}
                 type="button"
               >
                 <Edit aria-hidden="true" className="mr-2 h-4 w-4" />
-                Edit
+                {isOwnAppointment && !canEdit ? 'Medical Notes' : 'Edit'}
               </button>
             ) : null}
             <Link
@@ -207,6 +211,46 @@ export function AppointmentView() {
               <span className="rounded bg-mist px-2 py-0.5 font-sans text-[12px] text-ink">
                 {vitalsText}
               </span>
+            </section>
+          ) : null}
+
+          {appointment.current_condition || appointment.diagnosis || appointment.treatment_plan ? (
+            <section>
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate">
+                Medical Notes
+              </p>
+              <div className="space-y-3">
+                {appointment.current_condition ? (
+                  <div className="rounded-control border border-hairline bg-mist px-4 py-3">
+                    <p className="text-[11px] font-semibold text-slate">Current Condition</p>
+                    <p className="mt-1 text-[14px] leading-6 text-ink">{appointment.current_condition}</p>
+                  </div>
+                ) : null}
+                {appointment.diagnosis ? (
+                  <div className="rounded-control border border-hairline bg-mist px-4 py-3">
+                    <p className="text-[11px] font-semibold text-slate">Diagnosis</p>
+                    <p className="mt-1 text-[14px] leading-6 text-ink">{appointment.diagnosis}</p>
+                  </div>
+                ) : null}
+                {appointment.treatment_plan ? (
+                  <div className="rounded-control border border-hairline bg-mist px-4 py-3">
+                    <p className="text-[11px] font-semibold text-slate">Treatment Plan</p>
+                    <p className="mt-1 text-[14px] leading-6 text-ink">{appointment.treatment_plan}</p>
+                  </div>
+                ) : null}
+                {Array.isArray(appointment.medications_prescribed) && appointment.medications_prescribed.length > 0 ? (
+                  <div className="rounded-control border border-hairline bg-mist px-4 py-3">
+                    <p className="text-[11px] font-semibold text-slate">Medications Prescribed</p>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {appointment.medications_prescribed.map((med, i) => (
+                        <span key={i} className="rounded-full bg-brand-light px-2.5 py-1 text-[12px] font-medium text-brand">
+                          {med}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             </section>
           ) : null}
 

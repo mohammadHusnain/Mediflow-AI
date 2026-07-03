@@ -3,12 +3,13 @@ import { Link } from 'react-router-dom'
 
 import DarkTooltip from '@shared/components/charts/DarkTooltip'
 import {
-  emptyStateClass,
-  panelHeaderClass,
   surfaceClass,
 } from '@shared/components/FormPrimitives'
 import { useCountUp } from '@shared/lib/countUp'
 import { stagger } from '@shared/lib/motion'
+
+const dashboardPanelHeaderClass =
+  'flex min-h-12 items-center justify-between gap-3 border-b border-hairline px-4 py-3'
 
 function buildSparklinePoints(values = [], width = 320, height = 92) {
   const safeValues = values.length > 1 ? values : [0, 0, 0, 0]
@@ -46,22 +47,20 @@ export function DashboardStatCard({
 
   return (
     <article
-      className={`${surfaceClass} group relative h-full animate-fade-up overflow-hidden p-5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(20,24,31,0.07)]`}
+      className={`${surfaceClass} group relative h-full animate-fade-up overflow-hidden p-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(20,24,31,0.07)]`}
       style={stagger(index, 0.08)}
     >
       <div className="relative flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="animate-count-up text-[36px] font-extrabold leading-none text-ink">
+          <p className="animate-count-up text-[30px] font-extrabold leading-none text-ink">
             {count}
           </p>
-          <p className="mt-3 text-[13px] font-medium text-slate">{label}</p>
+          <p className="mt-2 text-[13px] font-medium text-slate">{label}</p>
           <p className="mt-1 text-[12px] font-normal text-slate">{context}</p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-4">
           <MoreHorizontal aria-hidden="true" className="h-5 w-5 text-slate/35" />
-          <div
-            className={`flex h-12 w-12 items-center justify-center rounded-control ${tone}`}
-          >
+          <div className={`flex h-10 w-10 items-center justify-center rounded-control ${tone}`}>
             <Icon aria-hidden="true" className="h-5 w-5" />
           </div>
         </div>
@@ -73,15 +72,16 @@ export function DashboardStatCard({
 export function DashboardPanel({
   action,
   actionTo,
-  bodyClassName = 'p-5',
+  bodyClassName = 'p-4',
   children,
+  className = '',
   footer,
   headerContent,
   title,
 }) {
   return (
-    <section className={`${surfaceClass} group/panel relative h-full overflow-hidden`}>
-      <div className={panelHeaderClass}>
+    <section className={`${surfaceClass} group/panel relative flex h-full flex-col overflow-hidden ${className}`}>
+      <div className={dashboardPanelHeaderClass}>
         <div className="flex min-w-0 items-center gap-3">
           <span className="h-2.5 w-2.5 rounded-full bg-brand" />
           <h2 className="truncate text-[16px] font-semibold text-ink">
@@ -103,7 +103,7 @@ export function DashboardPanel({
           </span>
         ) : null}
       </div>
-      <div className={`relative ${bodyClassName}`}>{children}</div>
+      <div className={`relative flex-1 ${bodyClassName}`}>{children}</div>
       {footer ? <div className="border-t border-hairline px-5 py-3">{footer}</div> : null}
     </section>
   )
@@ -135,7 +135,7 @@ export function DashboardEmptyState({
   return (
     <div
       className={[
-        emptyStateClass,
+        'flex min-h-[92px] flex-col items-center justify-center px-4 py-6 text-center',
         className,
       ].join(' ')}
     >
@@ -150,8 +150,139 @@ export function DashboardEmptyState({
   )
 }
 
+export function PanelSkeleton({ className = '', rows = 1 }) {
+  return (
+    <div className={['rounded-control bg-mist p-4', className].join(' ')}>
+      <div className="space-y-3">
+        {Array.from({ length: rows }).map((_, index) => (
+          <div
+            className="h-10 animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]"
+            key={index}
+            style={stagger(index, 0.04)}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function DashboardChartTooltip({ active, label, payload }) {
   return <DarkTooltip active={active} label={label} payload={payload} />
+}
+
+export function MetricCell({
+  accent = 'text-brand',
+  className = '',
+  label,
+  value,
+}) {
+  return (
+    <div className={['min-w-0 rounded-control border border-hairline bg-canvas px-3 py-2.5', className].join(' ')}>
+      <p className="text-[10px] font-semibold uppercase leading-4 tracking-[0.07em] text-slate">
+        {label}
+      </p>
+      <p className={`mt-1 break-words font-sans text-[17px] font-bold leading-tight ${accent}`}>
+        {value}
+      </p>
+    </div>
+  )
+}
+
+export function LegendChip({ color, label }) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-hairline bg-canvas px-2.5 py-1 text-[11px] font-semibold text-slate">
+      <span
+        aria-hidden="true"
+        className="h-2.5 w-2.5 rounded-full"
+        style={{ backgroundColor: color }}
+      />
+      {label}
+    </span>
+  )
+}
+
+export function ProgressMetricRow({
+  color = '#4338CA',
+  label,
+  percent,
+  value,
+}) {
+  const safePercent = Math.max(0, Math.min(100, Number(percent || 0)))
+
+  return (
+    <div className="rounded-control bg-mist/80 px-3.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] transition duration-200 hover:bg-mist">
+      <div className="flex items-center justify-between gap-3">
+        <span className="truncate text-[12px] font-semibold text-slate">{label}</span>
+        <span className="font-sans text-[12px] font-bold tabular-nums text-ink">{value}</span>
+      </div>
+      <div
+        aria-label={`${label}: ${Math.round(safePercent)}%`}
+        className="mt-2 h-2 overflow-hidden rounded-full bg-canvas shadow-[inset_0_1px_2px_rgba(20,24,31,0.06)]"
+        role="meter"
+        aria-valuemax={100}
+        aria-valuemin={0}
+        aria-valuenow={Math.round(safePercent)}
+      >
+        <div
+          className="h-full rounded-full transition-[width,filter] duration-500 ease-out"
+          style={{
+            background: `linear-gradient(90deg, ${color} 0%, ${color}dd 58%, ${color} 100%)`,
+            boxShadow: safePercent > 0 ? `0 4px 12px ${color}33` : 'none',
+            width: `${safePercent}%`,
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
+export function RankingRow({
+  children,
+  index,
+  label,
+  meta,
+  percent,
+  tone = '#4338CA',
+  value,
+}) {
+  const safePercent = Math.max(0, Math.min(100, Number(percent || 0)))
+
+  return (
+    <div className="rounded-control border border-hairline bg-canvas p-3 shadow-[0_8px_22px_rgba(20,24,31,0.035)] transition duration-200 hover:border-brand/20 hover:shadow-[0_12px_28px_rgba(67,56,202,0.08)]">
+      <div className="grid grid-cols-[28px_minmax(0,1fr)_44px] items-center gap-3">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-light font-sans text-[11px] font-bold text-brand">
+          {index + 1}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[13px] font-bold text-ink">{label}</p>
+          {meta ? <p className="truncate text-[11px] text-slate">{meta}</p> : null}
+        </div>
+        {value ? (
+          <span className="text-right font-sans text-[12px] font-bold tabular-nums text-ink">
+            {value}
+          </span>
+        ) : null}
+      </div>
+      <div
+        aria-label={`${label}: ${Math.round(safePercent)}%`}
+        className="mt-3 h-2 overflow-hidden rounded-full bg-mist shadow-[inset_0_1px_2px_rgba(20,24,31,0.05)]"
+        role="meter"
+        aria-valuemax={100}
+        aria-valuemin={0}
+        aria-valuenow={Math.round(safePercent)}
+      >
+        <div
+          className="h-full rounded-full transition-[width,filter] duration-500 ease-out"
+          style={{
+            background: `linear-gradient(90deg, ${tone} 0%, ${tone}dd 58%, ${tone} 100%)`,
+            boxShadow: safePercent > 0 ? `0 5px 14px ${tone}35` : 'none',
+            width: `${safePercent}%`,
+          }}
+        />
+      </div>
+      {children ? <div className="mt-3">{children}</div> : null}
+    </div>
+  )
 }
 
 export function DashboardMiniSparkline({

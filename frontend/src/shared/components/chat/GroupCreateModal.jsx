@@ -2,6 +2,10 @@ import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
+import {
+  FieldLabel,
+  translucentBackdropClass,
+} from '@shared/components/FormPrimitives'
 import { useChatContext } from '@shared/context/ChatContext'
 import { filterGroupableUsers } from '@shared/lib/chatRbac'
 import ChatAvatar from './ChatAvatar'
@@ -71,7 +75,7 @@ export function GroupCreateModal({ onClose, onCreated }) {
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[1001] flex items-end justify-end bg-glass-dark px-3 py-3 backdrop-blur-xs sm:px-6 sm:py-6">
+    <div className={`fixed inset-0 z-[1001] flex items-end justify-end px-3 py-3 sm:px-6 sm:py-6 ${translucentBackdropClass}`}>
       <form
         className="w-full animate-scale-in rounded-card bg-canvas p-5 shadow-card sm:max-w-[380px]"
         onSubmit={handleSubmit}
@@ -89,9 +93,7 @@ export function GroupCreateModal({ onClose, onCreated }) {
         </div>
 
         <label className="block">
-          <span className="mb-1.5 block text-[13px] font-semibold text-slate-900">
-            Group Name
-          </span>
+          <FieldLabel label="Group Name" />
           <input
             className="h-10 w-full rounded-control border border-hairline bg-mist px-3 text-[14px] outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
             onChange={(event) => setName(event.target.value)}
@@ -101,9 +103,7 @@ export function GroupCreateModal({ onClose, onCreated }) {
         </label>
 
         <label className="mt-4 block">
-          <span className="mb-1.5 block text-[13px] font-semibold text-slate-900">
-            Add Members
-          </span>
+          <FieldLabel label="Add Members" />
           <input
             className="h-10 w-full rounded-control border border-hairline bg-mist px-3 text-[14px] outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
             onChange={(event) => setMemberSearch(event.target.value)}

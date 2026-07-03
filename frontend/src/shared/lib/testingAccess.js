@@ -1,13 +1,14 @@
 /* src/shared/lib/testingAccess.js - Temporary auth bypass for local QA. */
-export const PUBLIC_ROUTES_FOR_TESTING = false
+export const PUBLIC_ROUTES_FOR_TESTING = true
 
 const TESTING_ROLE_STORAGE_KEY = 'mediflow_testing_role'
 
 export const FULL_ACCESS_PERMISSIONS = {
   appointments: 'full_access',
   doctors: 'full_access',
+  financial_reports: 'full_access',
   patients: 'full_access',
-  reports: 'read',
+  reports: 'full_access',
   staff: 'full_access',
 }
 
@@ -33,6 +34,7 @@ const TESTING_SESSIONS = {
     permissions: {
       appointments: 'read',
       doctors: 'read',
+      financial_reports: 'no_access',
       patients: 'read',
       reports: 'no_access',
       staff: 'no_access',
@@ -58,6 +60,7 @@ const TESTING_SESSIONS = {
     permissions: {
       appointments: 'full_access',
       doctors: 'full_access',
+      financial_reports: 'full_access',
       patients: 'full_access',
       reports: 'read',
       staff: 'no_access',

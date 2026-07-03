@@ -101,9 +101,9 @@ export function GroupsTab() {
           filteredGroups.map((group) => {
             const key = convKey.group(group.id)
             const unread = unreadCounts.get(key) || 0
-            const sender = group.last_message_sender || group.last_sender_name
+            const sender = group.last_message_sender_name
             const preview = group.last_message
-              ? `${sender ? `${sender}: ` : ''}${group.last_message}`
+              ? `${sender ? `${sender}: ` : ''}${group.last_message.content || ''}`
               : `${group.member_count || group.members?.length || 0} members`
 
             return (

@@ -1,13 +1,17 @@
 /* src/shared/lib/navItems.js - Computes permission-aware sidebar navigation. */
 import {
   BarChart2,
+  BarChart3,
   Briefcase,
   CalendarClock,
   LayoutDashboard,
+  Receipt,
   ShieldCheck,
   Stethoscope,
+  TrendingDown,
   UserCircle,
   Users,
+  Wallet,
 } from 'lucide-react'
 
 export function getNavItems({ canRead, isAdmin, role, user }) {
@@ -44,6 +48,52 @@ export function getNavItems({ canRead, isAdmin, role, user }) {
       icon: Users,
       label: isDoctor ? 'My Patients' : 'Patients',
       to: '/patients',
+    })
+  }
+
+  if (canRead('financial_reports') || isDoctor) {
+    const financeChildren = isDoctor
+      ? [
+          {
+            icon: Wallet,
+            label: 'Salary',
+            matchPaths: ['/financial-reports/salary'],
+            to: '/financial-reports/salary',
+          },
+        ]
+      : [
+          {
+            icon: Receipt,
+            label: 'Billing',
+            matchPaths: ['/financial-reports/billing'],
+            to: '/financial-reports/billing/invoices',
+          },
+          {
+            icon: Wallet,
+            label: 'Salary',
+            matchPaths: ['/financial-reports/salary'],
+            to: '/financial-reports/salary',
+          },
+          {
+            icon: BarChart2,
+            label: 'Financial Reports',
+            matchPaths: ['/financial-reports/reports'],
+            to: '/financial-reports/reports',
+          },
+          {
+            icon: TrendingDown,
+            label: 'Expenses',
+            matchPaths: ['/financial-reports/expenses'],
+            to: '/financial-reports/expenses',
+          },
+        ]
+
+    items.push({
+      children: financeChildren,
+      icon: BarChart3,
+      label: 'Finances',
+      matchPaths: ['/financial-reports'],
+      to: '/financial-reports',
     })
   }
 

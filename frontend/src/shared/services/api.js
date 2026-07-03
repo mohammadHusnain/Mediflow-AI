@@ -9,7 +9,18 @@ import {
   setDemoRolePermissions,
   updateDemoRole,
 } from '@shared/lib/accessControlData'
-import { PUBLIC_ROUTES_FOR_TESTING } from '@shared/lib/testingAccess'
+import {
+  createDemoExpense,
+  deleteDemoExpense,
+  getDemoExpenseById,
+  getDemoExpenseCategories,
+  getDemoExpenses,
+  getDemoExpenseSummary,
+  getDemoPatientRevenue,
+  getDemoSalaryRecords,
+  markDemoSalaryPaid,
+  updateDemoExpense,
+} from '@shared/lib/expensesDemoData'
 import {
   bookDemoAppointment,
   createDemoDoctor,
@@ -38,6 +49,13 @@ import {
   updateDemoStaff,
   updateDemoStatus,
 } from '@shared/lib/seedData'
+import { PUBLIC_ROUTES_FOR_TESTING } from '@shared/lib/testingAccess'
+
+try {
+  localStorage.removeItem('mediflow_demo_data_v7')
+} catch {
+  // localStorage may be unavailable in some environments
+}
 
 export const api = axios.create({
   baseURL: 'http://localhost:8000/api',
@@ -108,27 +126,15 @@ function isWriteMethod(method = '') {
   return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase())
 }
 
-function canUseBackend() {
-  return Boolean(getAccessToken())
-}
-
-function shouldUseDemoFallback(error) {
-  return !canUseBackend() || !error?.response
-}
-
-async function withDemoFallback(request, fallback) {
-  if (!canUseBackend()) {
-    return fallback()
+function ensureAuthenticated() {
+  if (PUBLIC_ROUTES_FOR_TESTING) {
+    return
   }
 
-  try {
-    return await request()
-  } catch (error) {
-    if (shouldUseDemoFallback(error)) {
-      return fallback()
-    }
-
-    throw error
+  if (!getAccessToken()) {
+    const err = new Error('Authentication required. Please log in.')
+    err.response = { status: 401, data: { detail: 'Authentication required.' } }
+    throw err
   }
 }
 
@@ -234,16 +240,16 @@ export async function refreshToken(refreshTokenValue) {
 }
 
 export async function changePassword(newPassword, confirmPassword) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.post('/auth/change-password/', {
-        new_password: newPassword,
-        confirm_password: confirmPassword,
-      })
-      return data
-    },
-    () => ({ detail: 'Password updated successfully.' }),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) {
+    return { detail: 'Password changed for testing session.' }
+  }
+
+  ensureAuthenticated()
+  const { data } = await api.post('/auth/change-password/', {
+    new_password: newPassword,
+    confirm_password: confirmPassword,
+  })
+  return data
 }
 
 // DOCTOR ROLE — automatic server-side scoping (no frontend param needed):
@@ -264,193 +270,130 @@ export async function changePassword(newPassword, confirmPassword) {
 // Full access with no role-based scoping, including /api/staff/
 export async function getPatients(params = '') {
   const normalizedParams = normalizeParams(params)
-
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.get('/patients/', {
-        params: normalizedParams,
-      })
-      return data
-    },
-    () => getDemoPatients(normalizedParams),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return getDemoPatients(normalizedParams)
+  ensureAuthenticated()
+  const { data } = await api.get('/patients/', { params: normalizedParams })
+  return data
 }
 
 export async function getPatient(id) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.get(`/patients/${id}/`)
-      return data
-    },
-    () => getDemoPatient(id),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return getDemoPatient(id)
+  ensureAuthenticated()
+  const { data } = await api.get(`/patients/${id}/`)
+  return data
 }
 
 export async function createPatient(patient) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.post('/patients/', patient)
-      return data
-    },
-    () => createDemoPatient(patient),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return createDemoPatient(patient)
+  ensureAuthenticated()
+  const { data } = await api.post('/patients/', patient)
+  return data
 }
 
 export async function updatePatient(id, patient) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.patch(`/patients/${id}/`, patient)
-      return data
-    },
-    () => updateDemoPatient(id, patient),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return updateDemoPatient(id, patient)
+  ensureAuthenticated()
+  const { data } = await api.patch(`/patients/${id}/`, patient)
+  return data
 }
 
 export async function deletePatient(id) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.delete(`/patients/${id}/`)
-      return data
-    },
-    () => deleteDemoPatient(id),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return deleteDemoPatient(id)
+  ensureAuthenticated()
+  const { data } = await api.delete(`/patients/${id}/`)
+  return data
 }
 
 export async function getDoctors(params = {}) {
   const normalizedParams = normalizeParams(params)
-
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.get('/doctors/', {
-        params: normalizedParams,
-      })
-      return data
-    },
-    () => getDemoDoctors(normalizedParams),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return getDemoDoctors(normalizedParams)
+  ensureAuthenticated()
+  const { data } = await api.get('/doctors/', { params: normalizedParams })
+  return data
 }
 
 export async function getDoctorById(id) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.get(`/doctors/${id}/`)
-      return data
-    },
-    () => getDemoDoctorById(id),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return getDemoDoctorById(id)
+  ensureAuthenticated()
+  const { data } = await api.get(`/doctors/${id}/`)
+  return data
 }
 
 export async function createDoctor(doctorData) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.post('/doctors/', doctorData)
-      return data
-    },
-    () => createDemoDoctor(doctorData),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return createDemoDoctor(doctorData)
+  ensureAuthenticated()
+  const { data } = await api.post('/doctors/', doctorData)
+  return data
 }
 
 export async function updateDoctor(id, doctorData) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.put(`/doctors/${id}/`, doctorData)
-      return data
-    },
-    () => updateDemoDoctor(id, doctorData),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return updateDemoDoctor(id, doctorData)
+  ensureAuthenticated()
+  const { data } = await api.put(`/doctors/${id}/`, doctorData)
+  return data
 }
 
 export async function deleteDoctor(id) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.delete(`/doctors/${id}/`)
-      return data
-    },
-    () => deleteDemoDoctor(id),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return deleteDemoDoctor(id)
+  ensureAuthenticated()
+  const { data } = await api.delete(`/doctors/${id}/`)
+  return data
 }
 
 export async function getQualifications() {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.get('/qualifications/')
-      return data
-    },
-    () => getDemoQualifications(),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return getDemoQualifications()
+  ensureAuthenticated()
+  const { data } = await api.get('/qualifications/')
+  return data
 }
 
 export async function createQualification(name) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.post('/qualifications/', { name })
-      return data
-    },
-    () => createDemoQualification(name),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return createDemoQualification(name)
+  ensureAuthenticated()
+  const { data } = await api.post('/qualifications/', { name })
+  return data
 }
 
 export async function getRoles() {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.get('/access-control/roles/')
-      return data
-    },
-    () => getDemoRoles(),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return getDemoRoles()
+  ensureAuthenticated()
+  const { data } = await api.get('/access-control/roles/')
+  return data
 }
 
 export async function getRoleById(roleId) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.get(`/access-control/roles/${roleId}/`)
-      return data
-    },
-    () => getDemoRoleById(roleId),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return getDemoRoleById(roleId)
+  ensureAuthenticated()
+  const { data } = await api.get(`/access-control/roles/${roleId}/`)
+  return data
 }
 
 export async function createRole(roleData) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.post('/access-control/roles/', roleData)
-      return data
-    },
-    () => createDemoRole(roleData),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return createDemoRole(roleData)
+  ensureAuthenticated()
+  const { data } = await api.post('/access-control/roles/', roleData)
+  return data
 }
 
 export async function updateRole(roleId, roleData) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.put(`/access-control/roles/${roleId}/`, roleData)
-      return data
-    },
-    () => updateDemoRole(roleId, roleData),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return updateDemoRole(roleId, roleData)
+  ensureAuthenticated()
+  const { data } = await api.put(`/access-control/roles/${roleId}/`, roleData)
+  return data
 }
 
 export async function deleteRole(roleId) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.delete(`/access-control/roles/${roleId}/`)
-      return data
-    },
-    () => deleteDemoRole(roleId),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return deleteDemoRole(roleId)
+  ensureAuthenticated()
+  const { data } = await api.delete(`/access-control/roles/${roleId}/`)
+  return data
 }
 
 export async function setRolePermissions(roleId, payload) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.post(
-        `/access-control/roles/${roleId}/set-permissions/`,
-        payload,
-      )
-      return data
-    },
-    () => setDemoRolePermissions(roleId, payload),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return setDemoRolePermissions(roleId, payload)
+  ensureAuthenticated()
+  const { data } = await api.post(`/access-control/roles/${roleId}/set-permissions/`, payload)
+  return data
 }
 
 export async function updateRolePermissions(roleId, permissions) {
@@ -458,167 +401,181 @@ export async function updateRolePermissions(roleId, permissions) {
 }
 
 export async function getRoleNames() {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.get('/access-control/role-names/')
-      return data
-    },
-    () => getDemoRoleNames(),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return getDemoRoleNames()
+  ensureAuthenticated()
+  const { data } = await api.get('/access-control/role-names/')
+  return data
 }
 
 export async function getStaff(params = {}) {
   const normalizedParams = normalizeParams(params)
-
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.get('/staff/', {
-        params: normalizedParams,
-      })
-      return data
-    },
-    () => getDemoStaff(normalizedParams),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return getDemoStaff(normalizedParams)
+  ensureAuthenticated()
+  const { data } = await api.get('/staff/', { params: normalizedParams })
+  return data
 }
 
 export async function getStaffById(id) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.get(`/staff/${id}/`)
-      return data
-    },
-    () => getDemoStaffById(id),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return getDemoStaffById(id)
+  ensureAuthenticated()
+  const { data } = await api.get(`/staff/${id}/`)
+  return data
 }
 
 export async function createStaff(staffData) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.post('/staff/', staffData)
-      return data
-    },
-    () => createDemoStaff(staffData),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return createDemoStaff(staffData)
+  ensureAuthenticated()
+  const { data } = await api.post('/staff/', staffData)
+  return data
 }
 
 export async function updateStaff(id, staffData) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.put(`/staff/${id}/`, staffData)
-      return data
-    },
-    () => updateDemoStaff(id, staffData),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return updateDemoStaff(id, staffData)
+  ensureAuthenticated()
+  const { data } = await api.put(`/staff/${id}/`, staffData)
+  return data
 }
 
 export async function deleteStaff(id) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.delete(`/staff/${id}/`)
-      return data
-    },
-    () => deleteDemoStaff(id),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return deleteDemoStaff(id)
+  ensureAuthenticated()
+  const { data } = await api.delete(`/staff/${id}/`)
+  return data
 }
 
 export async function getDoctorStats(id) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.get(`/doctors/${id}/stats/`)
-      return data
-    },
-    () => getDemoDoctorStats(id),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return getDemoDoctorStats(id)
+  ensureAuthenticated()
+  const { data } = await api.get(`/doctors/${id}/stats/`)
+  return data
 }
 
 export async function getDoctorAppointments(id, params = {}) {
   const normalizedParams = normalizeParams(params)
-
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.get(`/doctors/${id}/appointments/`, {
-        params: normalizedParams,
-      })
-      return data
-    },
-    () => getDemoDoctorAppointments(id, params),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return getDemoDoctorAppointments(id, normalizedParams)
+  ensureAuthenticated()
+  const { data } = await api.get(`/doctors/${id}/appointments/`, { params: normalizedParams })
+  return data
 }
 
 export async function getAppointments(params = {}) {
   const normalizedParams = normalizeParams(params)
-
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.get('/appointments/', {
-        params: normalizedParams,
-      })
-      return data
-    },
-    () => getDemoAppointments(normalizedParams),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return getDemoAppointments(normalizedParams)
+  ensureAuthenticated()
+  const { data } = await api.get('/appointments/', { params: normalizedParams })
+  return data
 }
 
 export async function getAppointment(id) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.get(`/appointments/${id}/`)
-      return data
-    },
-    () => getDemoAppointment(id),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return getDemoAppointment(id)
+  ensureAuthenticated()
+  const { data } = await api.get(`/appointments/${id}/`)
+  return data
 }
 
 export async function bookAppointment(appointment) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.post('/appointments/', appointment)
-      return data
-    },
-    () => bookDemoAppointment(appointment),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return bookDemoAppointment(appointment)
+  ensureAuthenticated()
+  const { data } = await api.post('/appointments/', appointment)
+  return data
 }
 
 export async function updateAppointment(id, appointment) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.patch(`/appointments/${id}/`, appointment)
-      return data
-    },
-    () => updateDemoAppointment(id, appointment),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return updateDemoAppointment(id, appointment)
+  ensureAuthenticated()
+  const { data } = await api.patch(`/appointments/${id}/`, appointment)
+  return data
 }
 
 export async function deleteAppointment(id) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.delete(`/appointments/${id}/`)
-      return data
-    },
-    () => deleteDemoAppointment(id),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return deleteDemoAppointment(id)
+  ensureAuthenticated()
+  const { data } = await api.delete(`/appointments/${id}/`)
+  return data
 }
 
 export async function updateStatus(id, status) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.patch(`/appointments/${id}/update_status/`, {
-        status,
-      })
-      return data
-    },
-    () => updateDemoStatus(id, status),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return updateDemoStatus(id, status)
+  ensureAuthenticated()
+  const { data } = await api.patch(`/appointments/${id}/update_status/`, { status })
+  return data
 }
 
 export async function updatePaymentStatus(id, paymentStatus) {
-  return withDemoFallback(
-    async () => {
-      const { data } = await api.patch(`/appointments/${id}/`, {
-        payment_status: paymentStatus,
-      })
-      return data
-    },
-    () => updateDemoPayment(id, paymentStatus),
-  )
+  if (PUBLIC_ROUTES_FOR_TESTING) return updateDemoPayment(id, paymentStatus)
+  ensureAuthenticated()
+  const { data } = await api.patch(`/appointments/${id}/`, { payment_status: paymentStatus })
+  return data
+}
+
+export async function getExpenses(params = {}) {
+  const normalizedParams = normalizeParams(params)
+  if (PUBLIC_ROUTES_FOR_TESTING) return getDemoExpenses(normalizedParams)
+  ensureAuthenticated()
+  const { data } = await api.get('/expenses/', { params: normalizedParams })
+  return data
+}
+
+export async function getExpenseById(id) {
+  if (PUBLIC_ROUTES_FOR_TESTING) return getDemoExpenseById(id)
+  ensureAuthenticated()
+  const { data } = await api.get(`/expenses/${id}/`)
+  return data
+}
+
+export async function createExpense(data) {
+  if (PUBLIC_ROUTES_FOR_TESTING) return createDemoExpense(data)
+  ensureAuthenticated()
+  const response = await api.post('/expenses/', data)
+  return response.data
+}
+
+export async function updateExpense(id, data) {
+  if (PUBLIC_ROUTES_FOR_TESTING) return updateDemoExpense(id, data)
+  ensureAuthenticated()
+  const response = await api.put(`/expenses/${id}/`, data)
+  return response.data
+}
+
+export async function deleteExpense(id) {
+  if (PUBLIC_ROUTES_FOR_TESTING) return deleteDemoExpense(id)
+  ensureAuthenticated()
+  const { data } = await api.delete(`/expenses/${id}/`)
+  return data
+}
+
+export async function getExpenseSummary(period = 'month') {
+  if (PUBLIC_ROUTES_FOR_TESTING) return getDemoExpenseSummary(period)
+  ensureAuthenticated()
+  const { data } = await api.get('/expenses/summary/', { params: { period } })
+  return data
+}
+
+export async function getExpenseCategories() {
+  if (PUBLIC_ROUTES_FOR_TESTING) return getDemoExpenseCategories()
+  ensureAuthenticated()
+  const { data } = await api.get('/expenses/categories/')
+  return data
+}
+
+export async function getSalaryRecords(params = {}) {
+  const normalizedParams = normalizeParams(params)
+  if (PUBLIC_ROUTES_FOR_TESTING) return getDemoSalaryRecords(normalizedParams)
+  ensureAuthenticated()
+  const { data } = await api.get('/expenses/salaries/', { params: normalizedParams })
+  return data
+}
+
+export async function markSalaryPaid(id) {
+  if (PUBLIC_ROUTES_FOR_TESTING) return markDemoSalaryPaid(id)
+  ensureAuthenticated()
+  const { data } = await api.patch(`/expenses/salaries/${id}/`, { status: 'paid' })
+  return data
+}
+
+export async function getPatientRevenue(period = 'month') {
+  if (PUBLIC_ROUTES_FOR_TESTING) return getDemoPatientRevenue(period)
+  ensureAuthenticated()
+  const { data } = await api.get('/expenses/revenue/', { params: { period } })
+  return data
 }

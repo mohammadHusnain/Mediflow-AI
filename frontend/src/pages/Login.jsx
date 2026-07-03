@@ -6,7 +6,7 @@ import {
   Eye,
   EyeOff,
   Lock,
-  User,
+  Mail,
 } from 'lucide-react'
 
 import { useAuth } from '@shared/context/AuthContext'
@@ -40,12 +40,16 @@ function LoginField({
     <div>
       <label
         className={[
-          'mb-1.5 block text-[13px] font-semibold transition-all duration-150',
+          'mb-1.5 flex items-center justify-between gap-2 text-[13px] font-semibold transition-all duration-150',
           focused ? '-translate-y-0.5 text-brand' : 'text-ink',
         ].join(' ')}
         htmlFor={id}
       >
-        {label}
+        <span>{label}</span>
+        <span className="inline-flex items-center gap-1 rounded-full bg-brand-light px-2 py-0.5 text-[10px] font-semibold text-brand">
+          <Check aria-hidden="true" className="h-3 w-3" />
+          Required
+        </span>
       </label>
       <div className="relative">
         <Icon
@@ -180,13 +184,13 @@ export function Login() {
 
           <div className="mt-7 space-y-5">
             <LoginField
-              autoComplete="username"
-              icon={User}
+              autoComplete="email"
+              icon={Mail}
               id="email"
-              label="Username"
+              label="Email"
               onChange={(event) => setEmail(event.target.value)}
-              placeholder="Enter username"
-              type="text"
+              placeholder="Enter email"
+              type="email"
               value={email}
             />
 

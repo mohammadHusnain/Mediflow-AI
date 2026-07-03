@@ -37,11 +37,7 @@ function getAccessToken() {
 }
 
 function isChatHiddenPath(pathname = '') {
-  return (
-    HIDDEN_CHAT_ROUTES.includes(pathname) ||
-    pathname === '/patients' ||
-    pathname.startsWith('/patients/')
-  )
+  return HIDDEN_CHAT_ROUTES.includes(pathname)
 }
 
 function getChatWebSocketUrl() {
@@ -152,6 +148,12 @@ export function ChatProvider({ children }) {
     () => getActiveConversationKey(activeConversation),
     [activeConversation],
   )
+  const isOpenRef = useRef(isOpen)
+  isOpenRef.current = isOpen
+  const activeConversationKeyRef = useRef(activeConversationKey)
+  activeConversationKeyRef.current = activeConversationKey
+  const currentUserIdRef = useRef(currentUserId)
+  currentUserIdRef.current = currentUserId
   const wsUrl = useMemo(() => (chatAvailable ? getChatWebSocketUrl() : ''), [chatAvailable])
 
   const clearTypingUser = useCallback((conversationKey, userId) => {
@@ -202,6 +204,64 @@ export function ChatProvider({ children }) {
     })
   }, [])
 
+  function patchConversation(conversationKey, message) {
+    if (!conversationKey || !message) {
+      return
+    }
+
+    const kind = getConversationKind(conversationKey)
+    const id = getConversationId(conversationKey)
+
+    if (kind === 'dm') {
+      const userId = Number(id)
+      setConversations((currentConversations) => {
+        const nextConversations = new Map(currentConversations)
+        const existing = nextConversations.get(userId) || {}
+        nextConversations.set(userId, {
+          ...existing,
+          user_id: userId,
+          last_message: message.content || existing.last_message,
+          last_message_time: message.created_at || new Date().toISOString(),
+        })
+        return nextConversations
+      })
+
+      setChatUsers((currentUsers) => {
+        const idx = currentUsers.findIndex(
+          (u) => (u.id || u.user_id) === userId,
+        )
+        if (idx <= 0) return currentUsers
+        const user = currentUsers[idx]
+        const next = [...currentUsers]
+        next.splice(idx, 1)
+        next.unshift(user)
+        return next
+      })
+    }
+
+    if (kind === 'group') {
+      const groupId = Number(id)
+      setGroups((currentGroups) => {
+        const idx = currentGroups.findIndex((g) => g.id === groupId)
+        if (idx <= 0) return currentGroups
+        const group = currentGroups[idx]
+        const next = [...currentGroups]
+        next.splice(idx, 1)
+        next.unshift({
+          ...group,
+          last_message: {
+            content: message.content || group.last_message?.content || '',
+            sender_id: message.sender_id || group.last_message?.sender_id,
+            created_at: message.created_at || group.last_message?.created_at || new Date().toISOString(),
+          },
+          last_message_time: message.created_at || new Date().toISOString(),
+          last_message_sender_name: message.sender_name || group.last_message_sender_name,
+        })
+        return next
+      })
+    }
+  }
+
   const handleMessage = useCallback(
     (event) => {
       if (!event?.type) {
@@ -211,10 +271,11 @@ export function ChatProvider({ children }) {
       if (event.type === 'message' || event.type === 'group_message') {
         const conversationKey = event.conversation
         appendMessage(conversationKey, event.data)
+        patchConversation(conversationKey, event.data)
 
         if (
-          event.data?.sender_id !== currentUserId &&
-          (!isOpen || activeConversationKey !== conversationKey)
+          event.data?.sender_id !== currentUserIdRef.current &&
+          (!isOpenRef.current || activeConversationKeyRef.current !== conversationKey)
         ) {
           setUnreadCounts((currentCounts) => {
             const nextCounts = new Map(currentCounts)
@@ -224,11 +285,46 @@ export function ChatProvider({ children }) {
         }
       }
 
+      if (event.type === 'error') {
+        setMessages((currentMessages) => {
+          const conversationKey = event.conversation
+          if (!conversationKey) return currentMessages
+
+          const nextMessages = new Map(currentMessages)
+          const currentList = nextMessages.get(conversationKey) || []
+
+          const lastSending = [...currentList].reverse().find(
+            (m) => m.status === 'sending' && m.sender_id === currentUserIdRef.current,
+          )
+
+          if (lastSending) {
+            nextMessages.set(
+              conversationKey,
+              currentList.map((m) =>
+                m.temp_id === lastSending.temp_id
+                  ? { ...m, status: 'failed', error: event.message || 'Message could not be sent' }
+                  : m,
+              ),
+            )
+          }
+
+          return nextMessages
+        })
+
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('mediflow:toast', {
+              detail: { message: event.message || 'Message failed to send', type: 'error' },
+            }),
+          )
+        }
+      }
+
       if (event.type === 'typing') {
         const conversationKey = event.conversation
         const userId = event.user_id
 
-        if (!conversationKey || !userId || userId === currentUserId) {
+        if (!conversationKey || !userId || userId === currentUserIdRef.current) {
           return
         }
 
@@ -280,7 +376,7 @@ export function ChatProvider({ children }) {
         })
       }
     },
-    [activeConversationKey, appendMessage, clearTypingUser, currentUserId, isOpen],
+    [appendMessage, clearTypingUser],
   )
 
   const { disconnect, send, status: wsStatus } = useWebSocket({
@@ -350,6 +446,7 @@ export function ChatProvider({ children }) {
       }
 
       appendMessage(conversationKey, optimisticMessage)
+      patchConversation(conversationKey, optimisticMessage)
 
       const didSend = send({
         content: trimmedContent,
@@ -468,9 +565,16 @@ export function ChatProvider({ children }) {
         })
         setMessages((currentMessages) => {
           const nextMessagesMap = new Map(currentMessages)
+          const existingList = nextMessagesMap.get(conversationKey) || []
+          const existingIds = new Set(
+            existingList.map((m) => getMessageId(m)).filter(Boolean),
+          )
+          const dedupedNew = nextMessages.filter(
+            (m) => !existingIds.has(getMessageId(m)),
+          )
           nextMessagesMap.set(conversationKey, [
-            ...nextMessages,
-            ...(nextMessagesMap.get(conversationKey) || []),
+            ...dedupedNew,
+            ...existingList,
           ])
           return nextMessagesMap
         })
@@ -538,13 +642,60 @@ export function ChatProvider({ children }) {
           return
         }
 
-        setChatUsers(usersResult.status === 'fulfilled' ? normalizeArray(usersResult.value) : [])
-        setConversations(
-          conversationsResult.status === 'fulfilled'
-            ? toConversationMap(conversationsResult.value)
-            : new Map(),
-        )
-        setGroups(groupsResult.status === 'fulfilled' ? normalizeArray(groupsResult.value) : [])
+        const rawUsers = usersResult.status === 'fulfilled' ? normalizeArray(usersResult.value) : []
+        const rawConversations = conversationsResult.status === 'fulfilled'
+          ? normalizeArray(conversationsResult.value)
+          : []
+
+        const usersByRecentConversation = (() => {
+          const recentUserIds = rawConversations.map(
+            (c) => c.user_id || c.other_user_id || c.user?.id || c.user?.user_id,
+          )
+
+          const userMap = new Map(rawUsers.map((u) => [u.id || u.user_id, u]))
+          const seen = new Set()
+
+          const sortedByRecent = recentUserIds
+            .map((id) => userMap.get(id))
+            .filter(Boolean)
+            .filter((u) => {
+              const uid = u.id || u.user_id
+              if (seen.has(uid)) return false
+              seen.add(uid)
+              return true
+            })
+
+          rawUsers.forEach((u) => {
+            if (!seen.has(u.id || u.user_id)) {
+              sortedByRecent.push(u)
+            }
+          })
+
+          return sortedByRecent
+        })()
+
+        setChatUsers(usersByRecentConversation)
+        setConversations(toConversationMap(rawConversations))
+
+        const rawGroups = groupsResult.status === 'fulfilled' ? normalizeArray(groupsResult.value) : []
+        setGroups(rawGroups)
+
+        const initialUnread = new Map()
+        rawConversations.forEach((c) => {
+          const uid = c.user_id || c.other_user_id || c.user?.id || c.user?.user_id
+          const count = c.unread_count || c.unreadCount || 0
+          if (uid && count > 0) {
+            initialUnread.set(`dm_${uid}`, count)
+          }
+        })
+        rawGroups.forEach((g) => {
+          const count = g.unread_count || g.unreadCount || 0
+          if (g.id && count > 0) {
+            initialUnread.set(`group_${g.id}`, count)
+          }
+        })
+        setUnreadCounts(initialUnread)
+
         setIsBootstrapping(false)
       },
     )

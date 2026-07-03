@@ -1,6 +1,13 @@
 import { ACCESS_LEVEL_VALUES, normalizeAccessLevel } from './permissions'
 
-const MODULES = ['patients', 'appointments', 'doctors', 'staff', 'reports']
+const MODULES = [
+  'patients',
+  'appointments',
+  'doctors',
+  'staff',
+  'financial_reports',
+  'reports',
+]
 const DEFAULT_ACCESS_LEVEL = 'no_access'
 
 const DEMO_ROLE_RECORDS = [
@@ -12,8 +19,9 @@ const DEMO_ROLE_RECORDS = [
     module_permissions: {
       appointments: 'full_access',
       doctors: 'full_access',
+      financial_reports: 'full_access',
       patients: 'full_access',
-      reports: 'read',
+      reports: 'full_access',
       staff: 'full_access',
     },
     name: 'Admin',
@@ -28,6 +36,7 @@ const DEMO_ROLE_RECORDS = [
     module_permissions: {
       appointments: 'read',
       doctors: 'read',
+      financial_reports: 'no_access',
       patients: 'read',
       reports: 'no_access',
       staff: 'no_access',
@@ -44,6 +53,7 @@ const DEMO_ROLE_RECORDS = [
     module_permissions: {
       appointments: 'full_access',
       doctors: 'full_access',
+      financial_reports: 'full_access',
       patients: 'full_access',
       reports: 'read',
       staff: 'no_access',
@@ -60,6 +70,7 @@ const DEMO_ROLE_RECORDS = [
     module_permissions: {
       appointments: 'full_access',
       doctors: 'read',
+      financial_reports: 'no_access',
       patients: 'full_access',
       reports: 'read',
       staff: 'no_access',
@@ -76,6 +87,7 @@ const DEMO_ROLE_RECORDS = [
     module_permissions: {
       appointments: 'read',
       doctors: 'no_access',
+      financial_reports: 'no_access',
       patients: 'read',
       reports: 'read',
       staff: 'no_access',

@@ -5,12 +5,18 @@ import { useNavigate } from 'react-router-dom'
 
 import DoctorFormFields from '@features/doctors/components/DoctorFormFields'
 import AccountCreatedModal from '@shared/components/AccountCreatedModal'
-import { ErrorBanner, LoadingSpinner } from '@shared/components/FormPrimitives'
+import {
+  ErrorBanner,
+  FieldLabel,
+  LoadingSpinner,
+} from '@shared/components/FormPrimitives'
 import { useToast } from '@shared/components/Toast'
 import { getBackendError, getRecordId } from '@shared/lib/records'
 import { usePermission } from '@shared/lib/usePermission'
 import { validateEmail, validatePhone } from '@shared/lib/validation'
 import { createDoctor } from '@shared/services/api'
+import { createSalaryConfig } from '@shared/services/billingApi'
+import { CURRENCIES } from '@shared/lib/currency'
 
 const INITIAL_FORM_DATA = {
   first_name: '',
@@ -24,6 +30,14 @@ const INITIAL_FORM_DATA = {
   shift_end: '17:00',
   status: 'active',
   join_date: new Date().toISOString().split('T')[0],
+  salary_type: 'commission',
+  base_salary: '',
+  salary_commission_mode: 'rate',
+  salary_commission_rate: '',
+  salary_commission_per_appointment: '',
+  salary_allowances: '',
+  salary_deductions: '',
+  salary_effective_from: new Date().toISOString().split('T')[0],
 }
 
 const TOUCHED_ALL = {
@@ -38,6 +52,9 @@ const TOUCHED_ALL = {
   shift_start: true,
   specializations: true,
   status: true,
+  base_salary: true,
+  salary_type: true,
+  salary_effective_from: true,
 }
 
 function validateDoctorForm(data) {
@@ -124,19 +141,19 @@ function prepareDoctorPayload(data) {
 export function AddDoctor() {
   const navigate = useNavigate()
   const toast = useToast()
-  const { canWrite } = usePermission()
+  const { isAdmin } = usePermission()
   const [data, setData] = useState(INITIAL_FORM_DATA)
   const [errors, setErrors] = useState({})
-  const [generalError, setGeneralError] = useState('')
   const [touched, setTouched] = useState({})
+  const [generalError, setGeneralError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [createdAccount, setCreatedAccount] = useState(null)
 
   useEffect(() => {
-    if (!canWrite('doctors')) {
+    if (!isAdmin) {
       navigate('/not-available', { replace: true })
     }
-  }, [canWrite, navigate])
+  }, [isAdmin, navigate])
 
   function handleChange(event) {
     const { name, value } = event.target
@@ -179,6 +196,8 @@ export function AddDoctor() {
       const response = await createDoctor(prepareDoctorPayload(data))
       const doctorId = getRecordId(response)
 
+      await createSalaryIfNeeded(doctorId)
+
       if (response?.email_sent === false) {
         toast.warning(
           'Profile created but email delivery failed. Share credentials manually.',
@@ -201,6 +220,36 @@ export function AddDoctor() {
       setErrors(error?.response?.data || { general: 'Doctor could not be created.' })
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  async function createSalaryIfNeeded(employeeId) {
+    const baseSalary = Number(data.base_salary)
+    if (!baseSalary || !employeeId) return
+
+    const salaryData = {
+      employee_id: employeeId,
+      salary_type: data.salary_type || 'commission',
+      base_salary: baseSalary,
+      allowances: Number(data.salary_allowances) || 0,
+      deductions: Number(data.salary_deductions) || 0,
+      effective_from: data.salary_effective_from || new Date().toISOString().split('T')[0],
+    }
+
+    if (salaryData.salary_type === 'commission') {
+      if ((data.salary_commission_mode || 'rate') === 'rate') {
+        salaryData.commission_rate = Number(data.salary_commission_rate) || 0
+        salaryData.commission_per_appointment = 0
+      } else {
+        salaryData.commission_rate = 0
+        salaryData.commission_per_appointment = Number(data.salary_commission_per_appointment) || 0
+      }
+    }
+
+    try {
+      await createSalaryConfig(salaryData)
+    } catch {
+      // salary creation is optional, don't block
     }
   }
 
@@ -235,6 +284,117 @@ export function AddDoctor() {
           onChange={handleChange}
           touched={touched}
         />
+
+        <div className="space-y-4 border-t border-hairline pt-5">
+          <h3 className="flex items-center gap-2 text-[14px] font-semibold text-ink">
+            <span>Salary Configuration</span>
+            <span className="text-[12px] font-normal text-slate">optional</span>
+          </h3>
+
+          <label className="block">
+            <FieldLabel label="Currency" optional />
+            <select
+              className="w-full rounded-control border border-hairline bg-mist px-3 py-2.5 text-[13px] text-ink outline-none focus:border-brand"
+              name="salary_currency"
+              onBlur={handleBlur}
+              onChange={handleChange}
+              value={data.salary_currency || 'PKR'}
+            >
+              {CURRENCIES.map((c) => (
+                <option key={c.code} value={c.code}>{c.symbol} {c.code} - {c.name}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <FieldLabel label="Salary Type" optional />
+            <select
+              className="w-full rounded-control border border-hairline bg-mist px-3 py-2.5 text-[13px] text-ink outline-none focus:border-brand"
+              name="salary_type"
+              onBlur={handleBlur}
+              onChange={handleChange}
+              value={data.salary_type || 'commission'}
+            >
+              <option value="fixed">Fixed</option>
+              <option value="commission">Commission-Based</option>
+            </select>
+          </label>
+
+          <label className="block">
+            <FieldLabel label="Base Salary" optional />
+            <input
+              className="w-full rounded-control border border-hairline bg-mist px-3 py-2.5 text-[13px] text-ink outline-none font-sans focus:border-brand"
+              min="0"
+              name="base_salary"
+              onBlur={handleBlur}
+              onChange={handleChange}
+              placeholder="50000"
+              type="number"
+              value={data.base_salary || ''}
+            />
+          </label>
+
+          {(data.salary_type || 'commission') === 'commission' ? (
+            <div className="space-y-3 p-4 rounded-control bg-brand-light">
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 text-[13px] cursor-pointer">
+                  <input type="radio" name="salary_commission_mode"
+                    checked={(data.salary_commission_mode || 'rate') === 'rate'}
+                    onChange={() => handleChange({ target: { name: 'salary_commission_mode', value: 'rate' } })} />
+                  Rate (% of fee)
+                </label>
+                <label className="flex items-center gap-2 text-[13px] cursor-pointer">
+                  <input type="radio" name="salary_commission_mode"
+                    checked={data.salary_commission_mode === 'flat'}
+                    onChange={() => handleChange({ target: { name: 'salary_commission_mode', value: 'flat' } })} />
+                  Flat per appointment
+                </label>
+              </div>
+              {(data.salary_commission_mode || 'rate') === 'rate' ? (
+                <label className="block">
+                  <FieldLabel label="Commission Rate (%)" optional />
+                  <input
+                    className="w-full rounded-control border border-hairline bg-mist px-3 py-2.5 text-[13px] text-ink outline-none font-sans focus:border-brand"
+                    min="0" max="100" name="salary_commission_rate" onBlur={handleBlur} onChange={handleChange}
+                    placeholder="15" type="number" value={data.salary_commission_rate || ''} />
+                </label>
+              ) : (
+                <label className="block">
+                  <FieldLabel label="Flat per Appointment" optional />
+                  <input
+                    className="w-full rounded-control border border-hairline bg-mist px-3 py-2.5 text-[13px] text-ink outline-none font-sans focus:border-brand"
+                    min="0" name="salary_commission_per_appointment" onBlur={handleBlur} onChange={handleChange}
+                    placeholder="500" type="number" value={data.salary_commission_per_appointment || ''} />
+                </label>
+              )}
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-2 gap-4">
+            <label className="block">
+              <FieldLabel label="Allowances" optional />
+              <input
+                className="w-full rounded-control border border-hairline bg-mist px-3 py-2.5 text-[13px] text-ink outline-none font-sans focus:border-brand"
+                min="0" name="salary_allowances" onBlur={handleBlur} onChange={handleChange}
+                placeholder="5000" type="number" value={data.salary_allowances || ''} />
+            </label>
+            <label className="block">
+              <FieldLabel label="Deductions" optional />
+              <input
+                className="w-full rounded-control border border-hairline bg-mist px-3 py-2.5 text-[13px] text-ink outline-none font-sans focus:border-brand"
+                min="0" name="salary_deductions" onBlur={handleBlur} onChange={handleChange}
+                placeholder="2000" type="number" value={data.salary_deductions || ''} />
+            </label>
+          </div>
+
+          <label className="block">
+            <FieldLabel label="Effective From" optional />
+            <input
+              className="w-full rounded-control border border-hairline bg-mist px-3 py-2.5 text-[13px] text-ink outline-none focus:border-brand"
+              name="salary_effective_from" onBlur={handleBlur} onChange={handleChange}
+              type="date" value={data.salary_effective_from || new Date().toISOString().split('T')[0]} />
+          </label>
+        </div>
 
         <ErrorBanner message={generalError} />
 

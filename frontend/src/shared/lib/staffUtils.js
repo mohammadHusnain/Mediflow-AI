@@ -1,22 +1,47 @@
 /* src/shared/lib/staffUtils.js - Utility functions for staff records. */
 
-const DAY_MS = 1000 * 60 * 60 * 24
-
 export const STAFF_MIN_AGE = 18
 export const STAFF_MAX_AGE = 60
-
-function startOfDay(date) {
-  const nextDate = new Date(date)
-  nextDate.setHours(0, 0, 0, 0)
-  return nextDate
-}
 
 function parseDate(value) {
   if (!value) return null
 
+  const parts = String(value).split('-')
+
+  if (parts.length === 3) {
+    const year = Number(parts[0])
+    const month = Number(parts[1])
+    const day = Number(parts[2])
+
+    if (Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day)) {
+      const date = new Date(year, month - 1, day)
+
+      if (!Number.isNaN(date.getTime())) {
+        return date
+      }
+    }
+  }
+
   const date = new Date(value)
 
   return Number.isNaN(date.getTime()) ? null : date
+}
+
+function isAfterToday(date) {
+  const today = new Date()
+  const todayYear = today.getFullYear()
+  const todayMonth = today.getMonth()
+  const todayDay = today.getDate()
+
+  const joinYear = date.getFullYear()
+  const joinMonth = date.getMonth()
+  const joinDay = date.getDate()
+
+  if (joinYear > todayYear) return true
+  if (joinYear < todayYear) return false
+  if (joinMonth > todayMonth) return true
+  if (joinMonth < todayMonth) return false
+  return joinDay > todayDay
 }
 
 export function getStaffAgeError(ageValue) {
@@ -30,18 +55,17 @@ export function getStaffAgeError(ageValue) {
 }
 
 export function getStaffJoiningDateError(ageValue, joiningDateString) {
-  const joined = parseDate(joiningDateString)
-  const today = startOfDay(new Date())
-
   if (!joiningDateString) {
     return 'Joining date is required'
   }
+
+  const joined = parseDate(joiningDateString)
 
   if (!joined) {
     return 'Enter a valid joining date'
   }
 
-  if (startOfDay(joined) > today) {
+  if (isAfterToday(joined)) {
     return 'Joining date cannot be in the future'
   }
 
@@ -58,7 +82,7 @@ export function getStaffJoiningDateWarning(joiningDateString) {
   const sixtyYearsAgo = new Date()
   sixtyYearsAgo.setFullYear(sixtyYearsAgo.getFullYear() - 60)
 
-  if (startOfDay(joined) < startOfDay(sixtyYearsAgo)) {
+  if (joined < sixtyYearsAgo) {
     return 'Join date is over 60 years ago - please verify'
   }
 
@@ -73,7 +97,7 @@ export function getStaffCreatedDateError(joiningDateString, createdAtString) {
     return ''
   }
 
-  if (startOfDay(joined) > startOfDay(created)) {
+  if (joined > created) {
     return 'Joining date cannot be after the date added to system'
   }
 
@@ -94,10 +118,12 @@ export function getStaffDataIssues(staffMember) {
   return [ageError, joiningError, createdError].filter(Boolean)
 }
 
-export function computeTenure(joiningDateString) {
-  const joined = new Date(joiningDateString)
+const DAY_MS = 1000 * 60 * 60 * 24
 
-  if (!joiningDateString || Number.isNaN(joined.getTime())) {
+export function computeTenure(joiningDateString) {
+  const joined = parseDate(joiningDateString)
+
+  if (!joined) {
     return ''
   }
 

@@ -7,6 +7,14 @@ import {
   getStaffJoiningDateError,
 } from '@shared/lib/staffUtils'
 
+function capitalizeWords(value) {
+  return String(value || '')
+    .trim()
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
 export const INITIAL_STAFF_FORM_DATA = {
   full_name: '',
   age: '',
@@ -19,6 +27,21 @@ export const INITIAL_STAFF_FORM_DATA = {
   shift_start: '09:00',
   shift_end: '17:00',
   notes: '',
+  first_name: '',
+  last_name: '',
+  qualification: '',
+  specializations: [],
+  experience_years: '',
+  doctor_status: 'active',
+  salary_type: 'fixed',
+  salary_currency: 'PKR',
+  base_salary: '',
+  salary_commission_mode: 'rate',
+  salary_commission_rate: '',
+  salary_commission_per_appointment: '',
+  salary_allowances: '',
+  salary_deductions: '',
+  salary_effective_from: new Date().toISOString().split('T')[0],
 }
 
 export const TOUCHED_ALL_STAFF_FIELDS = {
@@ -33,15 +56,25 @@ export const TOUCHED_ALL_STAFF_FIELDS = {
   shift_end: true,
   shift_start: true,
   status: true,
+  first_name: true,
+  last_name: true,
+  qualification: true,
+  specializations: true,
+  experience_years: true,
+  doctor_status: true,
 }
 
 export function validateStaffForm(data) {
   const errors = {}
   const emailError = validateEmail(data.email)
   const phoneError = validatePhone(data.phone)
+  const roleLower = String(data.role || '').trim().toLowerCase()
 
-  if (String(data.full_name || '').trim().length < 2) {
-    errors.full_name = 'Name must be at least 2 characters'
+  if (String(data.first_name || '').trim().length < 2) {
+    errors.first_name = 'First name must be at least 2 characters'
+  }
+  if (String(data.last_name || '').trim().length < 2) {
+    errors.last_name = 'Last name must be at least 2 characters'
   }
 
   const ageError = getStaffAgeError(data.age)
@@ -88,6 +121,26 @@ export function validateStaffForm(data) {
     errors.shift_end = 'End time must be different from start time'
   }
 
+  if (roleLower === 'doctor') {
+    const specializations = Array.isArray(data.specializations)
+      ? data.specializations.filter(Boolean)
+      : []
+    if (specializations.length === 0) {
+      errors.specializations = 'At least one specialization is required'
+    }
+
+    const expYears = Number.parseInt(data.experience_years, 10)
+    if (Number.isNaN(expYears) || expYears < 0) {
+      errors.experience_years = 'Experience years must be 0 or greater'
+    } else if (expYears > 60) {
+      errors.experience_years = 'Experience years cannot exceed 60'
+    }
+
+    if (!['active', 'on_leave', 'inactive'].includes(data.doctor_status)) {
+      errors.doctor_status = 'Choose a valid status'
+    }
+  }
+
   return errors
 }
 
@@ -105,12 +158,26 @@ export function mapStaffToForm(staffMember) {
     shift_start: staffMember.shift_start || '09:00',
     shift_end: staffMember.shift_end || '17:00',
     notes: staffMember.notes || '',
+    first_name: staffMember.first_name || '',
+    last_name: staffMember.last_name || '',
+    qualification: staffMember.qualification || '',
+    specializations: Array.isArray(staffMember.specializations)
+      ? staffMember.specializations
+      : [],
+    experience_years: staffMember.experience_years ?? '',
+    doctor_status: staffMember.status || 'active',
   }
 }
 
 export function prepareStaffPayload(data) {
-  return {
-    full_name: String(data.full_name || '').trim(),
+  const roleLower = String(data.role || '').trim().toLowerCase()
+
+  const fullName = capitalizeWords(
+    `${String(data.first_name || '').trim()} ${String(data.last_name || '').trim()}`,
+  )
+
+  const payload = {
+    full_name: fullName,
     age: Math.min(
       STAFF_MAX_AGE,
       Math.max(STAFF_MIN_AGE, Number.parseInt(data.age, 10)),
@@ -125,4 +192,17 @@ export function prepareStaffPayload(data) {
     shift_end: data.shift_end,
     notes: String(data.notes || '').trim() || null,
   }
+
+  if (roleLower === 'doctor') {
+    payload.first_name = capitalizeWords(String(data.first_name || '').trim())
+    payload.last_name = capitalizeWords(String(data.last_name || '').trim())
+    payload.qualification = String(data.qualification || '').trim()
+    payload.specializations = Array.isArray(data.specializations)
+      ? data.specializations.filter(Boolean)
+      : []
+    payload.experience_years = Number.parseInt(data.experience_years, 10) || 0
+    payload.status = data.doctor_status || 'active'
+  }
+
+  return payload
 }

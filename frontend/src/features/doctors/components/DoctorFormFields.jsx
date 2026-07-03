@@ -3,6 +3,8 @@ import { X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
 import { createQualification, getQualifications } from '@shared/services/api'
+import { FieldLabel } from '@shared/components/FormPrimitives'
+import PhoneInput from '@shared/components/PhoneInput'
 
 function FieldError({ children, tone = 'error' }) {
   if (!children) return null
@@ -19,17 +21,15 @@ function FieldError({ children, tone = 'error' }) {
   )
 }
 
-function Field({ children, error, label }) {
+function Field({ children, error, label, optional, required = !optional }) {
   return (
     <label className="block">
-      <span
-        className={[
-          'mb-2 block text-[13px] font-medium',
-          error ? 'text-rose-600' : 'text-ink',
-        ].join(' ')}
-      >
-        {label}
-      </span>
+      <FieldLabel
+        error={error}
+        label={label}
+        optional={optional}
+        required={required}
+      />
       {children}
       <FieldError>{error}</FieldError>
     </label>
@@ -218,7 +218,7 @@ export function DoctorFormFields({
   return (
     <div className="space-y-5">
       <div className="grid gap-4 md:grid-cols-2">
-        <Field error={touched.first_name && errors.first_name} label="First Name *">
+        <Field error={touched.first_name && errors.first_name} label="First Name">
           <input
             className={INPUT_CLASS}
             name="first_name"
@@ -230,7 +230,7 @@ export function DoctorFormFields({
           />
         </Field>
 
-        <Field error={touched.last_name && errors.last_name} label="Last Name *">
+        <Field error={touched.last_name && errors.last_name} label="Last Name">
           <input
             className={INPUT_CLASS}
             name="last_name"
@@ -243,7 +243,7 @@ export function DoctorFormFields({
         </Field>
       </div>
 
-      <Field error={touched.email && errors.email} label="Email *">
+      <Field error={touched.email && errors.email} label="Email">
         <input
           className={[
             INPUT_CLASS,
@@ -269,29 +269,22 @@ export function DoctorFormFields({
         ) : null}
       </Field>
 
-      <Field error={touched.phone && errors.phone} label="Phone *">
-        <input
-          className={INPUT_CLASS}
+      <Field error={touched.phone && errors.phone} label="Phone">
+        <PhoneInput
+          error={touched.phone && errors.phone}
           name="phone"
           onBlur={onBlur}
           onChange={onChange}
-          placeholder="+923001234567"
-          type="tel"
+          required
           value={data.phone}
         />
       </Field>
 
       <div>
-        <span
-          className={[
-            'mb-2 block text-[13px] font-medium',
-            touched.qualifications && errors.qualifications
-              ? 'text-rose-600'
-              : 'text-ink',
-          ].join(' ')}
-        >
-          Qualifications *
-        </span>
+        <FieldLabel
+          error={touched.qualifications && errors.qualifications}
+          label="Qualifications"
+        />
         <div className="rounded-control border border-hairline bg-mist px-3 py-2.5">
           {data.qualifications.length > 0 ? (
             <div className="mb-2 flex flex-wrap gap-1.5">
@@ -335,16 +328,10 @@ export function DoctorFormFields({
       </div>
 
       <div>
-        <span
-          className={[
-            'mb-2 block text-[13px] font-medium',
-            touched.specializations && errors.specializations
-              ? 'text-rose-600'
-              : 'text-ink',
-          ].join(' ')}
-        >
-          Specializations *
-        </span>
+        <FieldLabel
+          error={touched.specializations && errors.specializations}
+          label="Specializations"
+        />
         <select
           className="mb-2 h-[38px] w-full rounded-control border border-hairline bg-mist px-3 text-[13px] font-medium text-ink outline-none transition-colors focus:border-brand"
           defaultValue=""
@@ -397,7 +384,7 @@ export function DoctorFormFields({
 
       <Field
         error={touched.experience_years && errors.experience_years}
-        label="Experience (years) *"
+        label="Experience (years)"
       >
         <input
           className={INPUT_CLASS}
@@ -418,7 +405,7 @@ export function DoctorFormFields({
       </Field>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Field error={touched.shift_start && errors.shift_start} label="Shift Start *">
+        <Field error={touched.shift_start && errors.shift_start} label="Shift Start">
           <input
             className={INPUT_CLASS}
             name="shift_start"
@@ -429,7 +416,7 @@ export function DoctorFormFields({
           />
         </Field>
 
-        <Field error={touched.shift_end && errors.shift_end} label="Shift End *">
+        <Field error={touched.shift_end && errors.shift_end} label="Shift End">
           <input
             className={INPUT_CLASS}
             name="shift_end"
@@ -442,7 +429,7 @@ export function DoctorFormFields({
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Field error={touched.status && errors.status} label="Status *">
+        <Field error={touched.status && errors.status} label="Status">
           <select
             className={INPUT_CLASS}
             name="status"
@@ -457,7 +444,7 @@ export function DoctorFormFields({
           </select>
         </Field>
 
-        <Field error={touched.join_date && errors.join_date} label="Join Date *">
+        <Field error={touched.join_date && errors.join_date} label="Join Date">
           <input
             className={INPUT_CLASS}
             name="join_date"

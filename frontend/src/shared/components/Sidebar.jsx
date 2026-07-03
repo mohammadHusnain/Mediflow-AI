@@ -1,6 +1,6 @@
 /* src/shared/components/Sidebar.jsx - Renders the blue portal navigation. */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { LogOut } from 'lucide-react'
+import { ChevronDown, LogOut } from 'lucide-react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 
 import { useAuth } from '@shared/context/AuthContext'
@@ -33,10 +33,23 @@ function matchesItemPath(item, pathname) {
 export function Sidebar({ mobile = false, onNavigate }) {
   const navigate = useNavigate()
   const location = useLocation()
+  const financialRouteActive = location.pathname.startsWith('/financial-reports')
   const { logout, role, user } = useAuth()
   const permissions = usePermission()
   const itemRefs = useRef({})
   const [activeStyle, setActiveStyle] = useState({ opacity: 0, transform: '' })
+  const [isFinancialOpen, setIsFinancialOpen] = useState(() => {
+    if (typeof window === 'undefined') {
+      return false
+    }
+
+    try {
+      return financialRouteActive || sessionStorage.getItem('sidebar_financial_open') === 'true'
+    } catch {
+      return financialRouteActive
+    }
+  })
+  const financialOpen = financialRouteActive || isFinancialOpen
   const fullName =
     [user?.first_name, user?.last_name].filter(Boolean).join(' ') ||
     'MediFlow User'
@@ -75,6 +88,14 @@ export function Sidebar({ mobile = false, onNavigate }) {
         : nextStyle,
     )
   }, [location.pathname, visibleNavItems])
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('sidebar_financial_open', String(isFinancialOpen))
+    } catch {
+      // sessionStorage may be unavailable in some environments
+    }
+  }, [isFinancialOpen])
 
   function handleLogout() {
     logout()
@@ -117,6 +138,74 @@ export function Sidebar({ mobile = false, onNavigate }) {
           {visibleNavItems.map((item, index) => {
             const Icon = item.icon
             const itemActive = matchesItemPath(item, location.pathname)
+
+            if (Array.isArray(item.children) && item.children.length > 0) {
+              return (
+                <div key={item.to} style={stagger(index, 0.04)}>
+                  <button
+                    aria-expanded={financialOpen}
+                    className={[
+                      'flex h-[42px] w-full items-center justify-between rounded-xl px-3 text-[14px] transition-all duration-150',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-light',
+                      itemActive
+                        ? 'font-semibold text-ink'
+                        : 'font-semibold text-slate hover:bg-canvas/70 hover:text-ink',
+                    ].join(' ')}
+                    onClick={() => setIsFinancialOpen((open) => !open)}
+                    ref={(element) => {
+                      itemRefs.current[item.to] = element
+                    }}
+                    title={item.label}
+                    type="button"
+                  >
+                    <span className="flex min-w-0 items-center gap-3">
+                      <Icon aria-hidden="true" className="h-[18px] w-[18px] shrink-0" />
+                      <span className={mobile ? 'truncate' : 'hidden truncate lg:block'}>
+                        {item.label}
+                      </span>
+                    </span>
+                    <ChevronDown
+                      aria-hidden="true"
+                      className={[
+                        'h-3.5 w-3.5 shrink-0 text-slate/60 transition-transform',
+                        financialOpen ? 'rotate-180' : '',
+                        mobile ? '' : 'hidden lg:block',
+                      ].join(' ')}
+                    />
+                  </button>
+
+                  {financialOpen ? (
+                    <div className={mobile ? 'mt-0.5 space-y-0.5 pl-9' : 'mt-0.5 hidden space-y-0.5 pl-9 lg:block'}>
+                      {item.children.map((child) => {
+                        const ChildIcon = child.icon
+                        const childActive = matchesItemPath(child, location.pathname)
+
+                        return (
+                          <NavLink
+                            className={() =>
+                              [
+                                'flex h-9 items-center gap-2 rounded-xl px-3 text-[13px] transition-all duration-150',
+                                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-light',
+                                childActive
+                                  ? 'bg-brand/10 font-semibold text-brand'
+                                  : 'font-medium text-slate hover:bg-mist/60 hover:text-ink',
+                              ].join(' ')
+                            }
+                            key={child.to}
+                            onClick={onNavigate}
+                            title={child.label}
+                            to={child.to}
+                          >
+                            <ChildIcon aria-hidden="true" className="h-[15px] w-[15px] shrink-0" />
+                            <span className="truncate">{child.label}</span>
+                          </NavLink>
+                        )
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              )
+            }
 
             return (
               <NavLink

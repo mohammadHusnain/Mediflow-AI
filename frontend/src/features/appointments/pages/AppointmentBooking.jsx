@@ -6,7 +6,7 @@ import { Link, Navigate, useNavigate } from 'react-router-dom'
 
 import AppointmentFields, {
   EMPTY_APPOINTMENT_FORM,
-  toAppointmentPayload,
+  toAppointmentBookingPayload,
 } from '../components/AppointmentFields'
 import Avatar from '@shared/components/Avatar'
 import { ErrorBanner, LoadingSpinner } from '@shared/components/FormPrimitives'
@@ -46,7 +46,7 @@ const PATIENT_MODE_OPTIONS = [
 ]
 
 export function AppointmentBooking() {
-  const { canWrite } = usePermission()
+  const { isAdmin } = usePermission()
   const toast = useToast()
   const navigate = useNavigate()
   const [patientMode, setPatientMode] = useState('existing')
@@ -133,7 +133,7 @@ export function AppointmentBooking() {
     [patientMode, patientResults.length, selectedPatient],
   )
 
-  if (!canWrite('appointments')) {
+  if (!isAdmin) {
     return <Navigate replace to="/appointments" />
   }
 
@@ -158,8 +158,8 @@ export function AppointmentBooking() {
         }
 
         const patientValues = patientForm.getValues()
-        const duplicate = await checkDuplicatePatient(
-          patientValues.full_name,
+          const duplicate = await checkDuplicatePatient(
+            `${String(patientValues.first_name || '').trim()} ${String(patientValues.last_name || '').trim()}`.trim(),
           patientValues.phone,
           getPatients,
         )
@@ -173,7 +173,7 @@ export function AppointmentBooking() {
       }
 
       await bookAppointment({
-        ...toAppointmentPayload(values),
+        ...toAppointmentBookingPayload(values),
         patient: patientId,
       })
 
@@ -201,7 +201,12 @@ export function AppointmentBooking() {
 
   function handleDuplicateCancel() {
     setDuplicatePatient(null)
-    patientForm.setValue('full_name', '', {
+    patientForm.setValue('first_name', '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    })
+    patientForm.setValue('last_name', '', {
       shouldDirty: true,
       shouldTouch: true,
       shouldValidate: true,
@@ -211,7 +216,7 @@ export function AppointmentBooking() {
       shouldTouch: true,
       shouldValidate: true,
     })
-    patientForm.clearErrors(['full_name', 'phone'])
+    patientForm.clearErrors(['first_name', 'last_name', 'phone'])
   }
 
   return (
@@ -365,6 +370,7 @@ export function AppointmentBooking() {
           register={appointmentForm.register}
           requireFuture
           setValue={appointmentForm.setValue}
+          showMedicalNotes={false}
           watch={appointmentForm.watch}
         />
 

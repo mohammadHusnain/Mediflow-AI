@@ -119,7 +119,7 @@ function IconButton({ children, label, onClick, tone = 'slate' }) {
 export function StaffList() {
   const navigate = useNavigate()
   const toast = useToast()
-  const { canWrite } = usePermission()
+  const { canWrite, isAdmin } = usePermission()
   const [staff, setStaff] = useState([])
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
@@ -131,7 +131,7 @@ export function StaffList() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const debouncedSearch = useDebounce(searchQuery, 300)
-  const canManage = canWrite('staff')
+  const canManage = isAdmin
   const hasActiveFilters =
     debouncedSearch.trim() || statusFilter !== 'all' || roleFilter !== 'all'
 

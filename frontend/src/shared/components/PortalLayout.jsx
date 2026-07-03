@@ -27,6 +27,10 @@ const PAGE_META = {
   '/reports': {
     title: 'Reports',
   },
+  '/financial-reports': {
+    title: 'Finances',
+    subtitle: 'Billing, salary, expenses, and financial reports',
+  },
   '/access-control': {
     title: 'Access Control',
     subtitle: 'Manage roles and module permissions',
@@ -164,6 +168,84 @@ function getRouteMeta(pathname, user, role) {
       title: 'Staff Profile',
       subtitle: 'Operational profile and employment details.',
     }
+  }
+
+  if (pathname.startsWith('/financial-reports/expenses/add')) {
+    return {
+      title: 'Record Expense',
+      subtitle: 'Add a new clinic expense entry.',
+    }
+  }
+
+  if (/^\/financial-reports\/expenses\/[^/]+\/edit$/.test(pathname)) {
+    return {
+      title: 'Edit Expense',
+      subtitle: 'Update clinic expense details.',
+    }
+  }
+
+  if (/^\/financial-reports\/billing\/invoices\/[^/]+$/.test(pathname)) {
+    return {
+      title: 'Invoice Details',
+      subtitle: 'Review invoice and payment status.',
+    }
+  }
+
+  if (pathname.startsWith('/financial-reports/billing/payments')) {
+    return {
+      title: 'Payment Records',
+      subtitle: 'Track received patient payments.',
+    }
+  }
+
+  if (pathname.startsWith('/financial-reports/billing/history')) {
+    return {
+      title: 'Invoice History',
+      subtitle: 'Full audit trail of invoice activity.',
+    }
+  }
+
+  if (pathname.startsWith('/financial-reports/billing')) {
+    return {
+      title: 'Billing',
+      subtitle: 'Appointment invoices and payments',
+    }
+  }
+
+  if (pathname.startsWith('/financial-reports/salary/config')) {
+    return {
+      title: 'Salary Configuration',
+      subtitle: 'Configure or update salary for doctors and staff',
+    }
+  }
+
+  if (pathname.startsWith('/financial-reports/salary/history')) {
+    return {
+      title: 'Salary History',
+      subtitle: role?.slug === 'doctor'
+        ? 'Your salary records and payout status'
+        : 'Salary records and disbursements',
+    }
+  }
+
+  if (pathname.startsWith('/financial-reports/salary')) {
+    return {
+      title: 'Salary',
+      subtitle: role?.slug === 'doctor'
+        ? 'Your current salary configuration and history'
+        : 'Salary configuration, history, and disbursements',
+    }
+  }
+
+  if (pathname.startsWith('/financial-reports/reports')) {
+    return {
+      title: 'Financial Reports',
+      subtitle: 'Consolidated finance reports are coming soon.',
+    }
+  }
+
+  if (pathname.startsWith('/financial-reports')) {
+    return PAGE_META['/financial-reports']
   }
 
   return DEFAULT_META

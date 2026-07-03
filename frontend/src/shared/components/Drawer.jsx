@@ -3,6 +3,8 @@ import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
+import { translucentBackdropClass } from './FormPrimitives'
+
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
@@ -75,7 +77,7 @@ export function Drawer({
     <div className="fixed inset-0 z-50">
       <button
         aria-label="Close drawer"
-        className="absolute inset-0 h-full w-full bg-glass-dark backdrop-blur-xs animate-fade-in"
+        className={`absolute inset-0 h-full w-full ${translucentBackdropClass}`}
         onClick={onClose}
         type="button"
       />

@@ -1,6 +1,7 @@
 import { AlertTriangle } from 'lucide-react'
 
 import Avatar from '@shared/components/Avatar'
+import { translucentBackdropClass } from '@shared/components/FormPrimitives'
 import { getPatientConditions, getPatientName } from '@shared/lib/records'
 
 export function DuplicatePatientModal({
@@ -15,7 +16,7 @@ export function DuplicatePatientModal({
   const condition = getPatientConditions(patient)[0]
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-glass-dark px-4 backdrop-blur-xs animate-fade-in">
+    <div className={`fixed inset-0 z-[90] flex items-center justify-center px-4 ${translucentBackdropClass}`}>
       <section
         aria-labelledby="duplicate-patient-title"
         aria-modal="true"

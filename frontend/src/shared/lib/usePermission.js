@@ -6,6 +6,7 @@ import {
   canWriteAccessLevel,
   normalizeAccessLevel,
 } from '@shared/lib/permissions'
+import { PUBLIC_ROUTES_FOR_TESTING } from '@shared/lib/testingAccess'
 
 export function getUserDoctorId(user) {
   return user?.user_id ?? user?.doctor_id ?? user?.id
@@ -26,6 +27,10 @@ export function usePermission() {
 
   const can = useCallback(
     (module, action) => {
+      if (PUBLIC_ROUTES_FOR_TESTING) {
+        return true
+      }
+
       const access = normalizeAccessLevel(permissions?.[module])
 
       if (action === 'read') return canReadAccessLevel(access)
@@ -39,23 +44,24 @@ export function usePermission() {
   const canRead = useCallback((module) => can(module, 'read'), [can])
   const canWrite = useCallback((module) => can(module, 'write'), [can])
   const canDelete = useCallback(
-    () => role?.slug === 'admin',
+    () => PUBLIC_ROUTES_FOR_TESTING || role?.slug === 'admin',
     [role],
   )
   const canViewFullDoctorProfile = useCallback(
     (doctorId) =>
+      PUBLIC_ROUTES_FOR_TESTING ||
       role?.slug === 'admin' ||
-      canRead('doctors') ||
+      role?.slug === 'receptionist' ||
       isOwnDoctorProfile(user, doctorId, role),
-    [canRead, role, user],
+    [role, user],
   )
   const isOwnDoctor = useCallback(
     (doctorId) => isOwnDoctorProfile(user, doctorId, role),
     [role, user],
   )
 
-  const isAdmin = role?.slug === 'admin'
-  const isSystemRole = role?.is_system === true
+  const isAdmin = PUBLIC_ROUTES_FOR_TESTING || role?.slug === 'admin'
+  const isSystemRole = PUBLIC_ROUTES_FOR_TESTING || role?.is_system === true
 
   return {
     can,

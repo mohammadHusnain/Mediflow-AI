@@ -32,11 +32,12 @@ function getPrimaryCondition(patient) {
 }
 
 export function Patients() {
-  const { canDelete: canDeleteRecords, canWrite, role } = usePermission()
-  const toast = useToast()
   const navigate = useNavigate()
+  const toast = useToast()
+  const { canDelete: canDeleteRecords, canWrite, role, isAdmin } = usePermission()
+
   const doctorUser = role?.slug === 'doctor'
-  const canCreatePatients = canWrite('patients')
+  const canCreatePatients = isAdmin
   const canEditPatients = canWrite('patients')
   const canDeletePatients = canDeleteRecords()
   const [searchParams, setSearchParams] = useSearchParams()

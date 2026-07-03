@@ -16,6 +16,7 @@ import { useToast } from '@shared/components/Toast'
 import { getBackendError, getRecordId } from '@shared/lib/records'
 import { usePermission } from '@shared/lib/usePermission'
 import { createStaff, getRoleNames } from '@shared/services/api'
+import { createSalaryConfig } from '@shared/services/billingApi'
 
 function normalizeRoleOptions(response) {
   if (Array.isArray(response?.results)) {
@@ -48,21 +49,21 @@ function canonicalizeRoleName(roleName, roleOptions) {
 export function AddStaff() {
   const navigate = useNavigate()
   const toast = useToast()
-  const { canWrite } = usePermission()
+  const { isAdmin } = usePermission()
+  const [roleOptions, setRoleOptions] = useState(null)
+  const [roleOptionsFailed, setRoleOptionsFailed] = useState(false)
   const [data, setData] = useState(INITIAL_STAFF_FORM_DATA)
   const [errors, setErrors] = useState({})
   const [touched, setTouched] = useState({})
   const [generalError, setGeneralError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [roleOptions, setRoleOptions] = useState(null)
-  const [roleOptionsFailed, setRoleOptionsFailed] = useState(false)
   const [createdAccount, setCreatedAccount] = useState(null)
 
   useEffect(() => {
-    if (!canWrite('staff')) {
+    if (!isAdmin) {
       navigate('/not-available', { replace: true })
     }
-  }, [canWrite, navigate])
+  }, [isAdmin, navigate])
 
   useEffect(() => {
     let mounted = true
@@ -142,6 +143,9 @@ export function AddStaff() {
       })
       const response = await createStaff(payload)
       const staffId = getRecordId(response)
+      const employeeId = response?.user_id || response?.id
+
+      await createSalaryIfNeeded(employeeId)
 
       if (response?.email_sent === false) {
         toast.warning(
@@ -170,6 +174,36 @@ export function AddStaff() {
       setErrors(error?.response?.data || {})
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  async function createSalaryIfNeeded(employeeId) {
+    const baseSalary = Number(data.base_salary)
+    if (!baseSalary || !employeeId) return
+
+    const salaryData = {
+      employee_id: employeeId,
+      salary_type: data.salary_type || 'fixed',
+      base_salary: baseSalary,
+      allowances: Number(data.salary_allowances) || 0,
+      deductions: Number(data.salary_deductions) || 0,
+      effective_from: data.salary_effective_from || new Date().toISOString().split('T')[0],
+    }
+
+    if (salaryData.salary_type === 'commission') {
+      if ((data.salary_commission_mode || 'rate') === 'rate') {
+        salaryData.commission_rate = Number(data.salary_commission_rate) || 0
+        salaryData.commission_per_appointment = 0
+      } else {
+        salaryData.commission_rate = 0
+        salaryData.commission_per_appointment = Number(data.salary_commission_per_appointment) || 0
+      }
+    }
+
+    try {
+      await createSalaryConfig(salaryData)
+    } catch {
+      // salary creation is optional, don't block
     }
   }
 

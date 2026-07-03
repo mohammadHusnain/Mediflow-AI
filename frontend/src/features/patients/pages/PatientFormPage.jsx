@@ -23,7 +23,7 @@ import { createPatient, getPatient, getPatients, updatePatient } from '@shared/s
 export function PatientFormPage({ mode = 'add' }) {
   const isEdit = mode === 'edit'
   const { id } = useParams()
-  const { canWrite } = usePermission()
+  const { canWrite, isAdmin } = usePermission()
   const toast = useToast()
   const navigate = useNavigate()
   const [isLoading, setIsLoading] = useState(isEdit)
@@ -91,7 +91,7 @@ export function PatientFormPage({ mode = 'add' }) {
     }
   }, [id, isEdit, reset])
 
-  const canManagePatient = canWrite('patients')
+  const canManagePatient = isEdit ? canWrite('patients') : isAdmin
 
   if (!canManagePatient) {
     return <Navigate replace to={isEdit ? `/patients/${id}` : '/patients'} />
@@ -117,7 +117,7 @@ export function PatientFormPage({ mode = 'add' }) {
         }
       } else {
         const duplicate = await checkDuplicatePatient(
-          values.full_name,
+          `${String(values.first_name || '').trim()} ${String(values.last_name || '').trim()}`.trim(),
           values.phone,
           getPatients,
         )
@@ -153,7 +153,12 @@ export function PatientFormPage({ mode = 'add' }) {
 
   function handleDuplicateCancel() {
     setDuplicatePatient(null)
-    setValue('full_name', '', {
+    setValue('first_name', '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    })
+    setValue('last_name', '', {
       shouldDirty: true,
       shouldTouch: true,
       shouldValidate: true,
@@ -163,7 +168,7 @@ export function PatientFormPage({ mode = 'add' }) {
       shouldTouch: true,
       shouldValidate: true,
     })
-    clearErrors(['full_name', 'phone'])
+    clearErrors(['first_name', 'last_name', 'phone'])
   }
 
   if (notFound) {

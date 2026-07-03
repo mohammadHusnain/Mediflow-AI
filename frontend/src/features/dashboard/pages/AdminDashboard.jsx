@@ -7,7 +7,6 @@ import {
   CalendarCheck,
   CalendarClock,
   Download,
-  DollarSign,
   Gauge,
   HeartPulse,
   LayoutDashboard,
@@ -42,6 +41,11 @@ import {
   DashboardChartTooltip,
   DashboardEmptyState,
   DashboardErrorState,
+  LegendChip,
+  MetricCell,
+  PanelSkeleton,
+  ProgressMetricRow,
+  RankingRow,
   DashboardMiniSparkline,
   DashboardPanel,
   DashboardStatCard,
@@ -54,6 +58,7 @@ import {
   estimateAppointmentRevenue,
   findBucketForDate,
   formatCurrency,
+  formatCompactNumber,
   getAnalyticsBuckets,
   getAxisInterval,
   getDoctorIdFromAppointment,
@@ -94,7 +99,7 @@ const CARD_GRID_CLASSES = {
 
 const STATUS_COLORS = {
   scheduled: '#0EA5E9',
-  in_progress: '#D97706',
+  in_progress: '#64748B',
   completed: '#059669',
   cancelled: '#DC2626',
 }
@@ -102,15 +107,47 @@ const STATUS_COLORS = {
 const GENDER_COLORS = {
   Female: '#0D9488',
   Male: '#4338CA',
-  Other: '#F59E0B',
+  Other: '#64748B',
 }
 
 const APPOINTMENT_FLOW_KEYS = [
   ['scheduled', 'Scheduled'],
-  ['inProgress', 'In Progress'],
   ['completed', 'Completed'],
   ['cancelled', 'Cancelled'],
 ]
+
+const CHART_AXIS_TICK = {
+  fill: '#5B6472',
+  fontFamily: 'Outfit, sans-serif',
+  fontSize: 10,
+  fontWeight: 500,
+}
+
+const CHART_GRID_PROPS = {
+  stroke: '#E6EBF0',
+  strokeDasharray: '3 7',
+  strokeOpacity: 0.9,
+  vertical: false,
+}
+
+const CHART_CURSOR = {
+  fill: '#EEF2FF',
+  opacity: 0.42,
+}
+
+const CHART_ANIMATION_PROPS = {
+  animationBegin: 80,
+  animationDuration: 520,
+  animationEasing: 'ease-out',
+  isAnimationActive: true,
+}
+
+const LINE_ANIMATION_PROPS = {
+  animationBegin: 120,
+  animationDuration: 560,
+  animationEasing: 'ease-out',
+  isAnimationActive: true,
+}
 
 function formatStatusLabel(status) {
   return String(status || 'scheduled')
@@ -118,6 +155,16 @@ function formatStatusLabel(status) {
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ')
+}
+
+function formatShortCurrency(value) {
+  const amount = Number(value || 0)
+
+  if (Math.abs(amount) >= 1000) {
+    return `$${formatCompactNumber(amount)}`
+  }
+
+  return formatCurrency(amount, { compact: true })
 }
 
 function getCount(response) {
@@ -219,8 +266,6 @@ export function AdminDashboard() {
   const [loadError, setLoadError] = useState('')
   const [appointmentPeriod, setAppointmentPeriod] = useState('week')
   const [lastUpdatedAt, setLastUpdatedAt] = useState(new Date())
-  const [selectedRevenuePoint, setSelectedRevenuePoint] = useState(null)
-  const [selectedHeatmapSlot, setSelectedHeatmapSlot] = useState(null)
 
   const loadDashboardData = useCallback(async (isMounted = () => true, options = {}) => {
     const silent = options?.silent === true
@@ -355,10 +400,32 @@ export function AdminDashboard() {
     [chartData],
   )
 
-  const adminHeroSparkline = useMemo(
-    () => chartData.map((day) => day.appointments),
-    [chartData],
-  )
+  const adminHeroSparkline = useMemo(() => {
+    const averageAppointments =
+      chartData.reduce((sum, day) => sum + Number(day.appointments || 0), 0) /
+      Math.max(1, chartData.length)
+
+    return chartData.map((day) => {
+      if (!day.appointments) {
+        return 0
+      }
+
+      const completionScore = (day.completed / day.appointments) * 100
+      const cancellationScore = 100 - (day.cancelled / day.appointments) * 100
+      const demandBalance = clampPercent(
+        100 -
+          (Math.abs(day.appointments - averageAppointments) /
+            Math.max(averageAppointments, 1)) *
+            30,
+      )
+
+      return Math.round(
+        completionScore * 0.6 +
+          cancellationScore * 0.25 +
+          demandBalance * 0.15,
+      )
+    })
+  }, [chartData])
 
   const adminHeroSparkLabels = useMemo(() => {
     if (chartData.length === 0) {
@@ -453,14 +520,6 @@ export function AdminDashboard() {
           .filter(Boolean),
       ).size,
     [dashboardData.staff],
-  )
-
-  const doctorsOnDuty = useMemo(
-    () =>
-      activeDoctors
-        .filter((doctor) => doctor.today_checkin)
-        .sort((first, second) => new Date(first.today_checkin) - new Date(second.today_checkin)),
-    [activeDoctors],
   )
 
   const recentPatients = useMemo(
@@ -868,49 +927,84 @@ export function AdminDashboard() {
     dashboardData.totalPatients,
   ])
 
-  const appointmentHeatmap = useMemo(() => {
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-    const slots = [
-      { end: 9, label: '7a', start: 7 },
-      { end: 11, label: '9a', start: 9 },
-      { end: 13, label: '11a', start: 11 },
-      { end: 15, label: '1p', start: 13 },
-      { end: 17, label: '3p', start: 15 },
-      { end: 20, label: '5p', start: 17 },
-    ]
-    const rows = days.map((day) => ({
-      day,
-      slots: slots.map((slot) => ({ ...slot, count: 0, day })),
-    }))
-
-    dashboardData.allAppointments.forEach((appointment) => {
-      const date = getAppointmentDate(appointment)
-
-      if (!date) {
-        return
-      }
-
-      const dayIndex = date.getDay() === 0 ? 6 : date.getDay() - 1
-      const hour = date.getHours()
-      const slot = rows[dayIndex]?.slots.find((item) => hour >= item.start && hour < item.end)
-
-      if (slot) {
-        slot.count += 1
-      }
-    })
-
-    const max = Math.max(1, ...rows.flatMap((row) => row.slots.map((slot) => slot.count)))
-    const peak = rows
-      .flatMap((row) => row.slots)
-      .reduce((best, slot) => (slot.count > (best?.count || 0) ? slot : best), null)
+  const completionAnalytics = useMemo(() => {
+    const total = dashboardData.todayAppointments.length
+    const cancelledToday = dashboardData.todayAppointments.filter(isCancelledAppointment).length
+    const scheduledToday = todayScheduledCount
+    const inProgressToday = dashboardData.todayAppointments.filter(
+      (appointment) => String(appointment.status || '').toLowerCase() === 'in_progress',
+    ).length
+    const cancellationRate = total ? Math.round((cancelledToday / total) * 100) : 0
+    const openQueueRate = total ? Math.round((todayOpenCount / total) * 100) : 0
+    const completionRisk = Math.max(
+      0,
+      Math.min(
+        100,
+        Math.round(cancellationRate * 0.5 + openQueueRate * 0.35 + (100 - completionRate) * 0.15),
+      ),
+    )
+    const flowStability = clampPercent(100 - completionRisk)
+    const activeQueue = scheduledToday + inProgressToday
+    const closeoutTarget = Math.max(0, total - todayCompletedCount - cancelledToday)
 
     return {
-      max,
-      peak,
-      rows,
-      slots,
+      cancellationRate,
+      completionRisk,
+      insights: [
+        {
+          helper: 'scheduled + in progress',
+          label: 'Active queue',
+          tone: 'bg-brand-light text-brand',
+          value: `${activeQueue} cases`,
+        },
+        {
+          helper: 'remaining closeout load',
+          label: 'Closeout target',
+          tone: closeoutTarget > 0 ? 'bg-[#E0F2FE] text-[#0284C7]' : 'bg-[#ECFDF5] text-[#047857]',
+          value: `${closeoutTarget} visits`,
+        },
+        {
+          helper: 'risk-adjusted signal',
+          label: 'Flow stability',
+          tone: flowStability < 70 ? 'bg-rose-50 text-rose-700' : 'bg-[#ECFDF5] text-[#047857]',
+          value: `${flowStability}%`,
+        },
+      ],
+      rows: [
+        {
+          color: STATUS_COLORS.completed,
+          label: 'Completed',
+          percent: completionRate,
+          value: `${todayCompletedCount}/${total || 0}`,
+        },
+        {
+          color: STATUS_COLORS.scheduled,
+          label: 'Scheduled',
+          percent: total ? Math.round((scheduledToday / total) * 100) : 0,
+          value: scheduledToday,
+        },
+        {
+          color: STATUS_COLORS.in_progress,
+          label: 'In progress',
+          percent: total ? Math.round((inProgressToday / total) * 100) : 0,
+          value: inProgressToday,
+        },
+        {
+          color: STATUS_COLORS.cancelled,
+          label: 'Cancelled',
+          percent: cancellationRate,
+          value: cancelledToday,
+        },
+      ],
+      total,
     }
-  }, [dashboardData.allAppointments])
+  }, [
+    completionRate,
+    dashboardData.todayAppointments,
+    todayCompletedCount,
+    todayOpenCount,
+    todayScheduledCount,
+  ])
 
   const doctorPerformanceData = useMemo(() => {
     const statsByDoctor = new Map()
@@ -945,21 +1039,34 @@ export function AdminDashboard() {
         const todayCases = Number(doctor.cases_today || 0)
         const totalCases = stats.total || Number(doctor.total_cases || todayCases || 0)
         const completion = totalCases ? Math.round((stats.completed / totalCases) * 100) : 0
+        const revenue = dashboardData.allAppointments.reduce((sum, appointment) => {
+          if (String(getDoctorIdFromAppointment(appointment)) !== String(doctor.id)) {
+            return sum
+          }
+
+          return sum + estimateAppointmentRevenue(appointment)
+        }, 0)
+        const rating = doctor.consultation_rating ?? doctor.rating ?? doctor.average_rating ?? null
+        const utilization = clampPercent((todayCases / 8) * 100)
+        const efficiency = clampPercent(completion * 0.55 + utilization * 0.3 + Math.min(100, totalCases * 2) * 0.15)
 
         return {
           avgConsult: 18 + (totalCases % 7) * 4,
           cases: totalCases,
           completion,
+          efficiency,
           id: doctor.id,
           label: doctor.last_name || getDoctorName(doctor).split(' ').at(-1) || 'Doctor',
           name: getDoctorName(doctor),
+          rating,
+          revenue,
           todayCases,
-          utilization: clampPercent((todayCases / 8) * 100),
+          utilization,
         }
       })
       .sort((first, second) => {
-        if (second.completion !== first.completion) {
-          return second.completion - first.completion
+        if (second.efficiency !== first.efficiency) {
+          return second.efficiency - first.efficiency
         }
 
         return second.cases - first.cases
@@ -967,15 +1074,44 @@ export function AdminDashboard() {
       .slice(0, 5)
   }, [dashboardData.allAppointments, dashboardData.doctors])
 
+  const doctorPerformanceSummary = useMemo(() => {
+    const totalRevenue = doctorPerformanceData.reduce(
+      (sum, doctor) => sum + Number(doctor.revenue || 0),
+      0,
+    )
+    const averageEfficiency = doctorPerformanceData.length
+      ? Math.round(
+          doctorPerformanceData.reduce(
+            (sum, doctor) => sum + Number(doctor.efficiency || 0),
+            0,
+          ) / doctorPerformanceData.length,
+        )
+      : 0
+    const completedCases = doctorPerformanceData.reduce(
+      (sum, doctor) =>
+        sum + Math.round((Number(doctor.cases || 0) * Number(doctor.completion || 0)) / 100),
+      0,
+    )
+
+    return {
+      averageEfficiency,
+      completedCases,
+      totalRevenue,
+    }
+  }, [doctorPerformanceData])
+
   const operationalAnalytics = useMemo(() => {
     const dailyAverage =
       chartData.reduce((sum, item) => sum + Number(item.appointments || 0), 0) /
       Math.max(1, chartData.length)
     const appointmentCapacity = Math.max(1, activeDoctors.length * 8)
+    const demandForecast = Math.round(dailyAverage * 1.18)
     const occupancyRate = clampPercent((dashboardData.todayAppointments.length / appointmentCapacity) * 100)
     const staffUtilization = dashboardData.totalStaff
       ? clampPercent((activeStaff.length / dashboardData.totalStaff) * 100)
       : 0
+    const capacityBuffer = Math.max(0, appointmentCapacity - dashboardData.todayAppointments.length)
+    const demandDelta = demandForecast - dashboardData.todayAppointments.length
     const departmentCounts = dashboardData.doctors.reduce((counts, doctor) => {
       const department =
         doctor.department ||
@@ -989,7 +1125,27 @@ export function AdminDashboard() {
     }, {})
 
     return {
-      demandForecast: Math.round(dailyAverage * 1.18),
+      capacitySignals: [
+        {
+          helper: 'remaining modeled slots',
+          label: 'Capacity buffer',
+          tone: capacityBuffer > 0 ? 'bg-[#ECFDF5] text-[#047857]' : 'bg-rose-50 text-rose-700',
+          value: `${capacityBuffer} slots`,
+        },
+        {
+          helper: `${doctorCoverage}% doctor coverage`,
+          label: 'Active doctors',
+          tone: 'bg-[#E0F2FE] text-[#0284C7]',
+          value: `${activeDoctors.length}/${dashboardData.totalDoctors || 0}`,
+        },
+        {
+          helper: 'vs current booked load',
+          label: 'Demand delta',
+          tone: demandDelta > 0 ? 'bg-brand-light text-brand' : 'bg-mist text-slate',
+          value: `${demandDelta > 0 ? '+' : ''}${demandDelta}`,
+        },
+      ],
+      demandForecast,
       occupancyRate,
       resourceRows: [
         {
@@ -1005,7 +1161,7 @@ export function AdminDashboard() {
           value: `${activeStaff.length}/${dashboardData.totalStaff || 0}`,
         },
         {
-          color: '#D97706',
+          color: '#4338CA',
           label: 'Open queue pressure',
           percent: clampPercent((todayOpenCount / Math.max(1, dashboardData.todayAppointments.length)) * 100),
           value: `${todayOpenCount} open`,
@@ -1023,12 +1179,12 @@ export function AdminDashboard() {
     chartData,
     dashboardData.doctors,
     dashboardData.todayAppointments.length,
+    dashboardData.totalDoctors,
     dashboardData.totalStaff,
+    doctorCoverage,
     todayOpenCount,
   ])
 
-  const selectedRevenueMetric = selectedRevenuePoint || revenueAnalytics.data.at(-1)
-  const selectedHeatmapMetric = selectedHeatmapSlot || appointmentHeatmap.peak
   const lastUpdatedLabel = useMemo(
     () =>
       new Intl.DateTimeFormat('en-US', {
@@ -1057,19 +1213,38 @@ export function AdminDashboard() {
       return
     }
 
-    const path = chartRef.current?.querySelector('.recharts-line-curve')
+    const paths = chartRef.current?.querySelectorAll('.recharts-line-curve')
 
-    if (!path) {
+    if (!paths?.length) {
       return
     }
 
-    const length = path.getTotalLength()
-    path.style.strokeDasharray = length
-    path.style.strokeDashoffset = length
-    path.getBoundingClientRect()
-    path.style.transition = 'stroke-dashoffset 1000ms ease-in-out'
-    path.style.strokeDashoffset = 0
+    paths.forEach((path) => {
+      const length = path.getTotalLength()
+      path.style.strokeDasharray = length
+      path.style.strokeDashoffset = length
+      path.getBoundingClientRect()
+      path.style.transition = 'stroke-dashoffset 520ms cubic-bezier(0.16, 1, 0.3, 1)'
+      path.style.strokeDashoffset = 0
+    })
   }, [appointmentsEnabled, chartData, realAppointmentDays])
+
+  const showPatientGrowthPanel =
+    patientsEnabled && (isLoading || dashboardData.totalPatients > 0)
+  const showDoctorPerformancePanel =
+    doctorsEnabled && (isLoading || doctorPerformanceData.length > 0)
+  const showTodayAppointmentsPanel =
+    appointmentsEnabled && (isLoading || dashboardData.todayAppointments.length > 0)
+  const showStatusMixPanel =
+    appointmentsEnabled && (isLoading || appointmentStatusData.length > 0)
+  const showDoctorWorkloadPanel =
+    doctorsEnabled && (isLoading || doctorWorkloadData.length > 0)
+  const showGenderPanel =
+    patientsEnabled && (isLoading || patientGenderData.length > 0)
+  const showRecentPatientsPanel =
+    patientsEnabled && (isLoading || recentPatients.length > 0)
+  const showStaffPanel =
+    staffEnabled && (isLoading || dashboardData.staff.length > 0)
 
   if (role?.slug === 'doctor') {
     return <Navigate replace to="/dashboard/doctor" />
@@ -1097,33 +1272,33 @@ export function AdminDashboard() {
   }
 
   return (
-    <div className="dashboard-stage space-y-5">
-      <section className="relative overflow-hidden rounded-card border border-hairline/70 bg-canvas p-6 shadow-card">
-        <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="flex min-w-0 flex-col justify-between gap-6">
+    <div className="dashboard-stage space-y-3">
+      <section className="relative overflow-hidden rounded-card border border-hairline/70 bg-canvas p-4 shadow-card">
+        <div className="relative grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="flex min-w-0 flex-col gap-4">
             <div>
               <span className="inline-flex items-center gap-2 rounded-full border border-brand/10 bg-white/75 px-3 py-1.5 text-[12px] font-semibold text-brand shadow-sm backdrop-blur">
                 <Sparkles aria-hidden="true" className="h-3.5 w-3.5" />
                 Live clinic overview
               </span>
-              <h2 className="mt-4 max-w-2xl text-[28px] font-bold leading-tight text-ink md:text-[34px]">
+              <h2 className="mt-3 max-w-2xl text-[26px] font-bold leading-tight text-ink md:text-[30px]">
                 Command center for patient flow, staff capacity, and care momentum.
               </h2>
-              <p className="mt-3 max-w-2xl text-[14px] leading-6 text-slate">
+              <p className="mt-2 max-w-2xl text-[13px] leading-5 text-slate">
                 Track today&apos;s queue, active clinical coverage, and patient growth in one polished operating view.
               </p>
-              <p className="mt-3 inline-flex items-center rounded-full bg-white/80 px-3 py-1.5 font-sans text-[12px] font-semibold text-slate shadow-sm">
+              <p className="mt-2 inline-flex items-center rounded-full bg-white/80 px-3 py-1.5 font-sans text-[12px] font-semibold text-slate shadow-sm">
                 Live sync {lastUpdatedLabel}
               </p>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-2.5 md:grid-cols-3">
               {adminSignals.map((signal, index) => {
                 const SignalIcon = signal.icon
 
                 return (
                   <div
-                    className="animate-fade-up rounded-card border border-white/75 bg-white/80 p-4 shadow-[0_12px_34px_rgba(20,24,31,0.06)] backdrop-blur"
+                    className="animate-fade-up rounded-card border border-white/75 bg-white/80 p-3.5 shadow-[0_12px_34px_rgba(20,24,31,0.06)] backdrop-blur"
                     key={signal.label}
                     style={stagger(index, 0.05)}
                   >
@@ -1139,7 +1314,7 @@ export function AdminDashboard() {
                           {isLoading ? 'Syncing live data' : signal.context}
                         </p>
                       </div>
-                      <div className={`flex h-10 w-10 items-center justify-center rounded-2xl ${signal.tone}`}>
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-control ${signal.tone}`}>
                         <SignalIcon aria-hidden="true" className="h-4 w-4" />
                       </div>
                     </div>
@@ -1149,14 +1324,14 @@ export function AdminDashboard() {
             </div>
           </div>
 
-          <div className="relative overflow-hidden rounded-card bg-brand p-5 text-white shadow-card">
+          <div className="relative overflow-hidden rounded-card bg-brand p-4 text-white shadow-card">
             <div className="relative flex items-start justify-between gap-4">
               <div>
                 <p className="text-[13px] font-semibold text-white/70">Operations score</p>
-                <p className="mt-3 text-[46px] font-bold leading-none">
+                <p className="mt-2 text-[40px] font-bold leading-none">
                   {isLoading ? '--' : operationsScore}
                 </p>
-                <p className="mt-2 text-[13px] text-white/70">Weighted from completion, doctors, and staff coverage.</p>
+                <p className="mt-2 text-[13px] text-white/70">Performance trend from completion, cancellation control, and demand balance.</p>
               </div>
               <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1.5 text-[12px] font-semibold text-white backdrop-blur">
                 <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
@@ -1164,10 +1339,10 @@ export function AdminDashboard() {
               </span>
             </div>
 
-            <div className="relative mt-8 h-[92px]">
+            <div className="relative mt-5 h-[76px]">
               <DashboardMiniSparkline
                 areaClassName="fill-white/10"
-                className="analytics-wave absolute inset-0 h-full w-full overflow-visible"
+                className="absolute inset-0 h-full w-full overflow-visible"
                 lineClassName="stroke-white/85"
                 values={adminHeroSparkline}
               />
@@ -1178,14 +1353,14 @@ export function AdminDashboard() {
               </div>
             </div>
 
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              <div className="rounded-2xl bg-white/12 p-3 backdrop-blur">
+            <div className="mt-4 grid grid-cols-2 gap-2.5">
+              <div className="rounded-control bg-white/12 p-3 backdrop-blur">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/55">
                   Completed
                 </p>
                 <p className="mt-1 text-[22px] font-bold">{isLoading ? '-' : `${completionRate}%`}</p>
               </div>
-              <div className="rounded-2xl bg-white/12 p-3 backdrop-blur">
+              <div className="rounded-control bg-white/12 p-3 backdrop-blur">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/55">
                   New patients
                 </p>
@@ -1219,9 +1394,10 @@ export function AdminDashboard() {
       ) : null}
 
       {appointmentsEnabled ? (
-        <section className="grid gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(320px,0.8fr)]">
+        <section className="grid items-stretch gap-4 xl:grid-cols-12">
           <DashboardPanel
-            bodyClassName="p-6"
+            bodyClassName="flex h-full flex-col p-4"
+            className="xl:col-span-8"
             headerContent={
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <div className="inline-flex rounded-full bg-mist p-1">
@@ -1242,6 +1418,7 @@ export function AdminDashboard() {
                   ))}
                 </div>
                 <button
+                  aria-label="Export revenue analytics as CSV"
                   className="inline-flex items-center gap-2 rounded-full border border-brand/10 bg-canvas px-3 py-1.5 text-[12px] font-semibold text-brand shadow-sm transition hover:-translate-y-0.5 hover:bg-brand hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
                   onClick={handleAdminExport}
                   type="button"
@@ -1254,13 +1431,10 @@ export function AdminDashboard() {
             title="Revenue Intelligence"
           >
             {isLoading ? (
-              <div className="h-[334px] rounded-control bg-mist p-4">
-                <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
-              </div>
+              <PanelSkeleton className="h-[220px]" />
             ) : (
-              <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_250px]">
-                <div>
-                  <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <div className="flex h-full flex-col">
+                  <div className="grid gap-2.5 sm:grid-cols-3">
                     {[
                       ['Daily Revenue', formatCurrency(revenueAnalytics.dailyRevenue, { compact: true })],
                       ['Weekly Revenue', formatCurrency(revenueAnalytics.weeklyRevenue, { compact: true })],
@@ -1269,52 +1443,48 @@ export function AdminDashboard() {
                       ['Growth', `${revenueAnalytics.growthRate}%`],
                       ['Forecast', formatCurrency(revenueAnalytics.forecastedRevenue, { compact: true })],
                     ].map(([label, value]) => (
-                      <div
-                        className="rounded-[18px] border border-hairline bg-white/85 px-3 py-3 shadow-sm"
+                      <MetricCell
+                        accent={label === 'Growth' && revenueAnalytics.growthRate < 0 ? 'text-rose-600' : 'text-ink'}
                         key={label}
-                      >
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
-                          {label}
-                        </p>
-                        <p className="mt-1 truncate font-sans text-[15px] font-bold text-ink">
-                          {value}
-                        </p>
-                      </div>
+                        label={label}
+                        value={value}
+                      />
                     ))}
                   </div>
 
-                  <div className="mt-6 h-[286px]">
+                  <div className="mt-3 min-h-[190px] flex-1">
                     <ResponsiveContainer height="100%" width="100%">
                       <ComposedChart
                         data={revenueAnalytics.data}
-                        margin={{ bottom: 0, left: -6, right: 6, top: 8 }}
-                        onClick={(event) => {
-                          const payload = event?.activePayload?.[0]?.payload
-                          if (payload) setSelectedRevenuePoint(payload)
-                        }}
+                        margin={{ bottom: 0, left: -2, right: 6, top: 10 }}
                       >
                         <defs>
                           <linearGradient id="adminRevenueArea" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#4338CA" stopOpacity={0.24} />
+                            <stop offset="0%" stopColor="#4338CA" stopOpacity={0.32} />
+                            <stop offset="46%" stopColor="#4338CA" stopOpacity={0.12} />
                             <stop offset="100%" stopColor="#4338CA" stopOpacity={0.02} />
                           </linearGradient>
                           <linearGradient id="adminRevenueBar" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#2DD4BF" />
+                            <stop offset="0%" stopColor="#5EEAD4" />
+                            <stop offset="42%" stopColor="#2DD4BF" />
                             <stop offset="100%" stopColor="#0D9488" />
                           </linearGradient>
+                          <filter id="adminRevenueDepth" x="-20%" y="-20%" width="140%" height="150%">
+                            <feDropShadow dx="0" dy="7" stdDeviation="5" floodColor="#0D9488" floodOpacity="0.18" />
+                          </filter>
                         </defs>
-                        <CartesianGrid stroke="#E4E8EB" strokeDasharray="4 6" vertical={false} />
+                        <CartesianGrid {...CHART_GRID_PROPS} />
                         <XAxis
                           axisLine={false}
                           dataKey="label"
                           interval={getAxisInterval(appointmentPeriod)}
-                          tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
+                          tick={CHART_AXIS_TICK}
                           tickLine={false}
                           tickMargin={12}
                         />
                         <YAxis
                           axisLine={false}
-                          tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
+                          tick={CHART_AXIS_TICK}
                           tickFormatter={(value) => formatCurrency(value, { compact: true })}
                           tickLine={false}
                           tickMargin={8}
@@ -1324,89 +1494,44 @@ export function AdminDashboard() {
                           allowDecimals={false}
                           axisLine={false}
                           orientation="right"
-                          tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
+                          tick={CHART_AXIS_TICK}
                           tickLine={false}
                           tickMargin={8}
                           yAxisId="volume"
                         />
-                        <Tooltip content={<DashboardChartTooltip />} cursor={{ fill: '#EEF2FF66' }} />
+                        <Tooltip content={<DashboardChartTooltip />} cursor={CHART_CURSOR} />
                         <Area
+                          {...CHART_ANIMATION_PROPS}
+                          activeDot={{ fill: '#4338CA', r: 5, stroke: '#FFFFFF', strokeWidth: 2 }}
                           dataKey="revenue"
                           fill="url(#adminRevenueArea)"
                           name="Revenue"
                           stroke="#4338CA"
-                          strokeWidth={3}
-                          type="monotone"
-                          yAxisId="money"
-                        />
-                        <Line
-                          dataKey="forecast"
-                          dot={false}
-                          name="Forecasted revenue"
-                          stroke="#F59E0B"
-                          strokeDasharray="6 4"
-                          strokeWidth={3}
+                          strokeWidth={3.25}
                           type="monotone"
                           yAxisId="money"
                         />
                         <Bar
+                          {...CHART_ANIMATION_PROPS}
+                          activeBar={{ filter: 'url(#adminRevenueDepth)', stroke: '#FFFFFF', strokeWidth: 2 }}
                           barSize={20}
+                          background={{ fill: '#F8FAFC', radius: 10 }}
                           dataKey="appointments"
                           fill="url(#adminRevenueBar)"
+                          filter="url(#adminRevenueDepth)"
                           name="Appointments"
-                          radius={[8, 8, 4, 4]}
+                          radius={[10, 10, 6, 6]}
                           yAxisId="volume"
                         />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
-                </div>
-
-                <aside className="rounded-card border border-hairline bg-white/80 p-5 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-light text-brand">
-                      <DollarSign aria-hidden="true" className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
-                        Drill-down
-                      </p>
-                      <p className="text-[18px] font-bold text-ink">
-                        {selectedRevenueMetric?.label || 'Current range'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-5 space-y-3">
-                    <div className="rounded-2xl bg-mist px-4 py-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">
-                        Revenue
-                      </p>
-                      <p className="mt-1 font-sans text-[22px] font-bold text-ink">
-                        {formatCurrency(selectedRevenueMetric?.revenue || 0, { compact: true })}
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-2xl bg-[#ECFDF5] px-3 py-3">
-                        <p className="text-[11px] font-semibold text-[#047857]">Conversion</p>
-                        <p className="font-sans text-[18px] font-bold text-[#047857]">
-                          {selectedRevenueMetric?.conversion || 0}%
-                        </p>
-                      </div>
-                      <div className="rounded-2xl bg-[#FFF7ED] px-3 py-3">
-                        <p className="text-[11px] font-semibold text-[#C2410C]">Forecast</p>
-                        <p className="font-sans text-[18px] font-bold text-[#C2410C]">
-                          {formatCurrency(selectedRevenueMetric?.forecast || 0, { compact: true })}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </aside>
               </div>
             )}
           </DashboardPanel>
 
-          <DashboardPanel title="AI Operational Brief">
-            <div className="space-y-3">
+          <DashboardPanel bodyClassName="flex h-full flex-col p-4" className="xl:col-span-4" title="AI Operational Brief">
+            <div className="grid h-full gap-3">
               {[
                 {
                   context: `${revenueAnalytics.conversionRate}% appointment-to-revenue conversion`,
@@ -1433,7 +1558,7 @@ export function AdminDashboard() {
                   context: `${todayOpenCount} unresolved appointments`,
                   icon: TimerReset,
                   label: 'Queue pressure',
-                  tone: 'bg-[#FFF7ED] text-[#C2410C]',
+                  tone: 'bg-brand-light text-brand',
                   value: todayOpenCount > 0 ? 'Monitor' : 'Clear',
                 },
               ].map((insight, index) => {
@@ -1441,19 +1566,19 @@ export function AdminDashboard() {
 
                 return (
                   <div
-                    className="animate-fade-up rounded-card border border-hairline bg-white/85 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(20,24,31,0.08)]"
+                    className="flex h-full animate-fade-up rounded-card border border-hairline bg-white/85 p-3.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(20,24,31,0.08)]"
                     key={insight.label}
                     style={stagger(index, 0.04)}
                   >
                     <div className="flex items-start gap-3">
-                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${insight.tone}`}>
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-control ${insight.tone}`}>
                         <InsightIcon aria-hidden="true" className="h-4 w-4" />
                       </div>
                       <div className="min-w-0">
                         <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
                           {insight.label}
                         </p>
-                        <p className="mt-1 text-[18px] font-bold text-ink">{insight.value}</p>
+                        <p className="mt-1 break-words text-[17px] font-bold leading-tight text-ink">{insight.value}</p>
                         <p className="mt-1 text-[12px] leading-5 text-slate">{insight.context}</p>
                       </div>
                     </div>
@@ -1465,84 +1590,92 @@ export function AdminDashboard() {
         </section>
       ) : null}
 
-      {patientsEnabled || appointmentsEnabled ? (
-        <section className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-          {patientsEnabled ? (
-            <DashboardPanel bodyClassName="p-6" title="Patient Growth & Retention">
+      {showPatientGrowthPanel || appointmentsEnabled ? (
+        <section className="grid items-stretch gap-4 xl:grid-cols-12">
+          {showPatientGrowthPanel ? (
+            <DashboardPanel bodyClassName="flex h-full flex-col p-4" className="xl:col-span-7" title="Patient Growth & Retention">
               {isLoading ? (
-                <div className="h-[300px] rounded-control bg-mist p-4">
+                <div className="h-[190px] rounded-control bg-mist p-4">
                   <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
                 </div>
               ) : (
-                <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_240px]">
-                  <div>
-                    <div className="grid gap-3 sm:grid-cols-4">
+                <div className="grid h-full items-stretch gap-4 2xl:grid-cols-[minmax(0,1fr)_230px]">
+                  <div className="flex h-full flex-col">
+                    <div className="grid gap-2.5 sm:grid-cols-4">
                       {[
                         ['Total Patients', dashboardData.totalPatients],
                         ['New Patients', joinedThisMonthCount],
                         ['Returning', patientLifecycle.returningPatients],
                         ['Retention', `${patientLifecycle.retentionRate}%`],
                       ].map(([label, value]) => (
-                        <div className="rounded-[18px] border border-hairline bg-white/85 px-3 py-3 shadow-sm" key={label}>
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
-                            {label}
-                          </p>
-                          <p className="mt-1 font-sans text-[18px] font-bold text-ink">{value}</p>
-                        </div>
+                        <MetricCell key={label} label={label} value={value} />
                       ))}
                     </div>
 
-                    <div className="mt-6 h-[260px]">
+                    <div className="mt-3 min-h-[176px] flex-1">
                       <ResponsiveContainer height="100%" width="100%">
                         <ComposedChart data={patientLifecycle.data} margin={{ bottom: 0, left: -18, right: 8, top: 8 }}>
                           <defs>
                             <linearGradient id="patientAcquisitionArea" x1="0" x2="0" y1="0" y2="1">
-                              <stop offset="0%" stopColor="#0EA5E9" stopOpacity={0.24} />
+                              <stop offset="0%" stopColor="#0EA5E9" stopOpacity={0.3} />
+                              <stop offset="48%" stopColor="#0EA5E9" stopOpacity={0.11} />
                               <stop offset="100%" stopColor="#0EA5E9" stopOpacity={0.02} />
                             </linearGradient>
                             <linearGradient id="patientNewBar" x1="0" x2="0" y1="0" y2="1">
-                              <stop offset="0%" stopColor="#7C3AED" />
+                              <stop offset="0%" stopColor="#A78BFA" />
+                              <stop offset="45%" stopColor="#7C3AED" />
                               <stop offset="100%" stopColor="#4338CA" />
                             </linearGradient>
+                            <filter id="patientNewDepth" x="-20%" y="-20%" width="140%" height="150%">
+                              <feDropShadow dx="0" dy="7" stdDeviation="5" floodColor="#4338CA" floodOpacity="0.16" />
+                            </filter>
                           </defs>
-                          <CartesianGrid stroke="#E4E8EB" strokeDasharray="4 6" vertical={false} />
+                          <CartesianGrid {...CHART_GRID_PROPS} />
                           <XAxis
                             axisLine={false}
                             dataKey="label"
                             interval={getAxisInterval(appointmentPeriod)}
-                            tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
+                            tick={CHART_AXIS_TICK}
                             tickLine={false}
                             tickMargin={12}
                           />
                           <YAxis
                             allowDecimals={false}
                             axisLine={false}
-                            tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
+                            tick={CHART_AXIS_TICK}
                             tickLine={false}
                             tickMargin={8}
                           />
-                          <Tooltip content={<DashboardChartTooltip />} cursor={{ fill: '#EEF2FF66' }} />
+                          <Tooltip content={<DashboardChartTooltip />} cursor={CHART_CURSOR} />
                           <Area
+                            {...CHART_ANIMATION_PROPS}
+                            activeDot={{ fill: '#0EA5E9', r: 5, stroke: '#FFFFFF', strokeWidth: 2 }}
                             dataKey="cumulativePatients"
                             fill="url(#patientAcquisitionArea)"
                             name="Active patient base"
                             stroke="#0EA5E9"
-                            strokeWidth={3}
+                            strokeWidth={3.25}
                             type="monotone"
                           />
                           <Bar
+                            {...CHART_ANIMATION_PROPS}
+                            activeBar={{ filter: 'url(#patientNewDepth)', stroke: '#FFFFFF', strokeWidth: 2 }}
                             barSize={22}
+                            background={{ fill: '#F8FAFC', radius: 10 }}
                             dataKey="newPatients"
                             fill="url(#patientNewBar)"
+                            filter="url(#patientNewDepth)"
                             name="New patients"
-                            radius={[8, 8, 4, 4]}
+                            radius={[10, 10, 6, 6]}
                           />
                           <Line
+                            {...LINE_ANIMATION_PROPS}
+                            activeDot={{ fill: '#0D9488', r: 5, stroke: '#FFFFFF', strokeWidth: 2 }}
                             dataKey="retention"
                             dot={false}
                             name="Retention rate"
                             stroke="#0D9488"
-                            strokeWidth={3}
+                            strokeWidth={3.25}
                             type="monotone"
                           />
                         </ComposedChart>
@@ -1550,19 +1683,19 @@ export function AdminDashboard() {
                     </div>
                   </div>
 
-                  <aside className="space-y-3 rounded-card border border-hairline bg-white/80 p-5 shadow-sm">
+                  <aside className="flex h-full flex-col justify-between gap-3 rounded-card border border-hairline bg-white/80 p-3.5 shadow-sm">
                     <div>
                       <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
                         Active vs inactive
                       </p>
                       <div className="mt-3 grid grid-cols-2 gap-3">
-                        <div className="rounded-2xl bg-[#ECFDF5] p-3">
+                        <div className="rounded-control bg-[#ECFDF5] p-3">
                           <p className="font-sans text-[22px] font-bold text-[#047857]">
                             {patientLifecycle.activePatients}
                           </p>
                           <p className="text-[11px] font-semibold text-[#047857]">Active</p>
                         </div>
-                        <div className="rounded-2xl bg-mist p-3">
+                        <div className="rounded-control bg-mist p-3">
                           <p className="font-sans text-[22px] font-bold text-slate">
                             {patientLifecycle.inactivePatients}
                           </p>
@@ -1604,147 +1737,205 @@ export function AdminDashboard() {
           ) : null}
 
           {appointmentsEnabled ? (
-            <DashboardPanel title="Peak Booking Heatmap">
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_180px]">
-                <div className="overflow-x-auto">
-                  <div className="min-w-[520px]">
-                    <div className="grid grid-cols-[46px_repeat(6,minmax(54px,1fr))] gap-2">
-                      <span />
-                      {appointmentHeatmap.slots.map((slot) => (
-                        <span className="text-center font-sans text-[11px] font-semibold text-slate" key={slot.label}>
-                          {slot.label}
-                        </span>
-                      ))}
-                      {appointmentHeatmap.rows.map((row) => (
-                        <div className="contents" key={row.day}>
-                          <span className="flex items-center text-[12px] font-semibold text-slate">{row.day}</span>
-                          {row.slots.map((slot) => {
-                            const alpha = 0.08 + (slot.count / appointmentHeatmap.max) * 0.74
-                            const selected =
-                              selectedHeatmapMetric?.day === slot.day &&
-                              selectedHeatmapMetric?.label === slot.label
+            <DashboardPanel bodyClassName="flex h-full flex-col p-4" className="xl:col-span-5" title="Completion & Cancellation Analytics">
+              {isLoading ? (
+                <PanelSkeleton rows={4} />
+              ) : (
+                <div className="flex h-full flex-col justify-between gap-3">
+                  <div className="grid gap-2.5 sm:grid-cols-3">
+                    <MetricCell
+                      accent="text-[#047857]"
+                      className="bg-[#ECFDF5] border-[#BBF7D0]"
+                      label="Completion"
+                      value={`${completionRate}%`}
+                    />
+                    <MetricCell
+                      accent="text-[#B91C1C]"
+                      className="bg-rose-50 border-rose-100"
+                      label="Cancellation"
+                      value={`${completionAnalytics.cancellationRate}%`}
+                    />
+                    <MetricCell
+                      accent={completionAnalytics.completionRisk > 40 ? 'text-rose-600' : 'text-brand'}
+                      className="bg-canvas"
+                      label="Queue Risk"
+                      value={`${completionAnalytics.completionRisk}%`}
+                    />
+                  </div>
 
-                            return (
-                              <button
-                                className={[
-                                  'h-11 rounded-[14px] border text-center font-sans text-[12px] font-bold transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50',
-                                  selected ? 'border-brand text-brand shadow-sm' : 'border-white/80 text-ink',
-                                ].join(' ')}
-                                key={`${row.day}-${slot.label}`}
-                                onClick={() => setSelectedHeatmapSlot(slot)}
-                                style={{ backgroundColor: `rgba(67, 56, 202, ${alpha})` }}
-                                title={`${row.day} ${slot.label}: ${slot.count} appointments`}
-                                type="button"
-                              >
-                                {slot.count}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      ))}
-                    </div>
+                  <div className="grid gap-2.5 sm:grid-cols-3">
+                    {completionAnalytics.insights.map((item) => (
+                      <div
+                        className={`rounded-control px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.62)] ${item.tone}`}
+                        key={item.label}
+                      >
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] opacity-75">
+                          {item.label}
+                        </p>
+                        <p className="mt-1 font-sans text-[15px] font-bold leading-tight tabular-nums">
+                          {item.value}
+                        </p>
+                        <p className="mt-0.5 truncate text-[10px] font-medium opacity-70">
+                          {item.helper}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {completionAnalytics.rows.map((row) => (
+                      <ProgressMetricRow
+                        color={row.color}
+                        key={row.label}
+                        label={row.label}
+                        percent={row.percent}
+                        value={row.value}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="rounded-control border border-hairline bg-mist px-4 py-3">
+                    <p className="text-[12px] font-semibold text-ink">
+                      Operational note
+                    </p>
+                    <p className="mt-1 text-[12px] leading-5 text-slate">
+                      {completionAnalytics.completionRisk > 40
+                        ? 'Completion risk is elevated. Prioritize open queue follow-up and cancellation recovery.'
+                        : 'Completion flow is stable. Keep monitoring open queue pressure through the day.'}
+                    </p>
                   </div>
                 </div>
-
-                <aside className="rounded-card border border-hairline bg-mist p-4">
-                  <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
-                    Peak booking
-                  </p>
-                  <p className="mt-2 text-[24px] font-bold text-ink">
-                    {selectedHeatmapMetric?.day || '-'} {selectedHeatmapMetric?.label || ''}
-                  </p>
-                  <p className="mt-1 font-sans text-[18px] font-bold text-brand">
-                    {selectedHeatmapMetric?.count || 0} appointments
-                  </p>
-                  <p className="mt-3 text-[12px] leading-5 text-slate">
-                    Peak booking hours help align front desk coverage, room turnover, and clinical staffing.
-                  </p>
-                </aside>
-              </div>
+              )}
             </DashboardPanel>
           ) : null}
         </section>
       ) : null}
 
-      {doctorsEnabled || staffEnabled ? (
-        <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.82fr)]">
-          {doctorsEnabled ? (
-            <DashboardPanel bodyClassName="p-0" title="Doctor Performance Leaderboard">
+      {showDoctorPerformancePanel || staffEnabled ? (
+        <section className="grid items-stretch gap-4 xl:grid-cols-12">
+          {showDoctorPerformancePanel ? (
+            <DashboardPanel bodyClassName="flex h-full flex-col p-0" className="xl:col-span-7" title="Doctor Performance Leaderboard">
               {isLoading ? (
-                <div className="m-5 h-[300px] rounded-card bg-mist p-4">
+                <div className="m-4 h-[190px] rounded-card bg-mist p-4">
                   <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
                 </div>
               ) : doctorPerformanceData.length === 0 ? (
                 <DashboardEmptyState title="No doctor performance data yet" />
               ) : (
-                <div className="analytics-surface overflow-hidden p-5">
-                  <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
-                    <div className="h-[280px]">
-                      <ResponsiveContainer height="100%" width="100%">
-                        <ComposedChart data={doctorPerformanceData} margin={{ bottom: 0, left: -18, right: 8, top: 8 }}>
+                <div className="analytics-surface h-full overflow-hidden p-4">
+                  <div className="grid h-full items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_270px]">
+                    <div className="flex h-full flex-col gap-2.5">
+                      <div className="min-h-[236px] flex-1">
+                        <ResponsiveContainer height="100%" width="100%">
+                          <ComposedChart
+                            barCategoryGap="30%"
+                            data={doctorPerformanceData}
+                            margin={{ bottom: 4, left: -8, right: 14, top: 12 }}
+                          >
                           <defs>
-                            <linearGradient id="doctorCompletionGradient" x1="0" x2="0" y1="0" y2="1">
-                              <stop offset="0%" stopColor="#34D399" />
-                              <stop offset="100%" stopColor="#059669" />
+                            <linearGradient id="doctorEfficiencyGradient" x1="0" x2="0" y1="0" y2="1">
+                              <stop offset="0%" stopColor="#A78BFA" />
+                              <stop offset="48%" stopColor="#7C3AED" />
+                              <stop offset="100%" stopColor="#4338CA" />
                             </linearGradient>
+                            <filter id="doctorEfficiencyDepth" x="-20%" y="-20%" width="140%" height="150%">
+                              <feDropShadow dx="0" dy="7" stdDeviation="5" floodColor="#4338CA" floodOpacity="0.18" />
+                            </filter>
                           </defs>
-                          <CartesianGrid stroke="#E4E8EB" strokeDasharray="4 7" vertical={false} />
+                          <CartesianGrid {...CHART_GRID_PROPS} />
                           <XAxis
                             axisLine={false}
                             dataKey="label"
-                            tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
+                            tick={CHART_AXIS_TICK}
                             tickLine={false}
                             tickMargin={12}
                           />
                           <YAxis
                             allowDecimals={false}
                             axisLine={false}
-                            tick={{ fill: '#5B6472', fontFamily: 'Outfit, sans-serif', fontSize: 10 }}
+                            domain={[0, 100]}
+                            tick={CHART_AXIS_TICK}
+                            tickFormatter={(value) => `${value}%`}
                             tickLine={false}
                             tickMargin={8}
+                            ticks={[0, 25, 50, 75, 100]}
+                            width={36}
                           />
-                          <Tooltip content={<DashboardChartTooltip />} cursor={{ fill: '#EEF2FF66' }} />
+                          <Tooltip content={<DashboardChartTooltip />} cursor={CHART_CURSOR} />
                           <Bar
-                            barSize={34}
-                            dataKey="completion"
-                            fill="url(#doctorCompletionGradient)"
-                            name="Completion rate"
-                            radius={[12, 12, 8, 8]}
+                            {...CHART_ANIMATION_PROPS}
+                            activeBar={{ filter: 'url(#doctorEfficiencyDepth)', stroke: '#FFFFFF', strokeWidth: 2 }}
+                            barSize={44}
+                            background={{ fill: '#F8FAFC', radius: 12 }}
+                            dataKey="efficiency"
+                            fill="url(#doctorEfficiencyGradient)"
+                            filter="url(#doctorEfficiencyDepth)"
+                            name="Efficiency score"
+                            radius={[14, 14, 8, 8]}
                           />
                           <Line
-                            dataKey="utilization"
-                            dot={{ fill: '#4338CA', r: 4 }}
-                            name="Utilization"
-                            stroke="#4338CA"
-                            strokeWidth={3}
+                            {...LINE_ANIMATION_PROPS}
+                            activeDot={{ fill: '#0D9488', r: 5, stroke: '#FFFFFF', strokeWidth: 2 }}
+                            dataKey="completion"
+                            dot={false}
+                            name="Completion"
+                            stroke="#0D9488"
+                            strokeOpacity={0.82}
+                            strokeWidth={2.5}
                             type="monotone"
                           />
-                        </ComposedChart>
-                      </ResponsiveContainer>
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </div>
+
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <MetricCell
+                          className="bg-mist/70"
+                          label="Eff."
+                          value={`${doctorPerformanceSummary.averageEfficiency}%`}
+                        />
+                        <MetricCell
+                          className="bg-mist/70"
+                          label="Done"
+                          value={doctorPerformanceSummary.completedCases}
+                        />
+                        <MetricCell
+                          className="bg-mist/70"
+                          label="Rev."
+                          value={formatShortCurrency(doctorPerformanceSummary.totalRevenue)}
+                        />
+                      </div>
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="grid content-start gap-2.5">
                       {doctorPerformanceData.map((doctor, index) => (
-                        <div className="rounded-[18px] border border-white/80 bg-white/85 p-3 shadow-sm" key={doctor.id}>
-                          <div className="flex items-center gap-3">
-                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-light font-sans text-[11px] font-bold text-brand">
-                              {index + 1}
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-[13px] font-bold text-ink">{doctor.name}</p>
-                              <p className="text-[11px] text-slate">{doctor.avgConsult} min avg consult</p>
-                            </div>
-                            <span className="font-sans text-[12px] font-bold text-[#047857]">
-                              {doctor.completion}%
-                            </span>
+                        <RankingRow
+                          index={index}
+                          key={doctor.id}
+                          label={doctor.name}
+                          meta={`${doctor.avgConsult}m avg`}
+                          percent={doctor.efficiency}
+                          tone="#4338CA"
+                          value={`${doctor.efficiency}%`}
+                        >
+                          <div className="grid grid-cols-4 gap-1.5">
+                            {[
+                              ['Pts', doctor.cases],
+                              ['Done', `${doctor.completion}%`],
+                              ['Rev', formatShortCurrency(doctor.revenue)],
+                              ['Rate', doctor.rating === null ? 'N/A' : Number(doctor.rating).toFixed(1)],
+                            ].map(([label, value]) => (
+                              <div className="rounded-control bg-mist px-2 py-1.5 text-left" key={label}>
+                                <p className="truncate text-[9px] font-semibold uppercase leading-3 tracking-[0.07em] text-slate">
+                                  {label}
+                                </p>
+                                <p className="mt-0.5 truncate font-sans text-[11px] font-bold leading-tight tabular-nums text-ink">
+                                  {value}
+                                </p>
+                              </div>
+                            ))}
                           </div>
-                          <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
-                            <div
-                              className="h-full rounded-full bg-gradient-to-r from-brand to-[#0D9488]"
-                              style={{ width: `${doctor.utilization}%` }}
-                            />
-                          </div>
-                        </div>
+                        </RankingRow>
                       ))}
                     </div>
                   </div>
@@ -1753,15 +1944,15 @@ export function AdminDashboard() {
             </DashboardPanel>
           ) : null}
 
-          <DashboardPanel title="Operational Capacity Forecast">
-            <div className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-3">
+          <DashboardPanel bodyClassName="flex h-full flex-col p-4" className="xl:col-span-5" title="Operational Capacity Forecast">
+            <div className="flex h-full flex-col justify-between gap-3">
+              <div className="grid gap-2.5 sm:grid-cols-3">
                 {[
                   ['Occupancy', `${operationalAnalytics.occupancyRate}%`, LineChart],
                   ['Staff utilization', `${operationalAnalytics.staffUtilization}%`, Users],
                   ['Forecast demand', operationalAnalytics.demandForecast, CalendarClock],
                 ].map(([label, value, Icon]) => (
-                  <div className="rounded-[18px] border border-hairline bg-white/85 p-3 shadow-sm" key={label}>
+                  <div className="rounded-control border border-hairline bg-canvas p-3" key={label}>
                     <Icon aria-hidden="true" className="mb-2 h-4 w-4 text-brand" />
                     <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">{label}</p>
                     <p className="mt-1 font-sans text-[18px] font-bold text-ink">{value}</p>
@@ -1769,24 +1960,38 @@ export function AdminDashboard() {
                 ))}
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {operationalAnalytics.resourceRows.map((row) => (
-                  <div className="rounded-[18px] bg-mist px-4 py-3" key={row.label}>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-[12px] font-semibold text-slate">{row.label}</span>
-                      <span className="font-sans text-[12px] font-bold text-ink">{row.value}</span>
-                    </div>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-white">
-                      <div
-                        className="h-full rounded-full"
-                        style={{ backgroundColor: row.color, width: `${row.percent}%` }}
-                      />
-                    </div>
+                  <ProgressMetricRow
+                    color={row.color}
+                    key={row.label}
+                    label={row.label}
+                    percent={row.percent}
+                    value={row.value}
+                  />
+                ))}
+              </div>
+
+              <div className="grid gap-2.5 sm:grid-cols-3">
+                {operationalAnalytics.capacitySignals.map((item) => (
+                  <div
+                    className={`rounded-control px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.62)] ${item.tone}`}
+                    key={item.label}
+                  >
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] opacity-75">
+                      {item.label}
+                    </p>
+                    <p className="mt-1 font-sans text-[15px] font-bold leading-tight tabular-nums">
+                      {item.value}
+                    </p>
+                    <p className="mt-0.5 truncate text-[10px] font-medium opacity-70">
+                      {item.helper}
+                    </p>
                   </div>
                 ))}
               </div>
 
-              <div className="rounded-card border border-hairline bg-white/85 p-4">
+              <div className="rounded-control border border-hairline bg-white/85 p-3.5">
                 <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
                   Department coverage
                 </p>
@@ -1804,17 +2009,16 @@ export function AdminDashboard() {
         </section>
       ) : null}
 
-      {appointmentsEnabled || doctorsEnabled ? (
-        <section className="grid gap-5 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-          {appointmentsEnabled ? (
-            <DashboardPanel action="View all" actionTo="/appointments" bodyClassName="p-0" title="Today's Appointments">
+      {showTodayAppointmentsPanel ? (
+        <section className="grid items-stretch gap-4 xl:grid-cols-12">
+            <DashboardPanel action="View all" actionTo="/appointments" bodyClassName="p-0" className="xl:col-span-12" title="Today's Appointments">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[680px] border-collapse text-left">
                   <thead className="border-b border-hairline bg-mist">
                     <tr>
                       {['Patient', 'Doctor', 'Time', 'Status', 'Payment'].map((header) => (
                         <th
-                          className="px-5 py-3.5 text-[11px] font-semibold uppercase tracking-[0.07em] text-slate"
+                          className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.07em] text-slate"
                           key={header}
                           scope="col"
                         >
@@ -1841,19 +2045,19 @@ export function AdminDashboard() {
                           key={appointment.id}
                           style={stagger(index, 0.04)}
                         >
-                          <td className="px-5 py-4 text-[14px] font-medium text-ink">
+                          <td className="px-4 py-3 text-[14px] font-medium text-ink">
                             {getAppointmentPatientName(appointment)}
                           </td>
-                          <td className="px-5 py-4 text-[13px] text-slate">
+                          <td className="px-4 py-3 text-[13px] text-slate">
                             {getAppointmentDoctorName(appointment, dashboardData.doctors)}
                           </td>
-                          <td className="px-5 py-4 font-sans text-[12px] font-medium text-ink">
+                          <td className="px-4 py-3 font-sans text-[12px] font-medium text-ink">
                             {formatTime(appointment.appointment_dt)}
                           </td>
-                          <td className="px-5 py-4">
+                          <td className="px-4 py-3">
                             <StatusBadge status={appointment.status} />
                           </td>
-                          <td className="px-5 py-4">
+                          <td className="px-4 py-3">
                             <PaymentBadge status={appointment.payment_status} />
                           </td>
                         </tr>
@@ -1863,64 +2067,12 @@ export function AdminDashboard() {
                 </table>
               </div>
             </DashboardPanel>
-          ) : null}
-
-          {doctorsEnabled ? (
-            <DashboardPanel
-              action={doctorsOnDuty.length > 6 ? `+${doctorsOnDuty.length - 6} more` : null}
-              actionTo={doctorsOnDuty.length > 6 ? '/doctors' : undefined}
-              title="Doctors Today"
-            >
-              {isLoading ? (
-                <div className="space-y-3">
-                  {Array.from({ length: 3 }).map((_, index) => (
-                    <div
-                      className="animate-fade-up flex items-center gap-3 rounded-control border border-hairline px-3 py-3"
-                      key={index}
-                      style={stagger(index, 0.04)}
-                    >
-                      <div className="h-9 w-9 animate-shimmer rounded-full bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
-                      <div className="flex-1 space-y-2">
-                        <div className="h-3 w-28 animate-shimmer rounded-full bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
-                        <div className="h-3 w-20 animate-shimmer rounded-full bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : doctorsOnDuty.length === 0 ? (
-                <DashboardEmptyState title="No check-ins recorded today" />
-              ) : (
-                <div className="space-y-3">
-                  {doctorsOnDuty.slice(0, 6).map((doctor, index) => (
-                    <div
-                      className="animate-fade-up flex items-center gap-3 rounded-control border border-hairline px-3 py-3"
-                      key={doctor.id}
-                      style={stagger(index, 0.04)}
-                    >
-                      <Avatar name={getDoctorName(doctor)} size="sm" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[14px] font-semibold text-ink">
-                          {getDoctorName(doctor)}
-                        </p>
-                        <p className="font-sans text-[11px] text-slate">
-                          Arrived {formatTime(doctor.today_checkin)}
-                        </p>
-                      </div>
-                      <span className="rounded-full bg-brand-light px-2.5 py-1 font-sans text-[11px] font-semibold text-brand">
-                        {Number(doctor.cases_today || 0)} cases
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </DashboardPanel>
-          ) : null}
         </section>
       ) : null}
 
       {appointmentsEnabled ? (
         <DashboardPanel
-          bodyClassName="p-6"
+          bodyClassName="flex h-full flex-col p-4"
           headerContent={
             <div className="inline-flex rounded-full bg-mist p-1">
               {ANALYTICS_PERIODS.map(([period, label]) => (
@@ -1943,122 +2095,114 @@ export function AdminDashboard() {
           title="Appointment Trend"
         >
           {isLoading ? (
-            <div className="h-[260px] rounded-control bg-mist p-4">
+            <div className="h-[190px] rounded-control bg-mist p-4">
               <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
             </div>
           ) : (
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_260px]" ref={chartRef}>
-              <div>
-                <div className="h-[288px]">
+            <div className="grid h-full items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_210px]" ref={chartRef}>
+              <div className="flex h-full flex-col">
+                <div className="mb-3 flex flex-wrap gap-2" aria-label="Appointment trend legend">
+                  {APPOINTMENT_FLOW_KEYS.map(([key, label]) => (
+                    <LegendChip
+                      color={
+                        key === 'scheduled'
+                          ? STATUS_COLORS.scheduled
+                          : key === 'completed'
+                            ? STATUS_COLORS.completed
+                            : STATUS_COLORS.cancelled
+                      }
+                      key={key}
+                      label={label}
+                    />
+                  ))}
+                  <LegendChip color="#10B981" label="7-day average" />
+                </div>
+                <div className="min-h-[188px] flex-1">
                   <ResponsiveContainer height="100%" width="100%">
-                    <ComposedChart data={chartData} margin={{ bottom: 0, left: -18, right: 12, top: 8 }}>
+                    <ComposedChart data={chartData} margin={{ bottom: 0, left: -12, right: 12, top: 8 }}>
                     <defs>
                       <linearGradient id="trendScheduledGradient" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="#38BDF8" />
+                        <stop offset="0%" stopColor="#7DD3FC" />
+                        <stop offset="48%" stopColor="#38BDF8" />
                         <stop offset="100%" stopColor="#0284C7" />
                       </linearGradient>
-                      <linearGradient id="trendInProgressGradient" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="#FBBF24" />
-                        <stop offset="100%" stopColor="#D97706" />
-                      </linearGradient>
                       <linearGradient id="trendCompletedGradient" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="#34D399" />
+                        <stop offset="0%" stopColor="#6EE7B7" />
+                        <stop offset="48%" stopColor="#34D399" />
                         <stop offset="100%" stopColor="#059669" />
                       </linearGradient>
                       <linearGradient id="trendCancelledGradient" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="#FB7185" />
+                        <stop offset="0%" stopColor="#FDA4AF" />
+                        <stop offset="48%" stopColor="#FB7185" />
                         <stop offset="100%" stopColor="#DC2626" />
                       </linearGradient>
+                      <filter id="trendBarDepth" x="-20%" y="-20%" width="140%" height="150%">
+                        <feDropShadow dx="0" dy="6" stdDeviation="4" floodColor="#4338CA" floodOpacity="0.12" />
+                      </filter>
                     </defs>
-                    <CartesianGrid stroke="#E4E8EB" strokeDasharray="4 4" vertical={false} />
+                    <CartesianGrid {...CHART_GRID_PROPS} />
                     <XAxis
                       axisLine={false}
                       dataKey="label"
-                      fontFamily="Outfit, sans-serif"
-                      fontSize={11}
                       interval={getAxisInterval(appointmentPeriod)}
-                      tick={{ fill: '#5B6472', fontWeight: 400 }}
+                      tick={CHART_AXIS_TICK}
                       tickLine={false}
                       tickMargin={12}
                     />
                     <YAxis
                       allowDecimals={false}
                       axisLine={false}
-                      fontFamily="Outfit, sans-serif"
-                      fontSize={11}
-                      tick={{ fill: '#5B6472', fontWeight: 400 }}
+                      tick={CHART_AXIS_TICK}
                       tickLine={false}
                       tickMargin={10}
                     />
-                    <Tooltip content={<DashboardChartTooltip />} cursor={{ fill: '#EEF2FF66' }} />
+                    <Tooltip content={<DashboardChartTooltip />} cursor={CHART_CURSOR} />
                     <Bar
+                      {...CHART_ANIMATION_PROPS}
                       dataKey="scheduled"
                       fill="url(#trendScheduledGradient)"
+                      filter="url(#trendBarDepth)"
                       name="Scheduled"
-                      radius={[8, 8, 4, 4]}
+                      radius={[10, 10, 5, 5]}
                       stackId="flow"
                     />
                     <Bar
-                      dataKey="inProgress"
-                      fill="url(#trendInProgressGradient)"
-                      name="In Progress"
-                      radius={[8, 8, 4, 4]}
-                      stackId="flow"
-                    />
-                    <Bar
+                      {...CHART_ANIMATION_PROPS}
                       dataKey="completed"
                       fill="url(#trendCompletedGradient)"
+                      filter="url(#trendBarDepth)"
                       name="Completed"
-                      radius={[8, 8, 4, 4]}
+                      radius={[10, 10, 5, 5]}
                       stackId="flow"
                     />
                     <Bar
+                      {...CHART_ANIMATION_PROPS}
                       dataKey="cancelled"
                       fill="url(#trendCancelledGradient)"
+                      filter="url(#trendBarDepth)"
                       name="Cancelled"
-                      radius={[8, 8, 4, 4]}
+                      radius={[10, 10, 5, 5]}
                       stackId="flow"
                     />
                     <Line
+                      {...LINE_ANIMATION_PROPS}
+                      activeDot={{ fill: '#10B981', r: 5, stroke: '#FFFFFF', strokeWidth: 2 }}
                       dataKey="rollingAverage"
                       dot={false}
                       name="7-day average"
                       stroke="#10B981"
-                      strokeWidth={3}
+                      strokeWidth={3.25}
                       type="monotone"
                     />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  {APPOINTMENT_FLOW_KEYS.map(([key, label]) => (
-                    <span
-                      className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-[12px] font-semibold text-slate shadow-sm"
-                      key={key}
-                    >
-                      <span
-                        className="h-2.5 w-2.5 rounded-full"
-                        style={{
-                          backgroundColor:
-                            key === 'scheduled'
-                              ? STATUS_COLORS.scheduled
-                              : key === 'inProgress'
-                                ? STATUS_COLORS.in_progress
-                                : key === 'completed'
-                                  ? STATUS_COLORS.completed
-                                  : STATUS_COLORS.cancelled,
-                        }}
-                      />
-                      {label}
-                    </span>
-                  ))}
-                </div>
               </div>
 
-              <aside className="flex flex-col justify-between rounded-card border border-hairline/80 bg-canvas p-5">
+              <aside className="flex h-full flex-col justify-between rounded-card border border-hairline/80 bg-canvas p-3.5">
                 <div className="text-center">
                   <div
-                    className="mx-auto flex h-36 w-36 items-center justify-center rounded-full p-3 shadow-[inset_0_0_0_1px_rgba(228,232,235,0.9)]"
+                    className="mx-auto flex h-24 w-24 items-center justify-center rounded-full p-2.5 shadow-[inset_0_0_0_1px_rgba(228,232,235,0.9)]"
                     style={{
                       background: `conic-gradient(#7C3AED ${completionRate * 3.6}deg, #EDE9FE 0deg)`,
                     }}
@@ -2075,12 +2219,12 @@ export function AdminDashboard() {
                   </div>
                 </div>
 
-                <div className="mt-5 space-y-3">
-                  <div className="flex items-center justify-between rounded-2xl bg-brand-light px-4 py-3">
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center justify-between rounded-control bg-brand-light px-3 py-2.5">
                     <span className="text-[12px] font-semibold text-brand">Open queue</span>
                     <span className="font-sans text-[14px] font-bold text-brand">{todayOpenCount}</span>
                   </div>
-                  <div className="flex items-center justify-between rounded-2xl bg-[#ECFDF5] px-4 py-3">
+                  <div className="flex items-center justify-between rounded-control bg-[#ECFDF5] px-3 py-2.5">
                     <span className="text-[12px] font-semibold text-[#059669]">Completed today</span>
                     <span className="font-sans text-[14px] font-bold text-[#059669]">{todayCompletedCount}</span>
                   </div>
@@ -2091,18 +2235,18 @@ export function AdminDashboard() {
         </DashboardPanel>
       ) : null}
 
-      {appointmentsEnabled || doctorsEnabled || patientsEnabled ? (
-        <section className="grid gap-5 xl:grid-cols-3">
-          {appointmentsEnabled ? (
-            <DashboardPanel bodyClassName="p-0" title="Appointment Status Mix">
+      {showStatusMixPanel || showDoctorWorkloadPanel || showGenderPanel ? (
+        <section className="grid items-stretch gap-4 xl:grid-cols-3">
+          {showStatusMixPanel ? (
+            <DashboardPanel bodyClassName="flex h-full flex-col p-0" title="Appointment Status Mix">
               {isLoading ? (
-                <div className="m-5 h-[300px] rounded-card bg-mist p-4">
+                <div className="m-4 h-[170px] rounded-card bg-mist p-4">
                   <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
                 </div>
               ) : appointmentStatusData.length === 0 ? (
                 <DashboardEmptyState title="No appointment status data yet" />
               ) : (
-                <div className="analytics-surface overflow-hidden p-5">
+                <div className="analytics-surface flex h-full flex-col overflow-hidden p-4">
                   <div className="relative flex items-start justify-between gap-4">
                     <div>
                       <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-slate">
@@ -2120,53 +2264,59 @@ export function AdminDashboard() {
                     </span>
                   </div>
 
-                  <div className="relative mt-5 h-[224px]">
+                  <div className="relative mt-3 min-h-[150px] flex-1">
                     <ResponsiveContainer height="100%" width="100%">
                       <BarChart data={appointmentStatusData} margin={{ bottom: 0, left: -18, right: 8, top: 8 }}>
                         <defs>
                           <linearGradient id="statusGradient-scheduled" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#38BDF8" />
+                            <stop offset="0%" stopColor="#7DD3FC" />
+                            <stop offset="48%" stopColor="#38BDF8" />
                             <stop offset="100%" stopColor="#0284C7" />
                           </linearGradient>
                           <linearGradient id="statusGradient-in_progress" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#F59E0B" />
-                            <stop offset="100%" stopColor="#D97706" />
+                            <stop offset="0%" stopColor="#CBD5E1" />
+                            <stop offset="48%" stopColor="#94A3B8" />
+                            <stop offset="100%" stopColor="#64748B" />
                           </linearGradient>
                           <linearGradient id="statusGradient-completed" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#34D399" />
+                            <stop offset="0%" stopColor="#6EE7B7" />
+                            <stop offset="48%" stopColor="#34D399" />
                             <stop offset="100%" stopColor="#059669" />
                           </linearGradient>
                           <linearGradient id="statusGradient-cancelled" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#FB7185" />
+                            <stop offset="0%" stopColor="#FDA4AF" />
+                            <stop offset="48%" stopColor="#FB7185" />
                             <stop offset="100%" stopColor="#DC2626" />
                           </linearGradient>
+                          <filter id="statusBarDepth" x="-20%" y="-20%" width="140%" height="150%">
+                            <feDropShadow dx="0" dy="7" stdDeviation="5" floodColor="#4338CA" floodOpacity="0.12" />
+                          </filter>
                         </defs>
-                        <CartesianGrid stroke="#E4E8EB" strokeDasharray="4 7" vertical={false} />
+                        <CartesianGrid {...CHART_GRID_PROPS} />
                         <XAxis
                           axisLine={false}
                           dataKey="label"
-                          fontFamily="Outfit, sans-serif"
-                          fontSize={10}
-                          tick={{ fill: '#5B6472' }}
+                          tick={CHART_AXIS_TICK}
                           tickLine={false}
                           tickMargin={12}
                         />
                         <YAxis
                           allowDecimals={false}
                           axisLine={false}
-                          fontFamily="Outfit, sans-serif"
-                          fontSize={10}
-                          tick={{ fill: '#5B6472' }}
+                          tick={CHART_AXIS_TICK}
                           tickLine={false}
                           tickMargin={8}
                         />
-                        <Tooltip content={<DashboardChartTooltip />} cursor={{ fill: '#FFFFFF66' }} />
+                        <Tooltip content={<DashboardChartTooltip />} cursor={CHART_CURSOR} />
                         <Bar
-                          background={{ fill: '#EEF2F7', radius: 10 }}
-                          barSize={44}
+                          {...CHART_ANIMATION_PROPS}
+                          activeBar={{ filter: 'url(#statusBarDepth)', stroke: '#FFFFFF', strokeWidth: 2 }}
+                          barSize={38}
+                          background={{ fill: '#F8FAFC', radius: 14 }}
                           dataKey="count"
+                          filter="url(#statusBarDepth)"
                           name="Appointments"
-                          radius={[12, 12, 8, 8]}
+                          radius={[14, 14, 8, 8]}
                         >
                           {appointmentStatusData.map((item) => (
                             <Cell fill={`url(#statusGradient-${item.status})`} key={item.status} />
@@ -2176,7 +2326,7 @@ export function AdminDashboard() {
                     </ResponsiveContainer>
                   </div>
 
-                  <div className="relative mt-4 space-y-2">
+                  <div className="relative mt-2.5 space-y-1.5">
                     {appointmentStatusData.map((item) => (
                       <div className="flex items-center gap-3" key={item.status}>
                         <span className="w-24 truncate text-[12px] font-semibold text-slate">
@@ -2202,16 +2352,16 @@ export function AdminDashboard() {
             </DashboardPanel>
           ) : null}
 
-          {doctorsEnabled ? (
-            <DashboardPanel bodyClassName="p-0" title="Doctor Workload Today">
+          {showDoctorWorkloadPanel ? (
+            <DashboardPanel bodyClassName="flex h-full flex-col p-0" title="Doctor Workload Today">
               {isLoading ? (
-                <div className="m-5 h-[300px] rounded-card bg-mist p-4">
+                <div className="m-4 h-[170px] rounded-card bg-mist p-4">
                   <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
                 </div>
               ) : doctorWorkloadData.length === 0 ? (
                 <DashboardEmptyState title="No workload data yet" />
               ) : (
-                <div className="analytics-surface overflow-hidden p-5">
+                <div className="analytics-surface flex h-full flex-col overflow-hidden p-4">
                   <div className="relative flex items-start justify-between gap-4">
                     <div>
                       <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-slate">
@@ -2229,49 +2379,52 @@ export function AdminDashboard() {
                     </span>
                   </div>
 
-                  <div className="relative mt-5 h-[224px]">
+                  <div className="relative mt-3 min-h-[150px] flex-1">
                     <ResponsiveContainer height="100%" width="100%">
                       <BarChart data={doctorWorkloadData} margin={{ bottom: 0, left: -18, right: 8, top: 8 }}>
                         <defs>
                           <linearGradient id="workloadGradient" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#7C3AED" />
+                            <stop offset="0%" stopColor="#A78BFA" />
+                            <stop offset="36%" stopColor="#7C3AED" />
                             <stop offset="56%" stopColor="#4338CA" />
                             <stop offset="100%" stopColor="#312E81" />
                           </linearGradient>
+                          <filter id="workloadBarDepth" x="-20%" y="-20%" width="140%" height="150%">
+                            <feDropShadow dx="0" dy="7" stdDeviation="5" floodColor="#4338CA" floodOpacity="0.18" />
+                          </filter>
                         </defs>
-                        <CartesianGrid stroke="#E4E8EB" strokeDasharray="4 7" vertical={false} />
+                        <CartesianGrid {...CHART_GRID_PROPS} />
                         <XAxis
                           axisLine={false}
                           dataKey="label"
-                          fontFamily="Outfit, sans-serif"
-                          fontSize={10}
-                          tick={{ fill: '#5B6472' }}
+                          tick={CHART_AXIS_TICK}
                           tickLine={false}
                           tickMargin={12}
                         />
                         <YAxis
                           allowDecimals={false}
                           axisLine={false}
-                          fontFamily="Outfit, sans-serif"
-                          fontSize={10}
-                          tick={{ fill: '#5B6472' }}
+                          tick={CHART_AXIS_TICK}
                           tickLine={false}
                           tickMargin={8}
                         />
-                        <Tooltip content={<DashboardChartTooltip />} cursor={{ fill: '#EEF2FF66' }} />
+                        <Tooltip content={<DashboardChartTooltip />} cursor={CHART_CURSOR} />
                         <Bar
-                          background={{ fill: '#EEF2F7', radius: 10 }}
-                          barSize={42}
+                          {...CHART_ANIMATION_PROPS}
+                          activeBar={{ filter: 'url(#workloadBarDepth)', stroke: '#FFFFFF', strokeWidth: 2 }}
+                          barSize={38}
+                          background={{ fill: '#F8FAFC', radius: 14 }}
                           dataKey="cases"
                           fill="url(#workloadGradient)"
+                          filter="url(#workloadBarDepth)"
                           name="Cases"
-                          radius={[12, 12, 8, 8]}
+                          radius={[14, 14, 8, 8]}
                         />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
 
-                  <div className="relative mt-4 grid gap-2">
+                  <div className="relative mt-2.5 grid gap-1.5">
                     {doctorWorkloadData.slice(0, 3).map((doctor, index) => (
                       <div className="flex items-center gap-3" key={doctor.label}>
                         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-light font-sans text-[11px] font-bold text-brand">
@@ -2297,16 +2450,16 @@ export function AdminDashboard() {
             </DashboardPanel>
           ) : null}
 
-          {patientsEnabled ? (
-            <DashboardPanel bodyClassName="p-0" title="Patients by Gender">
+          {showGenderPanel ? (
+            <DashboardPanel bodyClassName="flex h-full flex-col p-0" title="Patients by Gender">
               {isLoading ? (
-                <div className="m-5 h-[300px] rounded-card bg-mist p-4">
+                <div className="m-4 h-[170px] rounded-card bg-mist p-4">
                   <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
                 </div>
               ) : patientGenderData.length === 0 ? (
                 <DashboardEmptyState title="No patient gender data yet" />
               ) : (
-                <div className="analytics-surface overflow-hidden p-5">
+                <div className="analytics-surface flex h-full flex-col overflow-hidden p-4">
                   <div className="relative flex items-start justify-between gap-4">
                     <div>
                       <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-slate">
@@ -2324,32 +2477,41 @@ export function AdminDashboard() {
                     </span>
                   </div>
 
-                  <div className="relative mt-2 h-[234px]">
+                  <div className="relative mt-2 min-h-[150px] flex-1">
                     <ResponsiveContainer height="100%" width="100%">
                       <PieChart>
                         <defs>
                           <linearGradient id="genderGradient-Female" x1="0" x2="1" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#2DD4BF" />
+                            <stop offset="0%" stopColor="#5EEAD4" />
+                            <stop offset="48%" stopColor="#2DD4BF" />
                             <stop offset="100%" stopColor="#0D9488" />
                           </linearGradient>
                           <linearGradient id="genderGradient-Male" x1="0" x2="1" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#7C3AED" />
+                            <stop offset="0%" stopColor="#A78BFA" />
+                            <stop offset="48%" stopColor="#7C3AED" />
                             <stop offset="100%" stopColor="#4338CA" />
                           </linearGradient>
                           <linearGradient id="genderGradient-Other" x1="0" x2="1" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#FBBF24" />
-                            <stop offset="100%" stopColor="#F59E0B" />
+                            <stop offset="0%" stopColor="#CBD5E1" />
+                            <stop offset="48%" stopColor="#94A3B8" />
+                            <stop offset="100%" stopColor="#64748B" />
                           </linearGradient>
+                          <filter id="genderDonutDepth" x="-20%" y="-20%" width="140%" height="140%">
+                            <feDropShadow dx="0" dy="8" stdDeviation="5" floodColor="#14181F" floodOpacity="0.13" />
+                          </filter>
                         </defs>
                         <Tooltip content={<DashboardChartTooltip />} />
                         <Pie
+                          {...CHART_ANIMATION_PROPS}
+                          cornerRadius={8}
                           data={patientGenderData}
                           dataKey="count"
-                          innerRadius={72}
+                          filter="url(#genderDonutDepth)"
+                          innerRadius={46}
                           label={false}
                           labelLine={false}
                           nameKey="label"
-                          outerRadius={104}
+                          outerRadius={68}
                           paddingAngle={4}
                           startAngle={90}
                           endAngle={-270}
@@ -2373,7 +2535,7 @@ export function AdminDashboard() {
                     </div>
                   </div>
 
-                  <div className="relative mt-2 space-y-2">
+                  <div className="relative mt-2 space-y-1.5">
                     {patientGenderData.map((item) => (
                       <div
                         className="grid grid-cols-[78px_minmax(0,1fr)_42px] items-center gap-3"
@@ -2408,11 +2570,12 @@ export function AdminDashboard() {
         </section>
       ) : null}
 
-      <section className="grid gap-5 xl:grid-cols-2">
-        {patientsEnabled ? (
-          <DashboardPanel action="View all" actionTo="/patients" title="Recent Patients">
+      {showRecentPatientsPanel || showStaffPanel ? (
+      <section className="grid items-stretch gap-4 xl:grid-cols-2">
+        {showRecentPatientsPanel ? (
+          <DashboardPanel action="View all" actionTo="/patients" bodyClassName="flex h-full flex-col p-4" title="Recent Patients">
             {isLoading ? (
-              <div className="space-y-3">
+              <div className="grid content-start gap-2.5">
                 {Array.from({ length: 5 }).map((_, index) => (
                   <div
                     className="animate-fade-up flex items-center gap-3 rounded-control border border-hairline px-3 py-3"
@@ -2430,10 +2593,10 @@ export function AdminDashboard() {
             ) : recentPatients.length === 0 ? (
               <DashboardEmptyState title="No patients yet" />
             ) : (
-              <div className="space-y-3">
+              <div className="grid content-start gap-2.5">
                 {recentPatients.map((patient, index) => (
                   <div
-                    className="animate-fade-up flex items-center gap-3 rounded-control border border-hairline px-3 py-3"
+                    className="animate-fade-up flex items-center gap-3 rounded-control border border-hairline px-3 py-2.5"
                     key={patient.id}
                     style={stagger(index, 0.04)}
                   >
@@ -2456,8 +2619,9 @@ export function AdminDashboard() {
           </DashboardPanel>
         ) : null}
 
-        {staffEnabled ? (
+        {showStaffPanel ? (
           <DashboardPanel
+            bodyClassName="flex h-full flex-col p-4"
             footer={
               dashboardData.totalStaff > 5 ? (
                 <Link
@@ -2470,8 +2634,8 @@ export function AdminDashboard() {
             }
             title="Staff"
           >
-            <div className="mb-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-control bg-mist px-4 py-3">
+            <div className="mb-3 grid gap-2.5 sm:grid-cols-2">
+              <div className="rounded-control bg-mist px-3 py-2.5">
                 <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
                   Active
                 </p>
@@ -2479,7 +2643,7 @@ export function AdminDashboard() {
                   {isLoading ? '-' : activeStaff.length}
                 </p>
               </div>
-              <div className="rounded-control bg-mist px-4 py-3">
+              <div className="rounded-control bg-mist px-3 py-2.5">
                 <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
                   On Leave / Inactive
                 </p>
@@ -2490,7 +2654,7 @@ export function AdminDashboard() {
             </div>
 
             {isLoading ? (
-              <div className="space-y-3">
+              <div className="grid content-start gap-2.5">
                 {Array.from({ length: 3 }).map((_, index) => (
                   <div
                     className="animate-fade-up flex items-center gap-3 rounded-control border border-hairline px-3 py-3"
@@ -2507,10 +2671,10 @@ export function AdminDashboard() {
             ) : dashboardData.staff.length === 0 ? (
               <DashboardEmptyState title="No staff records yet" />
             ) : (
-              <div className="space-y-3">
+              <div className="grid content-start gap-2.5">
                 {dashboardData.staff.slice(0, 5).map((staffMember, index) => (
                   <div
-                    className="animate-fade-up flex items-center gap-3 rounded-control border border-hairline px-3 py-3"
+                    className="animate-fade-up flex items-center gap-3 rounded-control border border-hairline px-3 py-2.5"
                     key={staffMember.id}
                     style={stagger(index, 0.04)}
                   >
@@ -2528,6 +2692,7 @@ export function AdminDashboard() {
           </DashboardPanel>
         ) : null}
       </section>
+      ) : null}
     </div>
   )
 }

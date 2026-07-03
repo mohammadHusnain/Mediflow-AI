@@ -14,6 +14,7 @@ import PatientSummaryPanel from '@features/patients/components/PatientSummaryPan
 import SkeletonRow from '@shared/components/SkeletonRow'
 import { useToast } from '@shared/components/Toast'
 import { usePermission } from '@shared/lib/usePermission'
+import { useAuth } from '@shared/context/AuthContext'
 import {
   getAppointmentPatientId,
   getBackendError,
@@ -34,7 +35,8 @@ function getEmbeddedAppointmentPatient(appointment) {
 
 export function AppointmentEdit() {
   const { id } = useParams()
-  const { canWrite } = usePermission()
+  const { canWrite, role } = usePermission()
+  const { user } = useAuth()
   const toast = useToast()
   const navigate = useNavigate()
   const [appointment, setAppointment] = useState(null)
@@ -43,6 +45,8 @@ export function AppointmentEdit() {
   const [isLoading, setIsLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [formError, setFormError] = useState('')
+  const isDoctor = role?.slug === 'doctor'
+  const isOwnAppointment = isDoctor && appointment?.doctor === user?.id
   const {
     formState: { errors, isSubmitting },
     handleSubmit,
@@ -99,7 +103,7 @@ export function AppointmentEdit() {
     })
   }, [loadAppointment])
 
-  if (!canWrite('appointments')) {
+  if (!canWrite('appointments') && !isOwnAppointment && appointment !== null) {
     return <Navigate replace to={`/appointments/${id}`} />
   }
 
@@ -153,10 +157,10 @@ export function AppointmentEdit() {
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-[22px] font-bold text-ink">
-              Edit Appointment
+              {isOwnAppointment ? 'Medical Notes' : 'Edit Appointment'}
             </h1>
             <p className="mt-1 text-[14px] font-normal text-slate">
-              Update visit details and payment status
+              {isOwnAppointment ? 'Record diagnosis, treatment and medications' : 'Update visit details and payment status'}
             </p>
           </div>
           <Link
@@ -190,6 +194,7 @@ export function AppointmentEdit() {
                 requireFuture={false}
                 setValue={setValue}
                 watch={watch}
+                doctorOnly={isOwnAppointment}
               />
             </div>
 

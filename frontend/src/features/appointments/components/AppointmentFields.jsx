@@ -9,7 +9,10 @@ import {
 import {
   getRecordId,
   getDoctorName,
+  normalizeStringArray,
 } from '@shared/lib/records'
+import { CURRENCIES } from '@shared/lib/currency'
+import TagInput from '@features/patients/components/TagInput'
 import {
   getTemperatureWarning,
   validateBloodPressure,
@@ -20,10 +23,17 @@ export const EMPTY_APPOINTMENT_FORM = {
   doctor: '',
   appointment_dt: '',
   reason: '',
+  current_condition: '',
+  diagnosis: '',
+  treatment_plan: '',
+  medications_prescribed: [],
+  consultation_fee: '',
+  currency: 'PKR',
   temperature: '',
   blood_pressure: '',
   notes: '',
   payment_status: 'unpaid',
+  payment_method: '',
 }
 
 export function getAppointmentFormDefaults(appointment = null) {
@@ -38,10 +48,17 @@ export function getAppointmentFormDefaults(appointment = null) {
       '',
     appointment_dt: toDatetimeLocalValue(appointment.appointment_dt),
     reason: appointment.reason || '',
+    current_condition: appointment.current_condition || '',
+    diagnosis: appointment.diagnosis || '',
+    treatment_plan: appointment.treatment_plan || '',
+    medications_prescribed: normalizeStringArray(appointment.medications_prescribed || appointment.medications),
+    consultation_fee: appointment.consultation_fee ?? '',
+    currency: appointment.currency || 'PKR',
     temperature: appointment.temperature || '',
     blood_pressure: appointment.blood_pressure || '',
     notes: appointment.notes || appointment.additional_notes || '',
     payment_status: appointment.payment_status || 'unpaid',
+    payment_method: appointment.payment_method || '',
   }
 }
 
@@ -50,11 +67,28 @@ export function toAppointmentPayload(values) {
     doctor: values.doctor,
     appointment_dt: values.appointment_dt,
     reason: values.reason?.trim() || '',
+    current_condition: values.current_condition?.trim() || '',
+    diagnosis: values.diagnosis?.trim() || '',
+    treatment_plan: values.treatment_plan?.trim() || '',
+    medications_prescribed: normalizeStringArray(values.medications_prescribed),
+    consultation_fee: values.consultation_fee ? Number(values.consultation_fee) : undefined,
     temperature: values.temperature ? String(values.temperature) : '',
     blood_pressure: values.blood_pressure?.trim() || '',
     notes: values.notes?.trim() || '',
     payment_status: values.payment_status || 'unpaid',
+    payment_method: values.payment_method || '',
   }
+}
+
+export function toAppointmentBookingPayload(values) {
+  const payload = toAppointmentPayload(values)
+
+  delete payload.current_condition
+  delete payload.diagnosis
+  delete payload.treatment_plan
+  delete payload.medications_prescribed
+
+  return payload
 }
 
 export function toDatetimeLocalValue(value) {
@@ -80,13 +114,17 @@ export function AppointmentFields({
   register,
   requireFuture = true,
   setValue,
+  showMedicalNotes = true,
   watch,
+  doctorOnly = false,
 }) {
   const temperature = watch('temperature')
   const paymentStatus = watch('payment_status')
   const temperatureWarning = getTemperatureWarning(temperature)
 
   return (
+    <>
+    {!doctorOnly && (
     <FormSection title="Visit Details">
       <FormField error={errors.doctor?.message} label="Doctor">
         <select
@@ -128,6 +166,35 @@ export function AppointmentFields({
         </FormField>
       </div>
 
+      <FormField error={errors.consultation_fee?.message} label="Consultation Fee">
+        <div className="flex gap-2">
+          <select
+            className="h-11 w-[80px] shrink-0 rounded-control border border-hairline bg-canvas px-1.5 text-[11px] font-medium text-ink outline-none transition-colors focus:border-brand"
+            {...register('currency')}
+          >
+            {CURRENCIES.map((c) => (
+              <option key={c.code} value={c.code}>{c.symbol}</option>
+            ))}
+          </select>
+          <input
+            className={getFieldClass(errors.consultation_fee?.message, 'font-sans flex-1')}
+            min="0"
+            placeholder="1500"
+            step="0.01"
+            type="number"
+            {...register('consultation_fee', {
+              validate: (value) => {
+                const num = Number(value)
+                if (!value || Number.isNaN(num) || num < 0) {
+                  return 'Consultation fee is required and must be ≥ 0.'
+                }
+                return true
+              },
+            })}
+          />
+        </div>
+      </FormField>
+
       <FormField error={errors.temperature?.message} label="Temperature (C)" optional>
         <input
           className={getFieldClass(errors.temperature?.message, 'font-sans')}
@@ -165,7 +232,63 @@ export function AppointmentFields({
           />
         </FormField>
       </div>
+    </FormSection>
+    )}
 
+    {showMedicalNotes ? (
+    <FormSection title="Medical Notes">
+      <div className="md:col-span-2">
+        <FormField label="Current Medical Condition" optional>
+          <textarea
+            className={getFieldClass(false, 'min-h-[72px] resize-y')}
+            placeholder="Patient's current condition and symptoms..."
+            rows={2}
+            {...register('current_condition')}
+          />
+        </FormField>
+      </div>
+
+      <div className="md:col-span-2">
+        <FormField label="Diagnosis" optional>
+          <textarea
+            className={getFieldClass(false, 'min-h-[72px] resize-y')}
+            placeholder="Doctor's diagnosis..."
+            rows={2}
+            {...register('diagnosis')}
+          />
+        </FormField>
+      </div>
+
+      <div className="md:col-span-2">
+        <FormField label="Treatment Plan" optional>
+          <textarea
+            className={getFieldClass(false, 'min-h-[72px] resize-y')}
+            placeholder="Prescribed treatment plan..."
+            rows={2}
+            {...register('treatment_plan')}
+          />
+        </FormField>
+      </div>
+
+      <div className="md:col-span-2">
+        <FormField label="Medications Prescribed" optional>
+          <TagInput
+            placeholder="Type medication and press Enter"
+            value={watch('medications_prescribed') || []}
+            onChange={(nextValue) =>
+              setValue('medications_prescribed', nextValue, {
+                shouldDirty: true,
+                shouldValidate: true,
+              })
+            }
+          />
+        </FormField>
+      </div>
+    </FormSection>
+    ) : null}
+
+    {!doctorOnly && (
+    <FormSection title="Payment">
       <div className="md:col-span-2">
         <FormField label="Payment Status">
           <PaymentToggle
@@ -180,7 +303,22 @@ export function AppointmentFields({
           />
         </FormField>
       </div>
+
+      <FormField label="Payment Method" optional>
+        <select
+          className={getFieldClass(false)}
+          {...register('payment_method')}
+        >
+          <option value="">Select method</option>
+          <option value="cash">Cash</option>
+          <option value="card">Card</option>
+          <option value="online">Online Transfer</option>
+          <option value="insurance">Insurance</option>
+        </select>
+      </FormField>
     </FormSection>
+    )}
+    </>
   )
 }
 

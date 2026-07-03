@@ -147,17 +147,19 @@ export function DoctorsList() {
   const navigate = useNavigate()
   const toast = useToast()
   const { canDelete: canDeleteRecords, canWrite, isAdmin } = usePermission()
-  const [doctors, setDoctors] = useState([])
-  const [page, setPage] = useState(1)
-  const [total, setTotal] = useState(0)
-  const [isLoading, setIsLoading] = useState(true)
-  const [loadError, setLoadError] = useState('')
+
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [page, setPage] = useState(1)
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [doctors, setDoctors] = useState([])
+  const [total, setTotal] = useState(0)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const debouncedSearch = useDebounce(searchQuery, 300)
-  const canCreateDoctor = canWrite('doctors')
+
+  const canCreateDoctor = isAdmin
   const canEdit = isAdmin
   const canDelete = canDeleteRecords()
   const hasActiveFilters = debouncedSearch.trim() || statusFilter !== 'all'

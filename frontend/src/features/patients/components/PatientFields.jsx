@@ -15,10 +15,12 @@ import {
 } from '@shared/lib/validation'
 import { getPatients } from '@shared/services/api'
 import { FormField, FormSection, getFieldClass } from '@shared/components/FormPrimitives'
+import PhoneInput from '@shared/components/PhoneInput'
 import TagInput from './TagInput'
 
 export const EMPTY_PATIENT_FORM = {
-  full_name: '',
+  first_name: '',
+  last_name: '',
   date_of_birth: '',
   sex: '',
   marital_status: '',
@@ -51,8 +53,14 @@ export function getPatientFormDefaults(patient = null) {
     return EMPTY_PATIENT_FORM
   }
 
+  const fullName = patient.full_name || patient.name || ''
+  const nameParts = fullName.trim().split(/\s+/)
+  const firstName = patient.first_name || nameParts[0] || ''
+  const lastName = patient.last_name || nameParts.slice(1).join(' ') || ''
+
   return {
-    full_name: patient.full_name || patient.name || '',
+    first_name: firstName,
+    last_name: lastName,
     date_of_birth: patient.date_of_birth || patient.dob || '',
     sex: patient.sex || '',
     marital_status: patient.marital_status || '',
@@ -74,7 +82,7 @@ export function getPatientFormDefaults(patient = null) {
 
 export function toPatientPayload(values) {
   return {
-    full_name: values.full_name.trim(),
+    full_name: `${String(values.first_name || '').trim()} ${String(values.last_name || '').trim()}`.trim(),
     date_of_birth: values.date_of_birth,
     sex: values.sex,
     marital_status: values.marital_status,
@@ -152,11 +160,18 @@ export function PatientFields({
   const dob = watch('date_of_birth')
   const age = computeAge(dob)
   const phoneError = errors.phone?.message
-  const nameRegistration = register('full_name', {
-    required: 'Full name is required.',
+  const nameRegistration = register('first_name', {
+    required: 'First name is required.',
     minLength: {
       value: 2,
-      message: 'Full name must be at least 2 characters.',
+      message: 'First name must be at least 2 characters.',
+    },
+  })
+  const lastNameRegistration = register('last_name', {
+    required: 'Last name is required.',
+    minLength: {
+      value: 2,
+      message: 'Last name must be at least 2 characters.',
     },
   })
   const phoneRegistration = register('phone', {
@@ -173,10 +188,12 @@ export function PatientFields({
       return
     }
 
-    const fullName = watch('full_name')
+    const firstName = watch('first_name')
+    const lastName = watch('last_name')
+    const fullName = `${String(firstName || '').trim()} ${String(lastName || '').trim()}`.trim()
     const phone = String(watch('phone') || '').trim()
 
-    if (!String(fullName || '').trim() || !phone || validatePhone(phone)) {
+    if (!fullName || !phone || validatePhone(phone)) {
       return
     }
 
@@ -195,6 +212,12 @@ export function PatientFields({
 
   function handleNameBlur(event) {
     nameRegistration.onBlur(event)
+    duplicateTouchedRef.current.name = true
+    maybeCheckDuplicatePatient()
+  }
+
+  function handleLastNameBlur(event) {
+    lastNameRegistration.onBlur(event)
     duplicateTouchedRef.current.name = true
     maybeCheckDuplicatePatient()
   }
@@ -237,6 +260,14 @@ export function PatientFields({
     }
   }
 
+  function handlePhoneChange(event) {
+    setValue('phone', event.target.value, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    })
+  }
+
   function setTagValue(fieldName, nextValue) {
     setValue(fieldName, nextValue, {
       shouldDirty: true,
@@ -248,13 +279,23 @@ export function PatientFields({
   return (
     <div className="space-y-8">
       <FormSection title="Personal Information">
-        <FormField error={errors.full_name?.message} label="Full Name">
+        <FormField error={errors.first_name?.message} label="First Name">
           <input
-            className={getFieldClass(errors.full_name?.message)}
-            placeholder="Patient full name"
+            className={getFieldClass(errors.first_name?.message)}
+            placeholder="John"
             type="text"
             {...nameRegistration}
             onBlur={handleNameBlur}
+          />
+        </FormField>
+
+        <FormField error={errors.last_name?.message} label="Last Name">
+          <input
+            className={getFieldClass(errors.last_name?.message)}
+            placeholder="Doe"
+            type="text"
+            {...lastNameRegistration}
+            onBlur={handleLastNameBlur}
           />
         </FormField>
 
@@ -291,19 +332,28 @@ export function PatientFields({
 
         <FormField
           error={phoneError}
-          hint="Format: +[country code][number] · e.g. +923001234567"
+          hint="Select a country and enter the local number. The saved value uses international E.164 format."
           label="Phone"
         >
-          <div className="relative">
+          <div>
             <input
-              className={getFieldClass(phoneError, 'pr-9 font-sans')}
-              placeholder="+923001234567"
-              type="tel"
               {...phoneRegistration}
+              readOnly
+              type="hidden"
+              value={watch('phone') || ''}
+            />
+            <PhoneInput
+              error={phoneError}
+              name="phone"
               onBlur={handlePhoneBlur}
+              onChange={handlePhoneChange}
+              required
+              value={watch('phone') || ''}
             />
             {checkingPhone ? (
-              <span className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-brand/20 border-t-brand animate-spin" />
+              <p className="mt-1.5 text-[12px] font-medium text-brand">
+                Checking patient records...
+              </p>
             ) : null}
           </div>
         </FormField>

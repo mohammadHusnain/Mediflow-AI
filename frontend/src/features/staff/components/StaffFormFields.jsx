@@ -1,6 +1,8 @@
 /* src/features/staff/components/StaffFormFields.jsx - Shared staff form controls. */
 import { useMemo, useState } from 'react'
 
+import PhoneInput from '@shared/components/PhoneInput'
+import { CURRENCIES } from '@shared/lib/currency'
 import {
   FieldError,
   FormField,
@@ -11,6 +13,27 @@ import { getStaffJoiningDateWarning } from '@shared/lib/staffUtils'
 
 const OTHER_ROLE_VALUE = '__other__'
 const EMAIL_HELPER_TEXT = 'Login credentials will be sent to this email address.'
+
+const DEFAULT_SYSTEM_ROLES = [
+  { name: 'Admin', slug: 'admin', is_system: true },
+  { name: 'Doctor', slug: 'doctor', is_system: true },
+]
+
+function mergeRoleOptions(apiRoles) {
+  if (!Array.isArray(apiRoles) || apiRoles.length === 0) {
+    return DEFAULT_SYSTEM_ROLES
+  }
+
+  const merged = [...DEFAULT_SYSTEM_ROLES]
+
+  for (const role of apiRoles) {
+    if (!DEFAULT_SYSTEM_ROLES.some((defaultRole) => defaultRole.name === role.name)) {
+      merged.push(role)
+    }
+  }
+
+  return merged
+}
 
 export function StaffFormFields({
   data,
@@ -23,21 +46,27 @@ export function StaffFormFields({
   touched = {},
 }) {
   const [showCustomRole, setShowCustomRole] = useState(false)
+  const resolvedRoleOptions = useMemo(() => {
+    if (roleOptions === null) return null
+    if (roleOptionsFailed || roleOptions === undefined) return DEFAULT_SYSTEM_ROLES
+    return mergeRoleOptions(roleOptions)
+  }, [roleOptions, roleOptionsFailed])
+
   const roleValue = String(data.role || '')
   const emailReadOnly = data.has_account === true
   const joinDateWarning = !errors.joining_date
     ? getStaffJoiningDateWarning(data.joining_date)
     : ''
   const matchedRoleName = useMemo(() => {
-    if (!Array.isArray(roleOptions)) {
+    if (!Array.isArray(resolvedRoleOptions)) {
       return ''
     }
 
-    return roleOptions.find((role) => role.name === roleValue)?.name || ''
-  }, [roleOptions, roleValue])
+    return resolvedRoleOptions.find((role) => role.name === roleValue)?.name || ''
+  }, [resolvedRoleOptions, roleValue])
   const usingCustomRole =
     showCustomRole ||
-    (Array.isArray(roleOptions) && Boolean(roleValue) && !matchedRoleName)
+    (Array.isArray(resolvedRoleOptions) && Boolean(roleValue) && !matchedRoleName)
 
   function emitRoleChange(value) {
     onChange({
@@ -66,7 +95,7 @@ export function StaffFormFields({
   }
 
   function renderRoleControl() {
-    if (roleOptions === null && !roleOptionsFailed) {
+    if (resolvedRoleOptions === null) {
       return (
         <select
           className={getFieldClass('', 'text-slate')}
@@ -76,27 +105,6 @@ export function StaffFormFields({
         >
           <option value="">Loading roles...</option>
         </select>
-      )
-    }
-
-    if (roleOptionsFailed || roleOptions === undefined) {
-      return (
-        <>
-          <input
-            className={getFieldClass(touched.role ? errors.role : '')}
-            name="role"
-            onBlur={onBlur}
-            onChange={onChange}
-            placeholder="e.g. Nurse, Ward Boy, Sweeper, Security Guard..."
-            type="text"
-            value={data.role}
-          />
-          {roleOptionsFailed ? (
-            <p className="mt-1.5 text-[12px] text-slate">
-              Could not load role suggestions.
-            </p>
-          ) : null}
-        </>
       )
     }
 
@@ -110,7 +118,7 @@ export function StaffFormFields({
           value={usingCustomRole ? OTHER_ROLE_VALUE : matchedRoleName}
         >
           <option value="">Select a role...</option>
-          {roleOptions.map((role) => (
+          {resolvedRoleOptions.map((role) => (
             <option key={role.id || role.slug || role.name} value={role.name}>
               {role.name}
             </option>
@@ -129,6 +137,12 @@ export function StaffFormFields({
             value={data.role}
           />
         ) : null}
+
+        {roleOptionsFailed ? (
+          <p className="mt-1.5 text-[12px] text-slate">
+            Could not load additional role suggestions.
+          </p>
+        ) : null}
       </div>
     )
   }
@@ -137,17 +151,32 @@ export function StaffFormFields({
     <>
       <FormSection title="Personal Details">
         <FormField
-          error={touched.full_name ? errors.full_name : ''}
-          label="Full Name"
+          error={touched.first_name ? errors.first_name : ''}
+          label="First Name"
         >
           <input
-            className={getFieldClass(touched.full_name ? errors.full_name : '')}
-            name="full_name"
+            className={getFieldClass(touched.first_name ? errors.first_name : '')}
+            name="first_name"
             onBlur={onBlur}
             onChange={onChange}
-            placeholder="Aisha Khan"
+            placeholder="Aisha"
             type="text"
-            value={data.full_name}
+            value={data.first_name || ''}
+          />
+        </FormField>
+
+        <FormField
+          error={touched.last_name ? errors.last_name : ''}
+          label="Last Name"
+        >
+          <input
+            className={getFieldClass(touched.last_name ? errors.last_name : '')}
+            name="last_name"
+            onBlur={onBlur}
+            onChange={onChange}
+            placeholder="Khan"
+            type="text"
+            value={data.last_name || ''}
           />
         </FormField>
 
@@ -171,13 +200,11 @@ export function StaffFormFields({
         </FormField>
 
         <FormField error={touched.phone ? errors.phone : ''} label="Phone">
-          <input
-            className={getFieldClass(touched.phone ? errors.phone : '')}
+          <PhoneInput
+            error={touched.phone ? errors.phone : ''}
             name="phone"
             onBlur={onBlur}
             onChange={onChange}
-            placeholder="+923001234567"
-            type="tel"
             value={data.phone}
           />
         </FormField>
@@ -268,6 +295,86 @@ export function StaffFormFields({
         ) : null}
       </FormSection>
 
+      {roleValue.toLowerCase() === 'doctor' ? (
+        <FormSection title="Doctor Profile">
+          <FormField
+            error={touched.qualification ? errors.qualification : ''}
+            label="Qualification"
+          >
+            <input
+              className={getFieldClass(touched.qualification ? errors.qualification : '')}
+              name="qualification"
+              onBlur={onBlur}
+              onChange={onChange}
+              placeholder="e.g. MBBS, FCPS"
+              type="text"
+              value={data.qualification || ''}
+            />
+          </FormField>
+
+          <FormField
+            error={touched.specializations ? errors.specializations : ''}
+            hint="Comma-separated specializations"
+            label="Specializations"
+          >
+            <input
+              className={getFieldClass(touched.specializations ? errors.specializations : '')}
+              name="specializations"
+              onBlur={onBlur}
+              onChange={(event) => {
+                const raw = event.target.value
+                onChange({
+                  target: {
+                    name: 'specializations',
+                    value: raw
+                      .split(',')
+                      .map((s) => s.trim())
+                      .filter(Boolean),
+                  },
+                })
+              }}
+              placeholder="Cardiology, Neurology, Pediatrics"
+              type="text"
+              value={(data.specializations || []).join(', ')}
+            />
+          </FormField>
+
+          <FormField
+            error={touched.experience_years ? errors.experience_years : ''}
+            label="Experience (Years)"
+          >
+            <input
+              className={getFieldClass(touched.experience_years ? errors.experience_years : '')}
+              max="60"
+              min="0"
+              name="experience_years"
+              onBlur={onBlur}
+              onChange={onChange}
+              placeholder="5"
+              type="number"
+              value={data.experience_years ?? ''}
+            />
+          </FormField>
+
+          <FormField
+            error={touched.doctor_status ? errors.doctor_status : ''}
+            label="Doctor Status"
+          >
+            <select
+              className={getFieldClass(touched.doctor_status ? errors.doctor_status : '')}
+              name="doctor_status"
+              onBlur={onBlur}
+              onChange={onChange}
+              value={data.doctor_status || 'active'}
+            >
+              <option value="active">Active</option>
+              <option value="on_leave">On Leave</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </FormField>
+        </FormSection>
+      ) : null}
+
       <FormSection title="Working Hours">
         <FormField
           error={touched.shift_start ? errors.shift_start : ''}
@@ -319,6 +426,148 @@ export function StaffFormFields({
             />
           </FormField>
         </div>
+      </FormSection>
+
+      <FormSection title="Salary Configuration" optional>
+        <FormField label="Currency" optional>
+          <select
+            className={getFieldClass('')}
+            name="salary_currency"
+            onBlur={onBlur}
+            onChange={onChange}
+            value={data.salary_currency || 'PKR'}
+          >
+            {CURRENCIES.map((c) => (
+              <option key={c.code} value={c.code}>{c.symbol} {c.code} - {c.name}</option>
+            ))}
+          </select>
+        </FormField>
+
+        <FormField label="Salary Type" optional>
+          <select
+            className={getFieldClass('')}
+            name="salary_type"
+            onBlur={onBlur}
+            onChange={onChange}
+            value={data.salary_type || 'fixed'}
+          >
+            <option value="fixed">Fixed</option>
+            <option value="commission">Commission-Based (doctors only)</option>
+          </select>
+        </FormField>
+
+        <FormField label="Base Salary" optional>
+          <input
+            className={getFieldClass('', 'font-sans')}
+            min="0"
+            name="base_salary"
+            onBlur={onBlur}
+            onChange={onChange}
+            placeholder="50000"
+            type="number"
+            value={data.base_salary || ''}
+          />
+        </FormField>
+
+        {(data.salary_type || 'fixed') === 'commission' ? (
+          <>
+            <div>
+              <div className="flex gap-4 mb-3">
+                <label className="flex items-center gap-2 text-[13px] text-ink cursor-pointer">
+                  <input
+                    type="radio"
+                    name="salary_commission_mode"
+                    checked={(data.salary_commission_mode || 'rate') === 'rate'}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        onChange({ target: { name: 'salary_commission_mode', value: 'rate' } })
+                      }
+                    }}
+                  />
+                  Rate (% of fee)
+                </label>
+                <label className="flex items-center gap-2 text-[13px] text-ink cursor-pointer">
+                  <input
+                    type="radio"
+                    name="salary_commission_mode"
+                    checked={data.salary_commission_mode === 'flat'}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        onChange({ target: { name: 'salary_commission_mode', value: 'flat' } })
+                      }
+                    }}
+                  />
+                  Flat per appointment
+                </label>
+              </div>
+              {(data.salary_commission_mode || 'rate') === 'rate' ? (
+                <FormField label="Commission Rate (%)" optional>
+                  <input
+                    className={getFieldClass('', 'font-sans')}
+                    min="0"
+                    max="100"
+                    name="salary_commission_rate"
+                    onBlur={onBlur}
+                    onChange={onChange}
+                    placeholder="15"
+                    type="number"
+                    value={data.salary_commission_rate || ''}
+                  />
+                </FormField>
+              ) : (
+                <FormField label="Flat per Appointment" optional>
+                  <input
+                    className={getFieldClass('', 'font-sans')}
+                    min="0"
+                    name="salary_commission_per_appointment"
+                    onBlur={onBlur}
+                    onChange={onChange}
+                    placeholder="500"
+                    type="number"
+                    value={data.salary_commission_per_appointment || ''}
+                  />
+                </FormField>
+              )}
+            </div>
+          </>
+        ) : null}
+
+        <FormField label="Allowances" optional>
+          <input
+            className={getFieldClass('', 'font-sans')}
+            min="0"
+            name="salary_allowances"
+            onBlur={onBlur}
+            onChange={onChange}
+            placeholder="5000"
+            type="number"
+            value={data.salary_allowances || ''}
+          />
+        </FormField>
+
+        <FormField label="Deductions" optional>
+          <input
+            className={getFieldClass('', 'font-sans')}
+            min="0"
+            name="salary_deductions"
+            onBlur={onBlur}
+            onChange={onChange}
+            placeholder="2000"
+            type="number"
+            value={data.salary_deductions || ''}
+          />
+        </FormField>
+
+        <FormField label="Effective From" optional>
+          <input
+            className={getFieldClass('')}
+            name="salary_effective_from"
+            onBlur={onBlur}
+            onChange={onChange}
+            type="date"
+            value={data.salary_effective_from || new Date().toISOString().split('T')[0]}
+          />
+        </FormField>
       </FormSection>
     </>
   )

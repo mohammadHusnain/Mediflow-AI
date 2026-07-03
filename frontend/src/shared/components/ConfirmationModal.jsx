@@ -1,6 +1,6 @@
 import { AlertTriangle } from 'lucide-react'
 
-import { LoadingSpinner } from './FormPrimitives'
+import { LoadingSpinner, translucentBackdropClass } from './FormPrimitives'
 
 export function ConfirmationModal({
   body,
@@ -11,7 +11,7 @@ export function ConfirmationModal({
   title,
 }) {
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-glass-dark px-4 backdrop-blur-xs animate-fade-in">
+    <div className={`fixed inset-0 z-[80] flex items-center justify-center px-4 ${translucentBackdropClass}`}>
       <section
         aria-describedby="confirmation-description"
         aria-labelledby="confirmation-title"

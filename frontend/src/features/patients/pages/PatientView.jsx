@@ -132,7 +132,7 @@ function VisitCard({ appointment, doctors, expanded, onToggle }) {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
-          <StatusBadge status="completed" />
+          <StatusBadge status={appointment.status} />
           <ChevronDown
             aria-hidden="true"
             className={[

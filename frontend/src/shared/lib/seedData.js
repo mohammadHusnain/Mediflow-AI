@@ -15,6 +15,8 @@ import {
 import { validateEmail } from './validation'
 
 const DEMO_STORAGE_KEY = 'mediflow_demo_data_v7'
+const FIXED_TODAY = '2026-06-28'
+const FIXED_TODAY_ISO = '2026-06-28T09:00:00.000Z'
 
 const PATIENTS = [
   {
@@ -293,17 +295,16 @@ const STAFF = [
 ]
 
 function addDays(days, hour, minute = 0) {
-  const date = new Date()
-  date.setHours(hour, minute, 0, 0)
-  date.setDate(date.getDate() + days)
-
+  const date = new Date(FIXED_TODAY_ISO)
+  date.setUTCHours(hour, minute, 0, 0)
+  date.setUTCDate(date.getUTCDate() + days)
   return date.toISOString()
 }
 
 function withPatientDefaults(patient) {
   return {
     ...patient,
-    created_at: patient.created_at || patient.onboarding_date || new Date().toISOString(),
+    created_at: patient.created_at || patient.onboarding_date || FIXED_TODAY_ISO,
   }
 }
 
@@ -418,7 +419,7 @@ function withDoctorDefaults(doctor, qualifications = []) {
 
   return {
     ...doctor,
-    created_at: doctor.created_at || doctor.join_date || new Date().toISOString(),
+    created_at: doctor.created_at || doctor.join_date || FIXED_TODAY_ISO,
     first_name: firstName || fullName.split(' ')[0] || '',
     last_name: lastName || fullName.split(' ').slice(1).join(' ') || '',
     full_name: fullName,
@@ -793,7 +794,7 @@ function sortAppointmentsByOrdering(appointments, ordering) {
     return appointments
   }
 
-  const now = new Date()
+  const now = new Date(FIXED_TODAY_ISO)
 
   return [...appointments].sort((first, second) => {
     const firstDate = getDate(first)
@@ -819,7 +820,7 @@ function getDateKey(value) {
   return date.toISOString().split('T')[0]
 }
 
-function isSameDay(value, reference = new Date()) {
+function isSameDay(value, reference = new Date(FIXED_TODAY_ISO)) {
   return Boolean(value) && getDateKey(value) === getDateKey(reference)
 }
 
@@ -921,8 +922,8 @@ function decorateAppointment(data, appointment) {
 
 function getRecentDateKeys(days) {
   return Array.from({ length: days }, (_, index) => {
-    const date = new Date()
-    date.setDate(date.getDate() - (days - index - 1))
+    const date = new Date(FIXED_TODAY_ISO)
+    date.setUTCDate(date.getUTCDate() - (days - index - 1))
     return date.toISOString().split('T')[0]
   })
 }
@@ -949,7 +950,7 @@ function decorateDoctor(data, doctor) {
       countCasesForDate(caseAppointments, date) ||
       ((Number(doctor.id) + index) % 5 === 0 ? 2 : (Number(doctor.id) + index) % 3),
   }))
-  const todayKey = new Date().toISOString().split('T')[0]
+  const todayKey = FIXED_TODAY
   const currentMonth = todayKey.slice(0, 7)
   const casesThisMonth = caseAppointments.filter(
     (appointment) => getDateKey(appointment.appointment_dt).slice(0, 7) === currentMonth,
@@ -1100,8 +1101,8 @@ export function createDemoPatient(patient) {
   const createdPatient = {
     ...patient,
     id: getNextId(data.patients),
-    created_at: new Date().toISOString(),
-    onboarding_date: new Date().toISOString(),
+    created_at: FIXED_TODAY_ISO,
+    onboarding_date: FIXED_TODAY_ISO,
   }
 
   data.patients = [createdPatient, ...data.patients]
@@ -1276,7 +1277,7 @@ export function createDemoDoctor(doctor) {
     createDemoError('Phone already registered')
   }
 
-  const createdAt = new Date().toISOString()
+  const createdAt = FIXED_TODAY_ISO
   const createdDoctor = {
     ...doctor,
     id: getNextId(data.doctors),
@@ -1400,7 +1401,7 @@ export function deleteDemoDoctor(id) {
     deletedDoctor = {
       ...currentDoctor,
       is_active: false,
-      deleted_at: new Date().toISOString(),
+      deleted_at: FIXED_TODAY_ISO,
     }
 
     return deletedDoctor
@@ -1527,7 +1528,7 @@ export function createDemoStaff(staffMember) {
   const normalizedEmail = String(staffMember.email || '').trim().toLowerCase()
   const normalizedPhone = String(staffMember.phone || '').trim()
   const roleResult = ensureDemoRoleName(staffMember.role)
-  const createdAt = new Date().toISOString()
+  const createdAt = FIXED_TODAY_ISO
   const nextStaffMember = {
     ...staffMember,
     created_at: createdAt,
@@ -1666,7 +1667,7 @@ export function deleteDemoStaff(id) {
     deletedStaff = {
       ...currentStaff,
       is_deleted: true,
-      deleted_at: new Date().toISOString(),
+      deleted_at: FIXED_TODAY_ISO,
     }
 
     return deletedStaff
@@ -1745,7 +1746,7 @@ export function bookDemoAppointment(appointment) {
     payment_status: appointment.payment_status || 'unpaid',
     status: appointment.status || 'scheduled',
     booked_by_name: 'Dana Teller',
-    booked_at: new Date().toISOString(),
+    booked_at: FIXED_TODAY_ISO,
   }
 
   data.appointments = [bookedAppointment, ...data.appointments]
@@ -1850,8 +1851,8 @@ export function getDemoDoctorStats(doctorId) {
       ((Number(doctorId) + index) % 5 === 0 ? 2 : (Number(doctorId) + index) % 3),
   }))
   const monthlySummary = Array.from({ length: 12 }, (_, index) => {
-    const date = new Date()
-    date.setMonth(date.getMonth() - (11 - index), 1)
+    const date = new Date(FIXED_TODAY_ISO)
+    date.setUTCMonth(date.getUTCMonth() - (11 - index), 1)
     const month = date.toISOString().slice(0, 7)
     const appointmentCount = doctorAppointments.filter(
       (appointment) => getDateKey(appointment.appointment_dt).slice(0, 7) === month,

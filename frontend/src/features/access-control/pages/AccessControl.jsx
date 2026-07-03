@@ -10,6 +10,7 @@ import {
   RotateCcw,
   ShieldCheck,
   Stethoscope,
+  TrendingUp,
   Trash2,
   Users,
   X,
@@ -17,11 +18,14 @@ import {
 
 import {
   ErrorBanner,
+  FieldLabel,
   emptyStateClass,
   panelHeaderClass,
   surfaceClass,
+  translucentBackdropClass,
 } from '@shared/components/FormPrimitives'
 import { useToast } from '@shared/components/Toast'
+import { useAuth } from '@shared/context/AuthContext'
 import { MODULES } from '@shared/lib/accessControlData'
 import { getBackendError } from '@shared/lib/records'
 import { stagger } from '@shared/lib/motion'
@@ -46,6 +50,10 @@ const MODULE_META = {
   doctors: {
     icon: Stethoscope,
     label: 'Doctors',
+  },
+  financial_reports: {
+    icon: TrendingUp,
+    label: 'Finances',
   },
   patients: {
     icon: Users,
@@ -166,7 +174,7 @@ function RoleModal({ existingRoles = [], mode, onClose, onSubmit, role }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-ink/30 px-4 py-8 backdrop-blur-sm">
+    <div className={`fixed inset-0 z-[1000] flex items-center justify-center px-4 py-8 ${translucentBackdropClass}`}>
       <form
         className="w-full max-w-md animate-scale-in rounded-card bg-canvas p-6 shadow-card"
         onSubmit={handleSubmit}
@@ -194,9 +202,7 @@ function RoleModal({ existingRoles = [], mode, onClose, onSubmit, role }) {
 
         <div className="space-y-4">
           <label className="block">
-            <span className="mb-1.5 block text-[13px] font-semibold text-ink">
-              Name
-            </span>
+            <FieldLabel error={error} label="Name" />
             <input
               className="h-11 w-full rounded-control border border-hairline bg-mist/50 px-3 text-[14px] text-ink outline-none transition focus:border-brand focus:bg-canvas focus:ring-2 focus:ring-brand/20"
               onChange={(event) => setName(event.target.value)}
@@ -207,9 +213,7 @@ function RoleModal({ existingRoles = [], mode, onClose, onSubmit, role }) {
           </label>
 
           <label className="block">
-            <span className="mb-1.5 block text-[13px] font-semibold text-ink">
-              Description
-            </span>
+            <FieldLabel label="Description" optional />
             <textarea
               className="min-h-[84px] w-full resize-y rounded-control border border-hairline bg-mist/50 px-3 py-2.5 text-[14px] text-ink outline-none transition focus:border-brand focus:bg-canvas focus:ring-2 focus:ring-brand/20"
               onChange={(event) => setDescription(event.target.value)}
@@ -245,7 +249,7 @@ function RoleModal({ existingRoles = [], mode, onClose, onSubmit, role }) {
 
 function DeleteRoleModal({ error, isDeleting, onClose, onConfirm, role }) {
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-ink/30 px-4 py-8 backdrop-blur-sm">
+    <div className={`fixed inset-0 z-[1000] flex items-center justify-center px-4 py-8 ${translucentBackdropClass}`}>
       <section className="w-full max-w-md animate-scale-in rounded-card bg-canvas p-6 shadow-card">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
@@ -289,6 +293,7 @@ function DeleteRoleModal({ error, isDeleting, onClose, onConfirm, role }) {
 
 export function AccessControl() {
   const toast = useToast()
+  const { refreshSession } = useAuth()
   const [roles, setRoles] = useState([])
   const [selectedRoleId, setSelectedRoleId] = useState(null)
   const [editorPermissions, setEditorPermissions] = useState(getRolePermissions())
@@ -393,6 +398,7 @@ export function AccessControl() {
       setSavedPermissions(getRolePermissions(mergedRole))
       setEditorPermissions(getRolePermissions(mergedRole))
       toast.success('Permissions saved.')
+      refreshSession().catch(() => {})
     } catch (error) {
       setEditorPermissions(previousPermissions)
       setSaveError(getBackendError(error, 'Permissions could not be saved.'))

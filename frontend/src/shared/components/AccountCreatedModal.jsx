@@ -1,5 +1,7 @@
 import { CheckCircle2, Mail } from 'lucide-react'
 
+import { translucentBackdropClass } from './FormPrimitives'
+
 export function AccountCreatedModal({
   email,
   entityLabel,
@@ -7,7 +9,7 @@ export function AccountCreatedModal({
   onViewProfile,
 }) {
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-glass-dark px-4 backdrop-blur-xs animate-fade-in">
+    <div className={`fixed inset-0 z-[1000] flex items-center justify-center px-4 ${translucentBackdropClass}`}>
       <section
         aria-labelledby="account-created-title"
         aria-modal="true"

@@ -23,7 +23,14 @@ import {
 
 const AuthContext = createContext(null)
 const REFRESH_SYNC_INTERVAL_MS = 60_000
-const PERMISSION_MODULES = ['appointments', 'doctors', 'patients', 'reports', 'staff']
+const PERMISSION_MODULES = [
+  'appointments',
+  'doctors',
+  'financial_reports',
+  'patients',
+  'reports',
+  'staff',
+]
 
 function readStorageJson(key) {
   const stored = localStorage.getItem(key)
@@ -61,19 +68,20 @@ function normalizeRole(role, user = {}) {
 
 function normalizePermissions(permissions, user = {}) {
   if (permissions && typeof permissions === 'object') {
-    return Object.entries(permissions).reduce((nextPermissions, [module, access]) => {
-      nextPermissions[module] = normalizeAccessLevel(access)
+    return PERMISSION_MODULES.reduce((nextPermissions, module) => {
+      nextPermissions[module] = normalizeAccessLevel(permissions[module])
       return nextPermissions
     }, {})
   }
 
   if (Array.isArray(user.enabled_features)) {
     return {
-      appointments: user.enabled_features.includes('appointments') ? 'full_access' : 'no_access',
-      doctors: user.enabled_features.includes('doctors') ? 'full_access' : 'no_access',
-      patients: user.enabled_features.includes('patients') ? 'full_access' : 'no_access',
+      appointments: user.enabled_features.includes('appointments') ? 'read' : 'no_access',
+      doctors: user.enabled_features.includes('doctors') ? 'read' : 'no_access',
+      financial_reports: user.enabled_features.includes('financial_reports') ? 'read' : 'no_access',
+      patients: user.enabled_features.includes('patients') ? 'read' : 'no_access',
       reports: user.enabled_features.includes('reports') ? 'read' : 'no_access',
-      staff: user.enabled_features.includes('staff') ? 'full_access' : 'no_access',
+      staff: user.enabled_features.includes('staff') ? 'read' : 'no_access',
     }
   }
 
@@ -106,7 +114,10 @@ function normalizeSessionPayload(response = {}, fallbackUser = {}) {
     ...normalizeUser(responseUser, fallbackUser),
     force_password_change: forcePasswordChange,
   }
-  const role = normalizeRole(response.role, responseUser)
+  const role = normalizeRole(
+    response.role_detail || response.role,
+    responseUser,
+  )
   const permissions = normalizePermissions(
     response.permissions || responseUser.permissions,
     responseUser,
@@ -114,14 +125,15 @@ function normalizeSessionPayload(response = {}, fallbackUser = {}) {
 
   return {
     accessToken: response.access_token ?? response.access ?? '',
+    organizationCurrency: response.organization_currency || 'PKR',
     permissions,
-    refreshToken: response.refresh_token ?? response.refresh ?? '',
+    refreshToken: response.refresh_token ?? response.refresh,
     role,
     user,
   }
 }
 
-function persistSession({ accessToken, permissions, refreshToken, role, user }) {
+function persistSession({ accessToken, organizationCurrency, permissions, refreshToken, role, user }) {
   if (accessToken !== undefined) {
     localStorage.setItem('access_token', accessToken || '')
     localStorage.removeItem('access')
@@ -143,6 +155,10 @@ function persistSession({ accessToken, permissions, refreshToken, role, user }) 
   if (permissions !== undefined) {
     localStorage.setItem('permissions', JSON.stringify(permissions))
   }
+
+  if (organizationCurrency !== undefined) {
+    localStorage.setItem('org_currency', organizationCurrency)
+  }
 }
 
 function clearStoredSession() {
@@ -153,6 +169,7 @@ function clearStoredSession() {
   localStorage.removeItem('permissions')
   localStorage.removeItem('role')
   localStorage.removeItem('user')
+  localStorage.removeItem('org_currency')
 }
 
 function getInitialSession() {
@@ -197,6 +214,7 @@ export function AuthProvider({ children }) {
     if (session.accessToken !== undefined || session.refreshToken !== undefined || persist) {
       persistSession({
         accessToken: session.accessToken,
+        organizationCurrency: session.organizationCurrency ?? (localStorage.getItem('org_currency') || 'PKR'),
         permissions: nextPermissions,
         refreshToken: session.refreshToken,
         role: nextRole,
@@ -313,11 +331,21 @@ export function AuthProvider({ children }) {
       return undefined
     }
 
-    const interval = window.setInterval(() => {
-      refreshSession().catch(() => {
-        // The next guarded request will surface auth problems; avoid noisy polling failures.
-      })
-    }, REFRESH_SYNC_INTERVAL_MS)
+    let consecutiveFailures = 0
+
+    async function pollPermissions() {
+      try {
+        await refreshSession()
+        consecutiveFailures = 0
+      } catch {
+        consecutiveFailures += 1
+        if (consecutiveFailures >= 3) {
+          console.warn('Permission refresh failed 3 consecutive times; session may be stale.')
+        }
+      }
+    }
+
+    const interval = window.setInterval(pollPermissions, REFRESH_SYNC_INTERVAL_MS)
 
     return () => window.clearInterval(interval)
   }, [refreshSession])

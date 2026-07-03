@@ -6,7 +6,7 @@ import { useChatContext } from '@shared/context/ChatContext'
 import { useChatScroll } from '@shared/hooks/useChatScroll'
 import { useDebounce } from '@shared/hooks/useDebounce'
 import { convKey, groupMessages } from '@shared/lib/chatUtils'
-import { searchMessages } from '@shared/services/chatApi'
+import { getGroupDetail, searchMessages } from '@shared/services/chatApi'
 import ChatAvatar from './ChatAvatar'
 import MessageBubble from './MessageBubble'
 import MessageInput from './MessageInput'
@@ -81,7 +81,10 @@ export function ConversationView({ entity, group = false, memberCount, onBack, t
     typingUsers,
     wsStatus,
   } = useChatContext()
-  const conversationKey = group ? convKey.group(entity?.id) : convKey.dm(entity?.id)
+  const entityId = entity?.id ?? entity?.user_id
+  const conversationKey = entityId
+    ? (group ? convKey.group(entityId) : convKey.dm(entityId))
+    : ''
   const messageList = useMemo(
     () => messages.get(conversationKey) || [],
     [conversationKey, messages],
@@ -96,6 +99,8 @@ export function ConversationView({ entity, group = false, memberCount, onBack, t
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchTouched, setSearchTouched] = useState(false)
   const [showNewMessage, setShowNewMessage] = useState(false)
+  const [members, setMembers] = useState([])
+  const [membersOpen, setMembersOpen] = useState(false)
   const debouncedSearch = useDebounce(messageSearch, 400)
   const loadedOnce = useRef(new Set())
   const messageRefs = useRef(new Map())
@@ -114,6 +119,30 @@ export function ConversationView({ entity, group = false, memberCount, onBack, t
     loadedOnce.current.add(conversationKey)
     loadMoreMessages(conversationKey).then(() => markAsRead(conversationKey))
   }, [conversationKey, loadMoreMessages, markAsRead])
+
+  useEffect(() => {
+    if (!group || !entity?.id) {
+      setMembers([])
+      return
+    }
+
+    let cancelled = false
+
+    getGroupDetail(entity.id).then((detail) => {
+      if (cancelled) return
+      setMembers(
+        (detail?.members || []).map((m) => ({
+          id: m.user?.id,
+          name: m.user?.full_name || m.user?.email || 'Unknown',
+          is_admin: m.is_admin,
+        })),
+      )
+    }).catch(() => {
+      if (!cancelled) setMembers([])
+    })
+
+    return () => { cancelled = true }
+  }, [group, entity?.id])
 
   useEffect(() => {
     if (messageList.length > previousLength.current && !autoScroll) {
@@ -308,13 +337,47 @@ export function ConversationView({ entity, group = false, memberCount, onBack, t
           <Search aria-hidden="true" className="h-4 w-4" />
         </button>
         {group ? (
-          <button
-            className="rounded-control p-1.5 text-slate transition hover:bg-mist hover:text-brand"
-            type="button"
-          >
-            <span className="sr-only">Group members</span>
-            <Users aria-hidden="true" className="h-4 w-4" />
-          </button>
+          <div className="relative">
+            <button
+              className="rounded-control p-1.5 text-slate transition hover:bg-mist hover:text-brand"
+              onClick={() => setMembersOpen((o) => !o)}
+              type="button"
+            >
+              <span className="sr-only">Group members</span>
+              <Users aria-hidden="true" className="h-4 w-4" />
+            </button>
+            {membersOpen ? (
+              <div className="absolute right-0 top-full z-20 mt-1 w-[220px] overflow-hidden rounded-card border border-hairline bg-canvas shadow-card animate-scale-in">
+                <div className="border-b border-hairline px-3 py-2">
+                  <p className="text-[12px] font-semibold text-slate-900">
+                    Members ({members.length})
+                  </p>
+                </div>
+                <div className="max-h-[200px] overflow-y-auto">
+                  {members.length === 0 ? (
+                    <p className="px-3 py-4 text-center text-[12px] text-slate">Loading...</p>
+                  ) : (
+                    members.map((m) => (
+                      <div
+                        className="flex items-center gap-2 border-b border-hairline px-3 py-2 last:border-0"
+                        key={m.id}
+                      >
+                        <ChatAvatar name={m.name} size="sm" />
+                        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-slate-900">
+                          {m.name}
+                        </span>
+                        {m.is_admin ? (
+                          <span className="shrink-0 rounded-full bg-brand-light px-2 py-0.5 text-[10px] font-semibold text-brand">
+                            Admin
+                          </span>
+                        ) : null}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
         ) : null}
       </header>
 
