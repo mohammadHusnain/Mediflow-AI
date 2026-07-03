@@ -31,5 +31,19 @@ export async function resolve(specifier, context, nextResolve) {
     }
   }
 
+  if (
+    context.parentURL?.startsWith('file:') &&
+    (specifier.startsWith('./') || specifier.startsWith('../'))
+  ) {
+    const target = resolveExistingPath(fileURLToPath(new URL(specifier, context.parentURL)))
+
+    if (fs.existsSync(target)) {
+      return {
+        shortCircuit: true,
+        url: pathToFileURL(target).href,
+      }
+    }
+  }
+
   return nextResolve(specifier, context)
 }

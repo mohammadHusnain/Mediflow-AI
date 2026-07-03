@@ -6,8 +6,8 @@ import { useAuth } from '@shared/context/AuthContext'
 const PRIMARY_TABS = [
   { label: 'Billing', match: '/financial-reports/billing', to: '/financial-reports/billing/invoices' },
   { label: 'Salary', match: '/financial-reports/salary', to: '/financial-reports/salary' },
-  { label: 'Financial Reports', match: '/financial-reports/reports', to: '/financial-reports/reports' },
   { label: 'Expenses', match: '/financial-reports/expenses', to: '/financial-reports/expenses' },
+  { label: 'Financial Reports', match: '/financial-reports/reports', to: '/financial-reports/reports' },
 ]
 
 const BILLING_TABS = [

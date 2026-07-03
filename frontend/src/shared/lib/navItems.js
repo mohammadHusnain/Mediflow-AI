@@ -75,16 +75,16 @@ export function getNavItems({ canRead, isAdmin, role, user }) {
             to: '/financial-reports/salary',
           },
           {
-            icon: BarChart2,
-            label: 'Financial Reports',
-            matchPaths: ['/financial-reports/reports'],
-            to: '/financial-reports/reports',
-          },
-          {
             icon: TrendingDown,
             label: 'Expenses',
             matchPaths: ['/financial-reports/expenses'],
             to: '/financial-reports/expenses',
+          },
+          {
+            icon: BarChart2,
+            label: 'Financial Reports',
+            matchPaths: ['/financial-reports/reports'],
+            to: '/financial-reports/reports',
           },
         ]
 
