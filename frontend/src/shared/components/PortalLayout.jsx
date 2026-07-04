@@ -29,7 +29,11 @@ const PAGE_META = {
   },
   '/financial-reports': {
     title: 'Finances',
-    subtitle: 'Billing, salary, expenses, and financial reports',
+    subtitle: 'Billing, salary, expenses, and reports',
+  },
+  '/post-treatment/alerts': {
+    title: 'Critical Alerts',
+    subtitle: 'Patients requiring immediate follow-up call',
   },
   '/access-control': {
     title: 'Access Control',
@@ -240,12 +244,40 @@ function getRouteMeta(pathname, user, role) {
   if (pathname.startsWith('/financial-reports/reports')) {
     return {
       title: 'Financial Reports',
-      subtitle: 'Consolidated finance reports are coming soon.',
+      subtitle: 'Revenue, salary, and expense insights across your clinic.',
     }
   }
 
   if (pathname.startsWith('/financial-reports')) {
     return PAGE_META['/financial-reports']
+  }
+
+  if (pathname === '/post-treatment/plans/new') {
+    return {
+      title: 'Create Post-Treatment Plan',
+      subtitle: 'Configure WhatsApp follow-up messages',
+    }
+  }
+
+  if (/^\/post-treatment\/plans\/[^/]+\/edit$/.test(pathname)) {
+    return {
+      title: 'Edit Post-Treatment Plan',
+      subtitle: 'Changes only apply to upcoming messages',
+    }
+  }
+
+  if (/^\/post-treatment\/plans\/[^/]+$/.test(pathname)) {
+    return {
+      title: 'Post-Treatment Plan',
+      subtitle: 'WhatsApp follow-up timeline',
+    }
+  }
+
+  if (pathname.startsWith('/post-treatment')) {
+    return {
+      title: 'Post-Treatment',
+      subtitle: 'Follow-up plans and critical alerts',
+    }
   }
 
   return DEFAULT_META

@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "test": "node --test --loader ./scripts/test-alias-loader.mjs ./src/shared/lib/financialValidation.test.mjs ./src/shared/services/financialServices.test.mjs",
+    "test": "node --test --loader ./scripts/test-alias-loader.mjs ./src/shared/lib/financialValidation.test.mjs ./src/shared/lib/postTreatmentAccess.test.mjs ./src/shared/lib/scheduleBuilder.test.mjs ./src/shared/services/financialServices.test.mjs ./src/shared/services/postTreatmentApi.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

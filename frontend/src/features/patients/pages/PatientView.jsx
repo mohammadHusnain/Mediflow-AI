@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ChevronDown,
   Edit,
+  Plus,
   StickyNote,
   Trash2,
 } from 'lucide-react'
@@ -15,8 +16,11 @@ import Pagination from '@shared/components/Pagination'
 import PaymentBadge from '@features/appointments/components/PaymentBadge'
 import SkeletonRow from '@shared/components/SkeletonRow'
 import StatusBadge from '@features/appointments/components/StatusBadge'
+import PlanCard from '@features/post-treatment/components/PlanCard'
+import { useAuth } from '@shared/context/AuthContext'
 import { useToast } from '@shared/components/Toast'
 import { usePermission } from '@shared/lib/usePermission'
+import { canCreatePlan } from '@shared/lib/postTreatmentAccess'
 import {
   formatDate,
   formatDateParts,
@@ -43,6 +47,7 @@ import {
   getDoctors,
   getPatient,
 } from '@shared/services/api'
+import { getPlans } from '@shared/services/postTreatmentApi'
 
 function Chip({ children, tone }) {
   const toneClass = {
@@ -249,6 +254,7 @@ function VisitCard({ appointment, doctors, expanded, onToggle }) {
 export function PatientView() {
   const { id } = useParams()
   const { canDelete, canWrite } = usePermission()
+  const { role, user } = useAuth()
   const toast = useToast()
   const navigate = useNavigate()
   const outletContext = useOutletContext()
@@ -259,6 +265,7 @@ export function PatientView() {
   const [completedPage, setCompletedPage] = useState(1)
   const [completedTotal, setCompletedTotal] = useState(0)
   const [upcomingAppointments, setUpcomingAppointments] = useState([])
+  const [postTreatmentPlans, setPostTreatmentPlans] = useState([])
   const [upcomingPage, setUpcomingPage] = useState(1)
   const [upcomingTotal, setUpcomingTotal] = useState(0)
   const [doctors, setDoctors] = useState([])
@@ -275,7 +282,7 @@ export function PatientView() {
     setNotFound(false)
 
     try {
-      const [patientResponse, completedResponse, scheduledResponse, doctorsResponse] =
+      const [patientResponse, completedResponse, scheduledResponse, doctorsResponse, plansResponse] =
         await Promise.all([
           getPatient(id),
           getAppointments({
@@ -291,6 +298,7 @@ export function PatientView() {
             ordering: 'appointment_dt',
           }),
           getDoctors(),
+          getPlans({ patient: id }),
         ])
 
       const completed = normalizePaginatedResponse(completedResponse)
@@ -303,6 +311,7 @@ export function PatientView() {
       setUpcomingAppointments(scheduled.results)
       setUpcomingTotal(scheduled.count)
       setDoctors(normalizeList(doctorsResponse))
+      setPostTreatmentPlans(normalizeList(plansResponse))
       setExpandedVisits(new Set(visits[0] ? [getRecordId(visits[0])] : []))
     } catch (error) {
       if (error?.response?.status === 404) {
@@ -343,6 +352,8 @@ export function PatientView() {
   const headerLastVisitDate = patient?.last_visit_date || lastVisitDate
   const headerNextAppointmentDate =
     patient?.next_appointment_date || upcomingAppointments[0]?.appointment_dt
+  const canStartPostTreatmentPlan =
+    canCreatePlan({ role, user }) && completedTotal > 0
 
   function toggleVisit(visitId) {
     setExpandedVisits((currentVisits) => {
@@ -614,6 +625,41 @@ export function PatientView() {
               No completed consultations recorded.
             </p>
           </section>
+        )}
+      </section>
+
+      <section className="rounded-card bg-canvas p-6 shadow-card">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-[18px] font-bold text-ink">
+              Post-Treatment Plans
+            </h2>
+            <p className="mt-1 text-[13px] font-medium text-slate">
+              WhatsApp follow-up schedules for this patient
+            </p>
+          </div>
+          {canStartPostTreatmentPlan ? (
+            <button
+              className="primary-button inline-flex h-10 items-center justify-center rounded-control bg-brand px-4 text-[13px] font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+              onClick={() => navigate(`/post-treatment/plans/new?patient=${id}`)}
+              type="button"
+            >
+              <Plus aria-hidden="true" className="mr-2 h-4 w-4" />
+              Create Post-Treatment Plan
+            </button>
+          ) : null}
+        </div>
+
+        {postTreatmentPlans.length > 0 ? (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {postTreatmentPlans.map((plan) => (
+              <PlanCard key={plan.id} plan={plan} />
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-control bg-mist px-4 py-3 text-[14px] font-medium text-slate">
+            No post-treatment plans recorded.
+          </p>
         )}
       </section>
 

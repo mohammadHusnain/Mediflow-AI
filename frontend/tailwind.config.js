@@ -44,7 +44,7 @@ export default {
       fontFamily: {
         display: ['Outfit', 'sans-serif'],
         sans: ['Outfit', 'sans-serif'],
-        mono: ['Outfit', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace'],
       },
       borderRadius: {
         card: '8px',

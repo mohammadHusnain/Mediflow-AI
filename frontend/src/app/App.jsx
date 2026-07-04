@@ -12,6 +12,10 @@ import AddDoctor from '@features/doctors/pages/AddDoctor.jsx'
 import DoctorView from '@features/doctors/pages/DoctorView.jsx'
 import DoctorsList from '@features/doctors/pages/DoctorsList.jsx'
 import EditDoctor from '@features/doctors/pages/EditDoctor.jsx'
+import CreatePlan from '@features/post-treatment/pages/CreatePlan.jsx'
+import CriticalAlertsQueue from '@features/post-treatment/pages/CriticalAlertsQueue.jsx'
+import EditPlan from '@features/post-treatment/pages/EditPlan.jsx'
+import PlanView from '@features/post-treatment/pages/PlanView.jsx'
 import Reports from '@features/reports/pages/Reports.jsx'
 import PatientFormPage from '@features/patients/pages/PatientFormPage.jsx'
 import PatientView from '@features/patients/pages/PatientView.jsx'
@@ -30,13 +34,12 @@ import { useAuth } from '@shared/context/AuthContext'
 import ChangePassword from '../pages/ChangePassword.jsx'
 import ExpenseFormPage from '../pages/expenses/ExpenseFormPage.jsx'
 import FinancialReports from '../pages/FinancialReports.jsx'
-import FinancialLayout, {
-  FinancialReportsPlaceholder,
-} from '../pages/financial/FinancialLayout.jsx'
+import FinancialLayout from '../pages/financial/FinancialLayout.jsx'
 import InvoiceDetail from '../pages/financial/billing/InvoiceDetail.jsx'
 import InvoiceHistory from '../pages/financial/billing/InvoiceHistory.jsx'
 import InvoiceList from '../pages/financial/billing/InvoiceList.jsx'
 import PaymentRecords from '../pages/financial/billing/PaymentRecords.jsx'
+import ReportsOverview from '../pages/financial/reports/ReportsOverview.jsx'
 import SalaryConfig from '../pages/financial/salary/SalaryConfig.jsx'
 import SalaryHistory from '../pages/financial/salary/SalaryHistory.jsx'
 import SalaryOverview from '../pages/financial/salary/SalaryOverview.jsx'
@@ -239,6 +242,10 @@ export function App() {
                 </AdminOnlyRoute>
               }
             />
+            <Route path="/post-treatment/plans/new" element={<CreatePlan />} />
+            <Route path="/post-treatment/plans/:id" element={<PlanView />} />
+            <Route path="/post-treatment/plans/:id/edit" element={<EditPlan />} />
+            <Route path="/post-treatment/alerts" element={<CriticalAlertsQueue />} />
             <Route
               path="/billing"
               element={<Navigate replace to="/financial-reports/billing/invoices" />}
@@ -267,7 +274,7 @@ export function App() {
               <Route path="salary" element={<SalaryOverview />} />
               <Route path="salary/config" element={<SalaryConfig />} />
               <Route path="salary/history" element={<SalaryHistory />} />
-              <Route path="reports" element={<FinancialReportsPlaceholder />} />
+              <Route path="reports" element={<ReportsOverview />} />
               <Route path="expenses" element={<FinancialReports />} />
               <Route path="expenses/add" element={<ExpenseFormPage mode="add" />} />
               <Route path="expenses/:id/edit" element={<ExpenseFormPage mode="edit" />} />

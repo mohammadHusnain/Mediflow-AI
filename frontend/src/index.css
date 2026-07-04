@@ -165,16 +165,15 @@ textarea {
 .recharts-bar-rectangle path {
   animation: chartRise 0.52s cubic-bezier(0.16, 1, 0.3, 1) both;
   transform-origin: bottom;
-  transition: filter 180ms ease, opacity 180ms ease, transform 180ms ease;
+  transition: opacity 180ms ease, transform 180ms ease;
 }
 
 .recharts-bar-rectangle:hover path {
-  filter: drop-shadow(0 10px 16px rgba(67,56,202,0.18));
+  opacity: 0.88;
 }
 
 .recharts-line-curve,
 .recharts-area-curve {
-  filter: drop-shadow(0 5px 10px rgba(67,56,202,0.08));
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -192,7 +191,7 @@ textarea {
 }
 
 .recharts-sector:hover {
-  filter: drop-shadow(0 12px 18px rgba(20,24,31,0.12));
+  opacity: 0.9;
 }
 
 .login-blob-a {

@@ -5,6 +5,7 @@ import {
   Briefcase,
   CalendarClock,
   LayoutDashboard,
+  PhoneCall,
   Receipt,
   ShieldCheck,
   Stethoscope,
@@ -51,6 +52,14 @@ export function getNavItems({ canRead, isAdmin, role, user }) {
     })
   }
 
+  if (['admin', 'doctor', 'receptionist'].includes(role.slug)) {
+    items.push({
+      icon: PhoneCall,
+      label: 'Critical Alerts',
+      to: '/post-treatment/alerts',
+    })
+  }
+
   if (canRead('financial_reports') || isDoctor) {
     const financeChildren = isDoctor
       ? [
@@ -82,7 +91,7 @@ export function getNavItems({ canRead, isAdmin, role, user }) {
           },
           {
             icon: BarChart2,
-            label: 'Financial Reports',
+            label: 'Reports',
             matchPaths: ['/financial-reports/reports'],
             to: '/financial-reports/reports',
           },

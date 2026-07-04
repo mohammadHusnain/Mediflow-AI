@@ -45,7 +45,6 @@ import {
   MetricCell,
   PanelSkeleton,
   ProgressMetricRow,
-  RankingRow,
   DashboardMiniSparkline,
   DashboardPanel,
   DashboardStatCard,
@@ -119,34 +118,43 @@ const APPOINTMENT_FLOW_KEYS = [
 const CHART_AXIS_TICK = {
   fill: '#5B6472',
   fontFamily: 'Outfit, sans-serif',
-  fontSize: 10,
+  fontSize: 11,
   fontWeight: 500,
 }
 
 const CHART_GRID_PROPS = {
-  stroke: '#E6EBF0',
-  strokeDasharray: '3 7',
-  strokeOpacity: 0.9,
+  stroke: '#E4E8EB',
+  strokeDasharray: '4 8',
+  strokeOpacity: 0.72,
   vertical: false,
 }
 
 const CHART_CURSOR = {
-  fill: '#EEF2FF',
-  opacity: 0.42,
+  fill: '#F6F8F9',
+  opacity: 0.86,
 }
 
 const CHART_ANIMATION_PROPS = {
-  animationBegin: 80,
-  animationDuration: 520,
+  animationBegin: 60,
+  animationDuration: 360,
   animationEasing: 'ease-out',
   isAnimationActive: true,
 }
 
 const LINE_ANIMATION_PROPS = {
-  animationBegin: 120,
-  animationDuration: 560,
+  animationBegin: 80,
+  animationDuration: 420,
   animationEasing: 'ease-out',
   isAnimationActive: true,
+}
+
+const ADMIN_CHART_MARGIN = { bottom: 0, left: -8, right: 12, top: 12 }
+const ADMIN_COMPACT_CHART_MARGIN = { bottom: 0, left: -12, right: 8, top: 10 }
+const ADMIN_BAR_RADIUS = [7, 7, 3, 3]
+const ADMIN_ACTIVE_DOT = {
+  r: 4,
+  stroke: '#FFFFFF',
+  strokeWidth: 2,
 }
 
 function formatStatusLabel(status) {
@@ -165,6 +173,41 @@ function formatShortCurrency(value) {
   }
 
   return formatCurrency(amount, { compact: true })
+}
+
+function DoctorPerformanceTooltip({ active, payload }) {
+  if (!active || !payload?.length) {
+    return null
+  }
+
+  const doctor = payload[0]?.payload || {}
+
+  return (
+    <div className="animate-scale-in rounded-card border border-white/10 bg-[#111827]/95 px-3.5 py-3 text-white shadow-[0_18px_46px_rgba(17,24,39,0.24)] backdrop-blur-md">
+      <p className="font-sans text-[11px] font-semibold uppercase tracking-[0.08em] text-white/55">
+        {doctor.name || doctor.label || 'Doctor'}
+      </p>
+      <div className="mt-2 space-y-1.5">
+        {[
+          ['Efficiency', `${doctor.efficiency || 0}%`, '#4338CA'],
+          ['Completion', `${doctor.completion || 0}%`, '#0D9488'],
+          ['Utilization', `${doctor.utilization || 0}%`, '#0EA5E9'],
+          ['Total cases', doctor.cases || 0, '#94A3B8'],
+          ['Revenue', formatShortCurrency(doctor.revenue), '#4338CA'],
+          ['Avg consult', `${doctor.avgConsult || 0}m`, '#64748B'],
+          ['Rating', doctor.rating === null || doctor.rating === undefined ? 'N/A' : Number(doctor.rating).toFixed(1), '#F59E0B'],
+        ].map(([label, value, color]) => (
+          <div className="flex min-w-[170px] items-center justify-between gap-5" key={label}>
+            <span className="inline-flex min-w-0 items-center gap-2 text-[12px] font-medium text-white/72">
+              <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+              <span className="truncate">{label}</span>
+            </span>
+            <span className="font-sans text-[13px] font-bold text-white">{value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function getCount(response) {
@@ -1273,7 +1316,7 @@ export function AdminDashboard() {
 
   return (
     <div className="dashboard-stage space-y-3">
-      <section className="relative overflow-hidden rounded-card border border-hairline/70 bg-canvas p-4 shadow-card">
+      <section className="relative overflow-hidden rounded-card border border-hairline/70 bg-canvas p-5 shadow-card">
         <div className="relative grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
           <div className="flex min-w-0 flex-col gap-4">
             <div>
@@ -1324,7 +1367,7 @@ export function AdminDashboard() {
             </div>
           </div>
 
-          <div className="relative overflow-hidden rounded-card bg-brand p-4 text-white shadow-card">
+          <div className="relative overflow-hidden rounded-card bg-brand p-5 text-white shadow-card">
             <div className="relative flex items-start justify-between gap-4">
               <div>
                 <p className="text-[13px] font-semibold text-white/70">Operations score</p>
@@ -1396,7 +1439,7 @@ export function AdminDashboard() {
       {appointmentsEnabled ? (
         <section className="grid items-stretch gap-4 xl:grid-cols-12">
           <DashboardPanel
-            bodyClassName="flex h-full flex-col p-4"
+            bodyClassName="flex h-full flex-col p-5"
             className="xl:col-span-8"
             headerContent={
               <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1456,23 +1499,8 @@ export function AdminDashboard() {
                     <ResponsiveContainer height="100%" width="100%">
                       <ComposedChart
                         data={revenueAnalytics.data}
-                        margin={{ bottom: 0, left: -2, right: 6, top: 10 }}
+                        margin={ADMIN_CHART_MARGIN}
                       >
-                        <defs>
-                          <linearGradient id="adminRevenueArea" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#4338CA" stopOpacity={0.32} />
-                            <stop offset="46%" stopColor="#4338CA" stopOpacity={0.12} />
-                            <stop offset="100%" stopColor="#4338CA" stopOpacity={0.02} />
-                          </linearGradient>
-                          <linearGradient id="adminRevenueBar" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#5EEAD4" />
-                            <stop offset="42%" stopColor="#2DD4BF" />
-                            <stop offset="100%" stopColor="#0D9488" />
-                          </linearGradient>
-                          <filter id="adminRevenueDepth" x="-20%" y="-20%" width="140%" height="150%">
-                            <feDropShadow dx="0" dy="7" stdDeviation="5" floodColor="#0D9488" floodOpacity="0.18" />
-                          </filter>
-                        </defs>
                         <CartesianGrid {...CHART_GRID_PROPS} />
                         <XAxis
                           axisLine={false}
@@ -1502,25 +1530,24 @@ export function AdminDashboard() {
                         <Tooltip content={<DashboardChartTooltip />} cursor={CHART_CURSOR} />
                         <Area
                           {...CHART_ANIMATION_PROPS}
-                          activeDot={{ fill: '#4338CA', r: 5, stroke: '#FFFFFF', strokeWidth: 2 }}
+                          activeDot={{ ...ADMIN_ACTIVE_DOT, fill: '#4338CA' }}
                           dataKey="revenue"
-                          fill="url(#adminRevenueArea)"
+                          fill="#4338CA"
+                          fillOpacity={0.08}
                           name="Revenue"
                           stroke="#4338CA"
-                          strokeWidth={3.25}
+                          strokeWidth={2.35}
                           type="monotone"
                           yAxisId="money"
                         />
                         <Bar
                           {...CHART_ANIMATION_PROPS}
-                          activeBar={{ filter: 'url(#adminRevenueDepth)', stroke: '#FFFFFF', strokeWidth: 2 }}
-                          barSize={20}
-                          background={{ fill: '#F8FAFC', radius: 10 }}
+                          activeBar={{ fillOpacity: 0.86 }}
+                          barSize={18}
                           dataKey="appointments"
-                          fill="url(#adminRevenueBar)"
-                          filter="url(#adminRevenueDepth)"
+                          fill="#0D9488"
                           name="Appointments"
-                          radius={[10, 10, 6, 6]}
+                          radius={ADMIN_BAR_RADIUS}
                           yAxisId="volume"
                         />
                       </ComposedChart>
@@ -1530,7 +1557,7 @@ export function AdminDashboard() {
             )}
           </DashboardPanel>
 
-          <DashboardPanel bodyClassName="flex h-full flex-col p-4" className="xl:col-span-4" title="AI Operational Brief">
+          <DashboardPanel bodyClassName="flex h-full flex-col p-5" className="xl:col-span-4" title="AI Operational Brief">
             <div className="grid h-full gap-3">
               {[
                 {
@@ -1593,9 +1620,9 @@ export function AdminDashboard() {
       {showPatientGrowthPanel || appointmentsEnabled ? (
         <section className="grid items-stretch gap-4 xl:grid-cols-12">
           {showPatientGrowthPanel ? (
-            <DashboardPanel bodyClassName="flex h-full flex-col p-4" className="xl:col-span-7" title="Patient Growth & Retention">
+            <DashboardPanel bodyClassName="flex h-full flex-col p-5" className="xl:col-span-7" title="Patient Growth & Retention">
               {isLoading ? (
-                <div className="h-[190px] rounded-control bg-mist p-4">
+                <div className="h-[190px] rounded-control bg-mist p-5">
                   <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
                 </div>
               ) : (
@@ -1614,22 +1641,7 @@ export function AdminDashboard() {
 
                     <div className="mt-3 min-h-[176px] flex-1">
                       <ResponsiveContainer height="100%" width="100%">
-                        <ComposedChart data={patientLifecycle.data} margin={{ bottom: 0, left: -18, right: 8, top: 8 }}>
-                          <defs>
-                            <linearGradient id="patientAcquisitionArea" x1="0" x2="0" y1="0" y2="1">
-                              <stop offset="0%" stopColor="#0EA5E9" stopOpacity={0.3} />
-                              <stop offset="48%" stopColor="#0EA5E9" stopOpacity={0.11} />
-                              <stop offset="100%" stopColor="#0EA5E9" stopOpacity={0.02} />
-                            </linearGradient>
-                            <linearGradient id="patientNewBar" x1="0" x2="0" y1="0" y2="1">
-                              <stop offset="0%" stopColor="#A78BFA" />
-                              <stop offset="45%" stopColor="#7C3AED" />
-                              <stop offset="100%" stopColor="#4338CA" />
-                            </linearGradient>
-                            <filter id="patientNewDepth" x="-20%" y="-20%" width="140%" height="150%">
-                              <feDropShadow dx="0" dy="7" stdDeviation="5" floodColor="#4338CA" floodOpacity="0.16" />
-                            </filter>
-                          </defs>
+                        <ComposedChart data={patientLifecycle.data} margin={ADMIN_COMPACT_CHART_MARGIN}>
                           <CartesianGrid {...CHART_GRID_PROPS} />
                           <XAxis
                             axisLine={false}
@@ -1649,33 +1661,32 @@ export function AdminDashboard() {
                           <Tooltip content={<DashboardChartTooltip />} cursor={CHART_CURSOR} />
                           <Area
                             {...CHART_ANIMATION_PROPS}
-                            activeDot={{ fill: '#0EA5E9', r: 5, stroke: '#FFFFFF', strokeWidth: 2 }}
+                            activeDot={{ ...ADMIN_ACTIVE_DOT, fill: '#0EA5E9' }}
                             dataKey="cumulativePatients"
-                            fill="url(#patientAcquisitionArea)"
+                            fill="#0EA5E9"
+                            fillOpacity={0.08}
                             name="Active patient base"
                             stroke="#0EA5E9"
-                            strokeWidth={3.25}
+                            strokeWidth={2.35}
                             type="monotone"
                           />
                           <Bar
                             {...CHART_ANIMATION_PROPS}
-                            activeBar={{ filter: 'url(#patientNewDepth)', stroke: '#FFFFFF', strokeWidth: 2 }}
-                            barSize={22}
-                            background={{ fill: '#F8FAFC', radius: 10 }}
+                            activeBar={{ fillOpacity: 0.86 }}
+                            barSize={18}
                             dataKey="newPatients"
-                            fill="url(#patientNewBar)"
-                            filter="url(#patientNewDepth)"
+                            fill="#4338CA"
                             name="New patients"
-                            radius={[10, 10, 6, 6]}
+                            radius={ADMIN_BAR_RADIUS}
                           />
                           <Line
                             {...LINE_ANIMATION_PROPS}
-                            activeDot={{ fill: '#0D9488', r: 5, stroke: '#FFFFFF', strokeWidth: 2 }}
+                            activeDot={{ ...ADMIN_ACTIVE_DOT, fill: '#0D9488' }}
                             dataKey="retention"
                             dot={false}
                             name="Retention rate"
                             stroke="#0D9488"
-                            strokeWidth={3.25}
+                            strokeWidth={2.2}
                             type="monotone"
                           />
                         </ComposedChart>
@@ -1718,7 +1729,7 @@ export function AdminDashboard() {
                               <span className="text-[11px] font-semibold text-slate">{group.label}</span>
                               <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                                 <div
-                                  className="h-full rounded-full bg-gradient-to-r from-brand to-[#0EA5E9]"
+                                  className="h-full rounded-full bg-brand"
                                   style={{ width: `${percent}%` }}
                                 />
                               </div>
@@ -1737,7 +1748,7 @@ export function AdminDashboard() {
           ) : null}
 
           {appointmentsEnabled ? (
-            <DashboardPanel bodyClassName="flex h-full flex-col p-4" className="xl:col-span-5" title="Completion & Cancellation Analytics">
+            <DashboardPanel bodyClassName="flex h-full flex-col p-5" className="xl:col-span-5" title="Completion & Cancellation Analytics">
               {isLoading ? (
                 <PanelSkeleton rows={4} />
               ) : (
@@ -1816,135 +1827,121 @@ export function AdminDashboard() {
           {showDoctorPerformancePanel ? (
             <DashboardPanel bodyClassName="flex h-full flex-col p-0" className="xl:col-span-7" title="Doctor Performance Leaderboard">
               {isLoading ? (
-                <div className="m-4 h-[190px] rounded-card bg-mist p-4">
+                <div className="m-5 h-[190px] rounded-card bg-mist p-5">
                   <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
                 </div>
               ) : doctorPerformanceData.length === 0 ? (
                 <DashboardEmptyState title="No doctor performance data yet" />
               ) : (
-                <div className="analytics-surface h-full overflow-hidden p-4">
-                  <div className="grid h-full items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_270px]">
-                    <div className="flex h-full flex-col gap-2.5">
-                      <div className="min-h-[236px] flex-1">
-                        <ResponsiveContainer height="100%" width="100%">
-                          <ComposedChart
-                            barCategoryGap="30%"
-                            data={doctorPerformanceData}
-                            margin={{ bottom: 4, left: -8, right: 14, top: 12 }}
-                          >
-                          <defs>
-                            <linearGradient id="doctorEfficiencyGradient" x1="0" x2="0" y1="0" y2="1">
-                              <stop offset="0%" stopColor="#A78BFA" />
-                              <stop offset="48%" stopColor="#7C3AED" />
-                              <stop offset="100%" stopColor="#4338CA" />
-                            </linearGradient>
-                            <filter id="doctorEfficiencyDepth" x="-20%" y="-20%" width="140%" height="150%">
-                              <feDropShadow dx="0" dy="7" stdDeviation="5" floodColor="#4338CA" floodOpacity="0.18" />
-                            </filter>
-                          </defs>
-                          <CartesianGrid {...CHART_GRID_PROPS} />
-                          <XAxis
-                            axisLine={false}
-                            dataKey="label"
-                            tick={CHART_AXIS_TICK}
-                            tickLine={false}
-                            tickMargin={12}
-                          />
-                          <YAxis
-                            allowDecimals={false}
-                            axisLine={false}
-                            domain={[0, 100]}
-                            tick={CHART_AXIS_TICK}
-                            tickFormatter={(value) => `${value}%`}
-                            tickLine={false}
-                            tickMargin={8}
-                            ticks={[0, 25, 50, 75, 100]}
-                            width={36}
-                          />
-                          <Tooltip content={<DashboardChartTooltip />} cursor={CHART_CURSOR} />
-                          <Bar
-                            {...CHART_ANIMATION_PROPS}
-                            activeBar={{ filter: 'url(#doctorEfficiencyDepth)', stroke: '#FFFFFF', strokeWidth: 2 }}
-                            barSize={44}
-                            background={{ fill: '#F8FAFC', radius: 12 }}
-                            dataKey="efficiency"
-                            fill="url(#doctorEfficiencyGradient)"
-                            filter="url(#doctorEfficiencyDepth)"
-                            name="Efficiency score"
-                            radius={[14, 14, 8, 8]}
-                          />
-                          <Line
-                            {...LINE_ANIMATION_PROPS}
-                            activeDot={{ fill: '#0D9488', r: 5, stroke: '#FFFFFF', strokeWidth: 2 }}
-                            dataKey="completion"
-                            dot={false}
-                            name="Completion"
-                            stroke="#0D9488"
-                            strokeOpacity={0.82}
-                            strokeWidth={2.5}
-                            type="monotone"
-                          />
-                          </ComposedChart>
-                        </ResponsiveContainer>
-                      </div>
-
-                      <div className="grid gap-2 sm:grid-cols-3">
-                        <MetricCell
-                          className="bg-mist/70"
-                          label="Eff."
-                          value={`${doctorPerformanceSummary.averageEfficiency}%`}
-                        />
-                        <MetricCell
-                          className="bg-mist/70"
-                          label="Done"
-                          value={doctorPerformanceSummary.completedCases}
-                        />
-                        <MetricCell
-                          className="bg-mist/70"
-                          label="Rev."
-                          value={formatShortCurrency(doctorPerformanceSummary.totalRevenue)}
-                        />
-                      </div>
+                <div className="analytics-surface flex h-full flex-col overflow-hidden p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3 border-b border-hairline pb-3">
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-slate">
+                        Ranked clinical performance
+                      </p>
+                      <p className="mt-1 text-[13px] leading-5 text-slate">
+                        {doctorPerformanceData.length} doctors · Avg efficiency {doctorPerformanceSummary.averageEfficiency}% · {doctorPerformanceSummary.completedCases} completed · {formatShortCurrency(doctorPerformanceSummary.totalRevenue)} revenue
+                      </p>
                     </div>
-
-                    <div className="grid content-start gap-2.5">
-                      {doctorPerformanceData.map((doctor, index) => (
-                        <RankingRow
-                          index={index}
-                          key={doctor.id}
-                          label={doctor.name}
-                          meta={`${doctor.avgConsult}m avg`}
-                          percent={doctor.efficiency}
-                          tone="#4338CA"
-                          value={`${doctor.efficiency}%`}
-                        >
-                          <div className="grid grid-cols-4 gap-1.5">
-                            {[
-                              ['Pts', doctor.cases],
-                              ['Done', `${doctor.completion}%`],
-                              ['Rev', formatShortCurrency(doctor.revenue)],
-                              ['Rate', doctor.rating === null ? 'N/A' : Number(doctor.rating).toFixed(1)],
-                            ].map(([label, value]) => (
-                              <div className="rounded-control bg-mist px-2 py-1.5 text-left" key={label}>
-                                <p className="truncate text-[9px] font-semibold uppercase leading-3 tracking-[0.07em] text-slate">
-                                  {label}
-                                </p>
-                                <p className="mt-0.5 truncate font-sans text-[11px] font-bold leading-tight tabular-nums text-ink">
-                                  {value}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        </RankingRow>
-                      ))}
+                    <div className="flex flex-wrap justify-end gap-2" aria-label="Doctor performance legend">
+                      <LegendChip color="#4338CA" label="Efficiency" />
+                      <LegendChip color="#0D9488" label="Completion" />
+                      <LegendChip color="#0EA5E9" label="Utilization" />
+                      <LegendChip color="#94A3B8" label="Cases" />
                     </div>
+                  </div>
+
+                  <div className="mt-4 min-h-[360px] flex-1">
+                    <ResponsiveContainer height="100%" width="100%">
+                      <ComposedChart
+                        barCategoryGap="24%"
+                        barGap={6}
+                        data={doctorPerformanceData}
+                        margin={{ bottom: 8, left: -4, right: -2, top: 12 }}
+                      >
+                        <CartesianGrid {...CHART_GRID_PROPS} />
+                        <XAxis
+                          axisLine={false}
+                          dataKey="label"
+                          tick={CHART_AXIS_TICK}
+                          tickLine={false}
+                          tickMargin={12}
+                        />
+                        <YAxis
+                          allowDecimals={false}
+                          axisLine={false}
+                          domain={[0, 100]}
+                          tick={CHART_AXIS_TICK}
+                          tickFormatter={(value) => `${value}%`}
+                          tickLine={false}
+                          tickMargin={8}
+                          ticks={[0, 25, 50, 75, 100]}
+                          width={38}
+                          yAxisId="percent"
+                        />
+                        <YAxis
+                          allowDecimals={false}
+                          axisLine={false}
+                          orientation="right"
+                          tick={CHART_AXIS_TICK}
+                          tickLine={false}
+                          tickMargin={8}
+                          width={34}
+                          yAxisId="cases"
+                        />
+                        <Tooltip content={<DoctorPerformanceTooltip />} cursor={CHART_CURSOR} />
+                        <Bar
+                          {...CHART_ANIMATION_PROPS}
+                          activeBar={{ fillOpacity: 0.86 }}
+                          barSize={26}
+                          dataKey="efficiency"
+                          fill="#4338CA"
+                          name="Efficiency"
+                          radius={ADMIN_BAR_RADIUS}
+                          yAxisId="percent"
+                        />
+                        <Bar
+                          {...CHART_ANIMATION_PROPS}
+                          activeBar={{ fillOpacity: 0.82 }}
+                          barSize={16}
+                          dataKey="cases"
+                          fill="#94A3B8"
+                          name="Cases"
+                          radius={ADMIN_BAR_RADIUS}
+                          yAxisId="cases"
+                        />
+                        <Line
+                          {...LINE_ANIMATION_PROPS}
+                          activeDot={{ ...ADMIN_ACTIVE_DOT, fill: '#0D9488' }}
+                          dataKey="completion"
+                          dot={false}
+                          name="Completion"
+                          stroke="#0D9488"
+                          strokeWidth={2.2}
+                          type="monotone"
+                          yAxisId="percent"
+                        />
+                        <Line
+                          {...LINE_ANIMATION_PROPS}
+                          activeDot={{ ...ADMIN_ACTIVE_DOT, fill: '#0EA5E9' }}
+                          dataKey="utilization"
+                          dot={false}
+                          name="Utilization"
+                          stroke="#0EA5E9"
+                          strokeDasharray="5 5"
+                          strokeWidth={2}
+                          type="monotone"
+                          yAxisId="percent"
+                        />
+                      </ComposedChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
               )}
             </DashboardPanel>
           ) : null}
 
-          <DashboardPanel bodyClassName="flex h-full flex-col p-4" className="xl:col-span-5" title="Operational Capacity Forecast">
+          <DashboardPanel bodyClassName="flex h-full flex-col p-5" className="xl:col-span-5" title="Operational Capacity Forecast">
             <div className="flex h-full flex-col justify-between gap-3">
               <div className="grid gap-2.5 sm:grid-cols-3">
                 {[
@@ -2072,7 +2069,7 @@ export function AdminDashboard() {
 
       {appointmentsEnabled ? (
         <DashboardPanel
-          bodyClassName="flex h-full flex-col p-4"
+          bodyClassName="flex h-full flex-col p-5"
           headerContent={
             <div className="inline-flex rounded-full bg-mist p-1">
               {ANALYTICS_PERIODS.map(([period, label]) => (
@@ -2095,7 +2092,7 @@ export function AdminDashboard() {
           title="Appointment Trend"
         >
           {isLoading ? (
-            <div className="h-[190px] rounded-control bg-mist p-4">
+            <div className="h-[190px] rounded-control bg-mist p-5">
               <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
             </div>
           ) : (
@@ -2119,27 +2116,7 @@ export function AdminDashboard() {
                 </div>
                 <div className="min-h-[188px] flex-1">
                   <ResponsiveContainer height="100%" width="100%">
-                    <ComposedChart data={chartData} margin={{ bottom: 0, left: -12, right: 12, top: 8 }}>
-                    <defs>
-                      <linearGradient id="trendScheduledGradient" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="#7DD3FC" />
-                        <stop offset="48%" stopColor="#38BDF8" />
-                        <stop offset="100%" stopColor="#0284C7" />
-                      </linearGradient>
-                      <linearGradient id="trendCompletedGradient" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="#6EE7B7" />
-                        <stop offset="48%" stopColor="#34D399" />
-                        <stop offset="100%" stopColor="#059669" />
-                      </linearGradient>
-                      <linearGradient id="trendCancelledGradient" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="#FDA4AF" />
-                        <stop offset="48%" stopColor="#FB7185" />
-                        <stop offset="100%" stopColor="#DC2626" />
-                      </linearGradient>
-                      <filter id="trendBarDepth" x="-20%" y="-20%" width="140%" height="150%">
-                        <feDropShadow dx="0" dy="6" stdDeviation="4" floodColor="#4338CA" floodOpacity="0.12" />
-                      </filter>
-                    </defs>
+                    <ComposedChart data={chartData} margin={ADMIN_CHART_MARGIN}>
                     <CartesianGrid {...CHART_GRID_PROPS} />
                     <XAxis
                       axisLine={false}
@@ -2160,38 +2137,38 @@ export function AdminDashboard() {
                     <Bar
                       {...CHART_ANIMATION_PROPS}
                       dataKey="scheduled"
-                      fill="url(#trendScheduledGradient)"
-                      filter="url(#trendBarDepth)"
+                      fill={STATUS_COLORS.scheduled}
+                      maxBarSize={18}
                       name="Scheduled"
-                      radius={[10, 10, 5, 5]}
+                      radius={[0, 0, 4, 4]}
                       stackId="flow"
                     />
                     <Bar
                       {...CHART_ANIMATION_PROPS}
                       dataKey="completed"
-                      fill="url(#trendCompletedGradient)"
-                      filter="url(#trendBarDepth)"
+                      fill={STATUS_COLORS.completed}
+                      maxBarSize={18}
                       name="Completed"
-                      radius={[10, 10, 5, 5]}
+                      radius={[0, 0, 0, 0]}
                       stackId="flow"
                     />
                     <Bar
                       {...CHART_ANIMATION_PROPS}
                       dataKey="cancelled"
-                      fill="url(#trendCancelledGradient)"
-                      filter="url(#trendBarDepth)"
+                      fill={STATUS_COLORS.cancelled}
+                      maxBarSize={18}
                       name="Cancelled"
-                      radius={[10, 10, 5, 5]}
+                      radius={[7, 7, 0, 0]}
                       stackId="flow"
                     />
                     <Line
                       {...LINE_ANIMATION_PROPS}
-                      activeDot={{ fill: '#10B981', r: 5, stroke: '#FFFFFF', strokeWidth: 2 }}
+                      activeDot={{ ...ADMIN_ACTIVE_DOT, fill: '#10B981' }}
                       dataKey="rollingAverage"
                       dot={false}
                       name="7-day average"
                       stroke="#10B981"
-                      strokeWidth={3.25}
+                      strokeWidth={2.2}
                       type="monotone"
                     />
                     </ComposedChart>
@@ -2240,13 +2217,13 @@ export function AdminDashboard() {
           {showStatusMixPanel ? (
             <DashboardPanel bodyClassName="flex h-full flex-col p-0" title="Appointment Status Mix">
               {isLoading ? (
-                <div className="m-4 h-[170px] rounded-card bg-mist p-4">
+                <div className="m-5 h-[170px] rounded-card bg-mist p-5">
                   <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
                 </div>
               ) : appointmentStatusData.length === 0 ? (
                 <DashboardEmptyState title="No appointment status data yet" />
               ) : (
-                <div className="analytics-surface flex h-full flex-col overflow-hidden p-4">
+                <div className="analytics-surface flex h-full flex-col overflow-hidden p-5">
                   <div className="relative flex items-start justify-between gap-4">
                     <div>
                       <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-slate">
@@ -2266,32 +2243,7 @@ export function AdminDashboard() {
 
                   <div className="relative mt-3 min-h-[150px] flex-1">
                     <ResponsiveContainer height="100%" width="100%">
-                      <BarChart data={appointmentStatusData} margin={{ bottom: 0, left: -18, right: 8, top: 8 }}>
-                        <defs>
-                          <linearGradient id="statusGradient-scheduled" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#7DD3FC" />
-                            <stop offset="48%" stopColor="#38BDF8" />
-                            <stop offset="100%" stopColor="#0284C7" />
-                          </linearGradient>
-                          <linearGradient id="statusGradient-in_progress" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#CBD5E1" />
-                            <stop offset="48%" stopColor="#94A3B8" />
-                            <stop offset="100%" stopColor="#64748B" />
-                          </linearGradient>
-                          <linearGradient id="statusGradient-completed" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#6EE7B7" />
-                            <stop offset="48%" stopColor="#34D399" />
-                            <stop offset="100%" stopColor="#059669" />
-                          </linearGradient>
-                          <linearGradient id="statusGradient-cancelled" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#FDA4AF" />
-                            <stop offset="48%" stopColor="#FB7185" />
-                            <stop offset="100%" stopColor="#DC2626" />
-                          </linearGradient>
-                          <filter id="statusBarDepth" x="-20%" y="-20%" width="140%" height="150%">
-                            <feDropShadow dx="0" dy="7" stdDeviation="5" floodColor="#4338CA" floodOpacity="0.12" />
-                          </filter>
-                        </defs>
+                      <BarChart data={appointmentStatusData} margin={ADMIN_COMPACT_CHART_MARGIN}>
                         <CartesianGrid {...CHART_GRID_PROPS} />
                         <XAxis
                           axisLine={false}
@@ -2310,16 +2262,14 @@ export function AdminDashboard() {
                         <Tooltip content={<DashboardChartTooltip />} cursor={CHART_CURSOR} />
                         <Bar
                           {...CHART_ANIMATION_PROPS}
-                          activeBar={{ filter: 'url(#statusBarDepth)', stroke: '#FFFFFF', strokeWidth: 2 }}
-                          barSize={38}
-                          background={{ fill: '#F8FAFC', radius: 14 }}
+                          activeBar={{ fillOpacity: 0.86 }}
+                          barSize={30}
                           dataKey="count"
-                          filter="url(#statusBarDepth)"
                           name="Appointments"
-                          radius={[14, 14, 8, 8]}
+                          radius={ADMIN_BAR_RADIUS}
                         >
                           {appointmentStatusData.map((item) => (
-                            <Cell fill={`url(#statusGradient-${item.status})`} key={item.status} />
+                            <Cell fill={item.color} key={item.status} />
                           ))}
                         </Bar>
                       </BarChart>
@@ -2355,13 +2305,13 @@ export function AdminDashboard() {
           {showDoctorWorkloadPanel ? (
             <DashboardPanel bodyClassName="flex h-full flex-col p-0" title="Doctor Workload Today">
               {isLoading ? (
-                <div className="m-4 h-[170px] rounded-card bg-mist p-4">
+                <div className="m-5 h-[170px] rounded-card bg-mist p-5">
                   <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
                 </div>
               ) : doctorWorkloadData.length === 0 ? (
                 <DashboardEmptyState title="No workload data yet" />
               ) : (
-                <div className="analytics-surface flex h-full flex-col overflow-hidden p-4">
+                <div className="analytics-surface flex h-full flex-col overflow-hidden p-5">
                   <div className="relative flex items-start justify-between gap-4">
                     <div>
                       <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-slate">
@@ -2381,18 +2331,7 @@ export function AdminDashboard() {
 
                   <div className="relative mt-3 min-h-[150px] flex-1">
                     <ResponsiveContainer height="100%" width="100%">
-                      <BarChart data={doctorWorkloadData} margin={{ bottom: 0, left: -18, right: 8, top: 8 }}>
-                        <defs>
-                          <linearGradient id="workloadGradient" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#A78BFA" />
-                            <stop offset="36%" stopColor="#7C3AED" />
-                            <stop offset="56%" stopColor="#4338CA" />
-                            <stop offset="100%" stopColor="#312E81" />
-                          </linearGradient>
-                          <filter id="workloadBarDepth" x="-20%" y="-20%" width="140%" height="150%">
-                            <feDropShadow dx="0" dy="7" stdDeviation="5" floodColor="#4338CA" floodOpacity="0.18" />
-                          </filter>
-                        </defs>
+                      <BarChart data={doctorWorkloadData} margin={ADMIN_COMPACT_CHART_MARGIN}>
                         <CartesianGrid {...CHART_GRID_PROPS} />
                         <XAxis
                           axisLine={false}
@@ -2411,14 +2350,12 @@ export function AdminDashboard() {
                         <Tooltip content={<DashboardChartTooltip />} cursor={CHART_CURSOR} />
                         <Bar
                           {...CHART_ANIMATION_PROPS}
-                          activeBar={{ filter: 'url(#workloadBarDepth)', stroke: '#FFFFFF', strokeWidth: 2 }}
-                          barSize={38}
-                          background={{ fill: '#F8FAFC', radius: 14 }}
+                          activeBar={{ fillOpacity: 0.86 }}
+                          barSize={30}
                           dataKey="cases"
-                          fill="url(#workloadGradient)"
-                          filter="url(#workloadBarDepth)"
+                          fill="#4338CA"
                           name="Cases"
-                          radius={[14, 14, 8, 8]}
+                          radius={ADMIN_BAR_RADIUS}
                         />
                       </BarChart>
                     </ResponsiveContainer>
@@ -2435,7 +2372,7 @@ export function AdminDashboard() {
                         </span>
                         <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
                           <div
-                            className="h-full rounded-full bg-gradient-to-r from-brand to-[#7C3AED]"
+                            className="h-full rounded-full bg-brand"
                             style={{ width: `${Math.round((doctor.cases / workloadPeak) * 100)}%` }}
                           />
                         </div>
@@ -2453,13 +2390,13 @@ export function AdminDashboard() {
           {showGenderPanel ? (
             <DashboardPanel bodyClassName="flex h-full flex-col p-0" title="Patients by Gender">
               {isLoading ? (
-                <div className="m-4 h-[170px] rounded-card bg-mist p-4">
+                <div className="m-5 h-[170px] rounded-card bg-mist p-5">
                   <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
                 </div>
               ) : patientGenderData.length === 0 ? (
                 <DashboardEmptyState title="No patient gender data yet" />
               ) : (
-                <div className="analytics-surface flex h-full flex-col overflow-hidden p-4">
+                <div className="analytics-surface flex h-full flex-col overflow-hidden p-5">
                   <div className="relative flex items-start justify-between gap-4">
                     <div>
                       <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-slate">
@@ -2480,34 +2417,13 @@ export function AdminDashboard() {
                   <div className="relative mt-2 min-h-[150px] flex-1">
                     <ResponsiveContainer height="100%" width="100%">
                       <PieChart>
-                        <defs>
-                          <linearGradient id="genderGradient-Female" x1="0" x2="1" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#5EEAD4" />
-                            <stop offset="48%" stopColor="#2DD4BF" />
-                            <stop offset="100%" stopColor="#0D9488" />
-                          </linearGradient>
-                          <linearGradient id="genderGradient-Male" x1="0" x2="1" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#A78BFA" />
-                            <stop offset="48%" stopColor="#7C3AED" />
-                            <stop offset="100%" stopColor="#4338CA" />
-                          </linearGradient>
-                          <linearGradient id="genderGradient-Other" x1="0" x2="1" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#CBD5E1" />
-                            <stop offset="48%" stopColor="#94A3B8" />
-                            <stop offset="100%" stopColor="#64748B" />
-                          </linearGradient>
-                          <filter id="genderDonutDepth" x="-20%" y="-20%" width="140%" height="140%">
-                            <feDropShadow dx="0" dy="8" stdDeviation="5" floodColor="#14181F" floodOpacity="0.13" />
-                          </filter>
-                        </defs>
                         <Tooltip content={<DashboardChartTooltip />} />
                         <Pie
                           {...CHART_ANIMATION_PROPS}
-                          cornerRadius={8}
+                          cornerRadius={5}
                           data={patientGenderData}
                           dataKey="count"
-                          filter="url(#genderDonutDepth)"
-                          innerRadius={46}
+                          innerRadius={50}
                           label={false}
                           labelLine={false}
                           nameKey="label"
@@ -2518,10 +2434,10 @@ export function AdminDashboard() {
                         >
                           {patientGenderData.map((item) => (
                             <Cell
-                              fill={`url(#genderGradient-${item.label})`}
+                              fill={item.color}
                               key={item.label}
                               stroke="#FFFFFF"
-                              strokeWidth={4}
+                              strokeWidth={3}
                             />
                           ))}
                         </Pie>
@@ -2573,7 +2489,7 @@ export function AdminDashboard() {
       {showRecentPatientsPanel || showStaffPanel ? (
       <section className="grid items-stretch gap-4 xl:grid-cols-2">
         {showRecentPatientsPanel ? (
-          <DashboardPanel action="View all" actionTo="/patients" bodyClassName="flex h-full flex-col p-4" title="Recent Patients">
+          <DashboardPanel action="View all" actionTo="/patients" bodyClassName="flex h-full flex-col p-5" title="Recent Patients">
             {isLoading ? (
               <div className="grid content-start gap-2.5">
                 {Array.from({ length: 5 }).map((_, index) => (
@@ -2621,7 +2537,7 @@ export function AdminDashboard() {
 
         {showStaffPanel ? (
           <DashboardPanel
-            bodyClassName="flex h-full flex-col p-4"
+            bodyClassName="flex h-full flex-col p-5"
             footer={
               dashboardData.totalStaff > 5 ? (
                 <Link

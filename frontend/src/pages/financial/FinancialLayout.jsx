@@ -1,4 +1,4 @@
-import { BarChart3, Construction } from 'lucide-react'
+import { Construction } from 'lucide-react'
 import { NavLink, Outlet, useLocation, useOutletContext } from 'react-router-dom'
 
 import { useAuth } from '@shared/context/AuthContext'
@@ -7,7 +7,7 @@ const PRIMARY_TABS = [
   { label: 'Billing', match: '/financial-reports/billing', to: '/financial-reports/billing/invoices' },
   { label: 'Salary', match: '/financial-reports/salary', to: '/financial-reports/salary' },
   { label: 'Expenses', match: '/financial-reports/expenses', to: '/financial-reports/expenses' },
-  { label: 'Financial Reports', match: '/financial-reports/reports', to: '/financial-reports/reports' },
+  { label: 'Reports', match: '/financial-reports/reports', to: '/financial-reports/reports' },
 ]
 
 const BILLING_TABS = [
@@ -50,22 +50,6 @@ export function SalaryPlaceholder() {
         <h2 className="text-[18px] font-semibold text-ink">Salary module coming soon</h2>
         <p className="mt-2 text-[14px] text-slate">
           Fixed salary, commission salary, configuration, and history will live here.
-        </p>
-      </div>
-    </section>
-  )
-}
-
-export function FinancialReportsPlaceholder() {
-  return (
-    <section className="mx-auto flex min-h-[360px] max-w-2xl items-center justify-center rounded-[16px] border border-hairline bg-canvas p-8 text-center shadow-card">
-      <div>
-        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-[14px] bg-brand/10 text-brand">
-          <BarChart3 aria-hidden="true" className="h-6 w-6" />
-        </div>
-        <h2 className="text-[18px] font-semibold text-ink">Financial Reports coming soon</h2>
-        <p className="mt-2 text-[14px] text-slate">
-          Consolidated finance reporting will be available here after the backend is connected.
         </p>
       </div>
     </section>

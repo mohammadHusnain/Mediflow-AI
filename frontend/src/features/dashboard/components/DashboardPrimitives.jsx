@@ -9,7 +9,7 @@ import { useCountUp } from '@shared/lib/countUp'
 import { stagger } from '@shared/lib/motion'
 
 const dashboardPanelHeaderClass =
-  'flex min-h-12 items-center justify-between gap-3 border-b border-hairline px-4 py-3'
+  'flex min-h-12 items-center justify-between gap-3 border-b border-hairline px-5 py-4'
 
 function buildSparklinePoints(values = [], width = 320, height = 92) {
   const safeValues = values.length > 1 ? values : [0, 0, 0, 0]
@@ -47,7 +47,7 @@ export function DashboardStatCard({
 
   return (
     <article
-      className={`${surfaceClass} group relative h-full animate-fade-up overflow-hidden p-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(20,24,31,0.07)]`}
+      className={`${surfaceClass} group relative h-full animate-fade-up overflow-hidden p-5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(20,24,31,0.06)]`}
       style={stagger(index, 0.08)}
     >
       <div className="relative flex items-start justify-between gap-4">
@@ -72,7 +72,7 @@ export function DashboardStatCard({
 export function DashboardPanel({
   action,
   actionTo,
-  bodyClassName = 'p-4',
+  bodyClassName = 'p-5',
   children,
   className = '',
   footer,
@@ -152,7 +152,7 @@ export function DashboardEmptyState({
 
 export function PanelSkeleton({ className = '', rows = 1 }) {
   return (
-    <div className={['rounded-control bg-mist p-4', className].join(' ')}>
+    <div className={['rounded-control bg-mist p-5', className].join(' ')}>
       <div className="space-y-3">
         {Array.from({ length: rows }).map((_, index) => (
           <div
@@ -177,7 +177,7 @@ export function MetricCell({
   value,
 }) {
   return (
-    <div className={['min-w-0 rounded-control border border-hairline bg-canvas px-3 py-2.5', className].join(' ')}>
+    <div className={['min-w-0 rounded-control border border-hairline bg-canvas px-3.5 py-3', className].join(' ')}>
       <p className="text-[10px] font-semibold uppercase leading-4 tracking-[0.07em] text-slate">
         {label}
       </p>
@@ -210,14 +210,14 @@ export function ProgressMetricRow({
   const safePercent = Math.max(0, Math.min(100, Number(percent || 0)))
 
   return (
-    <div className="rounded-control bg-mist/80 px-3.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] transition duration-200 hover:bg-mist">
+    <div className="rounded-control border border-hairline bg-canvas px-3.5 py-3 transition duration-200 hover:bg-mist/50">
       <div className="flex items-center justify-between gap-3">
         <span className="truncate text-[12px] font-semibold text-slate">{label}</span>
         <span className="font-sans text-[12px] font-bold tabular-nums text-ink">{value}</span>
       </div>
       <div
         aria-label={`${label}: ${Math.round(safePercent)}%`}
-        className="mt-2 h-2 overflow-hidden rounded-full bg-canvas shadow-[inset_0_1px_2px_rgba(20,24,31,0.06)]"
+        className="mt-2 h-2 overflow-hidden rounded-full bg-mist"
         role="meter"
         aria-valuemax={100}
         aria-valuemin={0}
@@ -226,8 +226,7 @@ export function ProgressMetricRow({
         <div
           className="h-full rounded-full transition-[width,filter] duration-500 ease-out"
           style={{
-            background: `linear-gradient(90deg, ${color} 0%, ${color}dd 58%, ${color} 100%)`,
-            boxShadow: safePercent > 0 ? `0 4px 12px ${color}33` : 'none',
+            backgroundColor: color,
             width: `${safePercent}%`,
           }}
         />
@@ -248,7 +247,7 @@ export function RankingRow({
   const safePercent = Math.max(0, Math.min(100, Number(percent || 0)))
 
   return (
-    <div className="rounded-control border border-hairline bg-canvas p-3 shadow-[0_8px_22px_rgba(20,24,31,0.035)] transition duration-200 hover:border-brand/20 hover:shadow-[0_12px_28px_rgba(67,56,202,0.08)]">
+    <div className="rounded-control border border-hairline bg-canvas p-3 transition duration-200 hover:border-brand/25 hover:bg-mist/35">
       <div className="grid grid-cols-[28px_minmax(0,1fr)_44px] items-center gap-3">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-light font-sans text-[11px] font-bold text-brand">
           {index + 1}
@@ -265,7 +264,7 @@ export function RankingRow({
       </div>
       <div
         aria-label={`${label}: ${Math.round(safePercent)}%`}
-        className="mt-3 h-2 overflow-hidden rounded-full bg-mist shadow-[inset_0_1px_2px_rgba(20,24,31,0.05)]"
+        className="mt-3 h-2 overflow-hidden rounded-full bg-mist"
         role="meter"
         aria-valuemax={100}
         aria-valuemin={0}
@@ -274,8 +273,7 @@ export function RankingRow({
         <div
           className="h-full rounded-full transition-[width,filter] duration-500 ease-out"
           style={{
-            background: `linear-gradient(90deg, ${tone} 0%, ${tone}dd 58%, ${tone} 100%)`,
-            boxShadow: safePercent > 0 ? `0 5px 14px ${tone}35` : 'none',
+            backgroundColor: tone,
             width: `${safePercent}%`,
           }}
         />
@@ -307,7 +305,7 @@ export function DashboardMiniSparkline({
         points={linePoints}
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="4"
+        strokeWidth="3"
         vectorEffect="non-scaling-stroke"
       />
     </svg>

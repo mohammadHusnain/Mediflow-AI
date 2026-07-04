@@ -7,7 +7,9 @@ import { useAuth } from '@shared/context/AuthContext'
 import { usePermission } from '@shared/lib/usePermission'
 import { stagger } from '@shared/lib/motion'
 import { getNavItems } from '@shared/lib/navItems'
+import { getCriticalAlerts } from '@shared/services/postTreatmentApi'
 import Avatar from './Avatar'
+import UnreadBadge from './chat/UnreadBadge'
 
 function LogoMark() {
   return (
@@ -49,6 +51,10 @@ export function Sidebar({ mobile = false, onNavigate }) {
       return financialRouteActive
     }
   })
+  const [pendingAlertCount, setPendingAlertCount] = useState(0)
+  const alertBadgeCount = ['admin', 'doctor', 'receptionist'].includes(role?.slug)
+    ? pendingAlertCount
+    : 0
   const financialOpen = financialRouteActive || isFinancialOpen
   const fullName =
     [user?.first_name, user?.last_name].filter(Boolean).join(' ') ||
@@ -97,6 +103,49 @@ export function Sidebar({ mobile = false, onNavigate }) {
     }
   }, [isFinancialOpen])
 
+  useEffect(() => {
+    const canViewCriticalAlerts = ['admin', 'doctor', 'receptionist'].includes(role?.slug)
+
+    if (!canViewCriticalAlerts) {
+      return undefined
+    }
+
+    let cancelled = false
+
+    async function loadPendingAlertCount() {
+      try {
+        const response = await getCriticalAlerts({
+          page: 1,
+          page_size: 1,
+          status: 'pending',
+        })
+        const count = Number.isFinite(Number(response?.count))
+          ? Number(response.count)
+          : Array.isArray(response)
+            ? response.length
+            : Array.isArray(response?.results)
+              ? response.results.length
+              : 0
+
+        if (!cancelled) {
+          setPendingAlertCount(count)
+        }
+      } catch {
+        if (!cancelled) {
+          setPendingAlertCount(0)
+        }
+      }
+    }
+
+    loadPendingAlertCount()
+    const intervalId = window.setInterval(loadPendingAlertCount, 30_000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+    }
+  }, [role?.slug])
+
   function handleLogout() {
     logout()
     onNavigate?.()
@@ -138,6 +187,7 @@ export function Sidebar({ mobile = false, onNavigate }) {
           {visibleNavItems.map((item, index) => {
             const Icon = item.icon
             const itemActive = matchesItemPath(item, location.pathname)
+            const isCriticalAlertsItem = item.to === '/post-treatment/alerts'
 
             if (Array.isArray(item.children) && item.children.length > 0) {
               return (
@@ -232,6 +282,9 @@ export function Sidebar({ mobile = false, onNavigate }) {
                 <span className={mobile ? 'truncate' : 'hidden truncate lg:block'}>
                   {item.label}
                 </span>
+                {isCriticalAlertsItem ? (
+                  <UnreadBadge count={alertBadgeCount} />
+                ) : null}
               </NavLink>
             )
           })}

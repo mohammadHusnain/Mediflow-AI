@@ -1,6 +1,6 @@
 /* src/features/appointments/pages/AppointmentView.jsx - Read-only appointment detail page. */
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, CalendarClock, Edit } from 'lucide-react'
+import { ArrowLeft, CalendarClock, Edit, Plus } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import PaymentBadge from '../components/PaymentBadge'
@@ -11,6 +11,7 @@ import { usePermission } from '@shared/lib/usePermission'
 import { useAuth } from '@shared/context/AuthContext'
 import {
   formatDateTime,
+  getAppointmentDoctorId,
   getAppointmentDoctorName,
   getAppointmentPatientId,
   getBackendError,
@@ -23,6 +24,10 @@ import {
   getDoctors,
   getPatient,
 } from '@shared/services/api'
+import {
+  canCreatePlan,
+  getPostTreatmentDoctorId,
+} from '@shared/lib/postTreatmentAccess'
 
 function getEmbeddedAppointmentPatient(appointment) {
   return typeof appointment?.patient === 'object' ? appointment.patient : null
@@ -136,6 +141,11 @@ export function AppointmentView() {
   }
 
   const vitalsText = getVitalsText(appointment)
+  const appointmentPatientId = getAppointmentPatientId(appointment)
+  const canStartPostTreatmentPlan =
+    canCreatePlan({ role, user }) &&
+    appointment.status === 'completed' &&
+    String(getAppointmentDoctorId(appointment)) === String(getPostTreatmentDoctorId({ role, user }))
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -283,6 +293,33 @@ export function AppointmentView() {
               {formatDateTime(appointment.booked_at)}
             </p>
           </section>
+
+          {canStartPostTreatmentPlan ? (
+            <section className="rounded-card border border-brand/20 bg-brand-light/40 px-4 py-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-[15px] font-semibold text-ink">
+                    Set up a post-treatment plan for this visit?
+                  </h2>
+                  <p className="mt-1 text-[13px] text-slate">
+                    Build a static WhatsApp follow-up schedule for this patient.
+                  </p>
+                </div>
+                <button
+                  className="primary-button inline-flex h-10 items-center justify-center rounded-control bg-brand px-4 text-[13px] font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+                  onClick={() =>
+                    navigate(
+                      `/post-treatment/plans/new?patient=${appointmentPatientId}&appointment=${id}`,
+                    )
+                  }
+                  type="button"
+                >
+                  <Plus aria-hidden="true" className="mr-2 h-4 w-4" />
+                  Create Plan
+                </button>
+              </div>
+            </section>
+          ) : null}
         </div>
       </section>
     </div>

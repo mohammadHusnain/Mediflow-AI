@@ -19,6 +19,16 @@ import {
   markDisbursed,
   upsertSalaryConfig,
 } from './salaryApi.js'
+import {
+  buildReportParams,
+  downloadReportPDF,
+  getExpenseBreakdown,
+  getFinancialSummary,
+  getRevenueTrend,
+  getSalaryVsRevenue,
+  getTopMetrics,
+} from './reportsApi.js'
+import { exportReportPdf } from '../lib/exportPdf.js'
 
 describe('billing demo service CRUD', () => {
   test('creates, reads, updates, marks paid, syncs payment, and deletes an invoice', async () => {
@@ -146,5 +156,78 @@ describe('salary demo service flows', () => {
     const after = await getDisbursements({ month: '2026-07' })
     const persisted = after.results.find((record) => record.id === pending.id)
     assert.equal(persisted.status, 'disbursed')
+  })
+})
+
+describe('reports demo service and export helpers', () => {
+  test('normalizes report params and only sends custom dates for custom ranges', () => {
+    assert.deepEqual(
+      buildReportParams({
+        dateFrom: '2026-07-01',
+        dateTo: '2026-07-31',
+        period: 'monthly',
+      }),
+      { period: 'monthly' },
+    )
+
+    assert.deepEqual(
+      buildReportParams({
+        dateFrom: '2026-07-01',
+        dateTo: '2026-07-31',
+        period: 'custom',
+      }),
+      {
+        date_from: '2026-07-01',
+        date_to: '2026-07-31',
+        period: 'custom',
+      },
+    )
+  })
+
+  test('returns demo report data for the composed financial reports page', async () => {
+    const params = { period: 'monthly' }
+    const [summary, trend, expenseBreakdown, salaryVsRevenue, topMetrics] = await Promise.all([
+      getFinancialSummary(params),
+      getRevenueTrend(params),
+      getExpenseBreakdown(params),
+      getSalaryVsRevenue(params),
+      getTopMetrics(params),
+    ])
+
+    assert.ok(summary.total_revenue > 0)
+    assert.ok(summary.net_profit > 0)
+    assert.ok(trend.length >= 2)
+    assert.ok(expenseBreakdown.length > 0)
+    assert.ok(salaryVsRevenue.every((row) => 'salary_cost' in row))
+    assert.equal(topMetrics.top_doctor_name, 'Nora Patel')
+  })
+
+  test('supports a one-day custom range and demo PDF blob', async () => {
+    const params = {
+      dateFrom: '2026-07-04',
+      dateTo: '2026-07-04',
+      period: 'custom',
+    }
+    const trend = await getRevenueTrend(params)
+    const pdf = await downloadReportPDF(params)
+
+    assert.equal(trend.length, 1)
+    assert.equal(pdf.type, 'application/pdf')
+  })
+
+  test('surfaces JSON error blobs instead of downloading invalid PDFs', async () => {
+    let capturedError = null
+    const reportsApi = {
+      downloadReportPDF: async () =>
+        new Blob([JSON.stringify({ detail: 'PDF generation failed' })], {
+          type: 'application/json',
+        }),
+    }
+
+    await exportReportPdf(reportsApi, { period: 'monthly' }, (error) => {
+      capturedError = error
+    })
+
+    assert.equal(capturedError?.message, 'PDF generation failed')
   })
 })

@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
+  History,
   Search,
+  Settings2,
   Stethoscope,
   Users,
   Wallet,
@@ -234,19 +236,21 @@ function SalaryTable({
                     <PaymentStatus configured={Boolean(config)} record={record} />
                   </td>
                   <td className="px-5 py-4">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
                       <button
-                        className="text-[13px] font-semibold text-brand transition hover:text-brand-dark"
+                        className="inline-flex h-9 items-center gap-1.5 rounded-control border border-brand/20 bg-brand/5 px-3 text-[13px] font-semibold text-brand transition hover:border-brand/30 hover:bg-brand/10 hover:text-brand-dark"
                         onClick={() => onConfigure(person)}
                         type="button"
                       >
+                        <Settings2 aria-hidden="true" className="h-4 w-4" />
                         Configure
                       </button>
                       <button
-                        className="text-[13px] font-medium text-slate transition hover:text-ink"
+                        className="inline-flex h-9 items-center gap-1.5 rounded-control border border-hairline bg-canvas px-3 text-[13px] font-semibold text-slate transition hover:bg-mist hover:text-ink"
                         onClick={() => onHistory(person)}
                         type="button"
                       >
+                        <History aria-hidden="true" className="h-4 w-4" />
                         History
                       </button>
                     </div>
