@@ -1,41 +1,29 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
-  DollarSign,
-  Percent,
+  Search,
   Stethoscope,
   Users,
   Wallet,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
 
+import InvoiceBadge from '../../../components/financial/InvoiceBadge.jsx'
 import SalaryBadge from '../../../components/financial/SalaryBadge.jsx'
 import SalaryConfigModal from '../../../components/financial/SalaryConfigModal.jsx'
-import StatCard from '../../../components/financial/StatCard.jsx'
 import Avatar from '@shared/components/Avatar'
 import { useAuth } from '@shared/context/AuthContext'
 import {
   getDoctorSalaries,
   getOwnSalary,
-  getSalaryOverview,
-  getSalaryStats,
+  getSalaryHistory,
   getStaffSalaries,
 } from '@shared/services/salaryApi'
 
-const CHART_COLORS = ['#4338CA', '#7C3AED', '#B45309']
+function currentMonth() {
+  return new Date().toISOString().slice(0, 7)
+}
 
 function listFromResponse(response) {
   if (Array.isArray(response)) return response
@@ -80,6 +68,50 @@ function amountLabel(person) {
   return `${formatPkr(config.fixed_amount)}/mo`
 }
 
+function payrollRecordFor(person, records) {
+  return records.find((record) => String(record.user_id) === String(person.id))
+}
+
+function payrollStatusValue(person, records) {
+  if (!person?.current_config) return 'not_configured'
+
+  const record = payrollRecordFor(person, records)
+  const status = String(record?.status || 'pending').toLowerCase()
+
+  if (['paid', 'disbursed'].includes(status)) return 'paid'
+  if (['partial', 'partially_paid'].includes(status)) return 'partially_paid'
+  return 'pending'
+}
+
+const PAYROLL_STATUS_OPTIONS = [
+  { label: 'All Statuses', value: '' },
+  { label: 'Paid', value: 'paid' },
+  { label: 'Pending', value: 'pending' },
+  { label: 'Partially Paid', value: 'partially_paid' },
+  { label: 'Not Set', value: 'not_configured' },
+]
+
+function PaymentStatus({ configured, record }) {
+  if (!configured) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F3F4F6] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-[#5B6472]">
+        <AlertCircle aria-hidden="true" className="h-3.5 w-3.5" />
+        Not Set
+      </span>
+    )
+  }
+
+  if (!record) {
+    return <InvoiceBadge status="pending" />
+  }
+
+  if (record.status === 'disbursed') {
+    return <InvoiceBadge status="paid" />
+  }
+
+  return <InvoiceBadge status={record.status || 'pending'} />
+}
+
 function ConfiguredStatus({ configured }) {
   return configured ? (
     <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#0F9D66]">
@@ -112,7 +144,16 @@ function EmptyTable({ icon: Icon, label, onClick, toLabel }) {
   )
 }
 
-function SalaryTable({ emptyIcon, emptyLabel, emptyLink, onConfigure, onHistory, people, type }) {
+function SalaryTable({
+  emptyIcon,
+  emptyLabel,
+  emptyLink,
+  onConfigure,
+  onHistory,
+  payrollRecords,
+  people,
+  type,
+}) {
   const navigate = useNavigate()
 
   if (people.length === 0) {
@@ -131,10 +172,19 @@ function SalaryTable({ emptyIcon, emptyLabel, emptyLink, onConfigure, onHistory,
   return (
     <section className="overflow-hidden rounded-[16px] border border-hairline bg-canvas">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[980px] border-collapse text-left">
+        <table className="w-full min-w-[1080px] border-collapse text-left">
           <thead className="border-b border-hairline bg-mist/60">
             <tr>
-              {['Name', 'Role', 'Salary Type', 'Amount / Rate', 'Effective From', 'Configured', 'Actions'].map((header) => (
+              {[
+                'Employee',
+                'Department',
+                'Salary Type',
+                'Assigned Salary',
+                'Effective From',
+                'Configured',
+                'Selected Month Status',
+                'Actions',
+              ].map((header) => (
                 <th
                   className="px-5 py-3.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate"
                   key={header}
@@ -148,7 +198,9 @@ function SalaryTable({ emptyIcon, emptyLabel, emptyLink, onConfigure, onHistory,
           <tbody>
             {people.map((person) => {
               const config = person.current_config
-              const invalidStaffCommission = type === 'staff' && config?.salary_type === 'commission'
+              const record = payrollRecordFor(person, payrollRecords)
+              const invalidStaffCommission =
+                (type === 'staff' || person.employee_type === 'staff') && config?.salary_type === 'commission'
 
               return (
                 <tr className="border-b border-hairline last:border-0 hover:bg-mist/40" key={person.id}>
@@ -177,6 +229,9 @@ function SalaryTable({ emptyIcon, emptyLabel, emptyLink, onConfigure, onHistory,
                   </td>
                   <td className="px-5 py-4">
                     <ConfiguredStatus configured={Boolean(config)} />
+                  </td>
+                  <td className="px-5 py-4">
+                    <PaymentStatus configured={Boolean(config)} record={record} />
                   </td>
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">
@@ -309,31 +364,32 @@ function DoctorSalaryView() {
 
 function AdminSalaryView() {
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState('doctors')
-  const [stats, setStats] = useState(null)
-  const [overview, setOverview] = useState(null)
+  const [activeTab, setActiveTab] = useState('all')
+  const [payrollMonth, setPayrollMonth] = useState(currentMonth())
+  const [departmentFilter, setDepartmentFilter] = useState('')
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
   const [doctors, setDoctors] = useState([])
   const [staff, setStaff] = useState([])
+  const [payrollRecords, setPayrollRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [configModal, setConfigModal] = useState({ open: false, staff: null })
 
   const loadSalaryData = useCallback(async () => {
     setLoading(true)
     try {
-      const [statsData, overviewData, doctorsData, staffData] = await Promise.all([
-        getSalaryStats(),
-        getSalaryOverview(),
+      const [doctorsData, staffData, historyData] = await Promise.all([
         getDoctorSalaries(),
         getStaffSalaries(),
+        getSalaryHistory({ month: payrollMonth }),
       ])
-      setStats(statsData || {})
-      setOverview(overviewData || {})
       setDoctors(listFromResponse(doctorsData))
       setStaff(listFromResponse(staffData))
+      setPayrollRecords(listFromResponse(historyData))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [payrollMonth])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(loadSalaryData, 0)
@@ -344,88 +400,140 @@ function AdminSalaryView() {
     navigate('/financial-reports/salary/history', { state: { userId: person.id } })
   }
 
-  const currentRows = activeTab === 'doctors' ? doctors : staff
+  const allPeople = useMemo(() => [...doctors, ...staff], [doctors, staff])
+  const departments = useMemo(() => {
+    return [...new Set(allPeople.map((person) => person.role).filter(Boolean))]
+      .sort((first, second) => first.localeCompare(second))
+  }, [allPeople])
+  const currentRows = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    const department = departmentFilter.trim().toLowerCase()
+    const source = activeTab === 'doctors'
+      ? doctors
+      : activeTab === 'staff'
+        ? staff
+        : allPeople
+
+    return source
+      .filter((person) => {
+        if (!query) return true
+        return [person.name, person.email, person.role]
+          .some((value) => String(value || '').toLowerCase().includes(query))
+      })
+      .filter((person) => !department || String(person.role || '').toLowerCase() === department)
+      .filter((person) => !statusFilter || payrollStatusValue(person, payrollRecords) === statusFilter)
+      .sort((first, second) => String(first.name || '').localeCompare(String(second.name || '')))
+  }, [activeTab, allPeople, departmentFilter, doctors, payrollRecords, search, staff, statusFilter])
+
+  const payrollSummary = useMemo(() => {
+    return allPeople.reduce(
+      (summary, person) => {
+        const status = payrollStatusValue(person, payrollRecords)
+
+        if (status === 'not_configured') {
+          summary.notConfigured += 1
+        } else if (status === 'paid') {
+          summary.paid += 1
+        } else if (status === 'partially_paid') {
+          summary.partial += 1
+        } else {
+          summary.pending += 1
+        }
+
+        return summary
+      },
+      { notConfigured: 0, paid: 0, partial: 0, pending: 0 },
+    )
+  }, [allPeople, payrollRecords])
+
+  const tableType = activeTab === 'staff' ? 'staff' : activeTab === 'doctors' ? 'doctor' : 'mixed'
 
   return (
     <div>
-      <div className="mb-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          icon={Users}
-          label="Total Staff on Salary"
-          loading={loading && !stats}
-          value={stats?.total_configured}
-        />
-        <StatCard
-          icon={DollarSign}
-          label="Fixed Salary Budget"
-          loading={loading && !stats}
-          sub="PKR/month"
-          value={stats?.total_fixed_monthly === undefined ? undefined : formatPkr(stats.total_fixed_monthly)}
-        />
-        <StatCard
-          accentColor="green"
-          icon={Percent}
-          label="Commission Staff"
-          loading={loading && !stats}
-          value={stats?.commission_count}
-        />
-        <StatCard
-          accentColor={numberValue(stats?.not_configured) > 0 ? 'amber' : 'slate'}
-          icon={AlertCircle}
-          label="Not Configured"
-          loading={loading && !stats}
-          value={stats?.not_configured}
-        />
-      </div>
+      <header className="mb-5 rounded-[18px] border border-hairline bg-canvas px-6 py-5 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-2xl">
+            <h2 className="font-display text-[26px] text-ink">Payroll Management</h2>
+            <p className="mt-2 text-[15px] font-normal leading-6 text-slate">
+              Assign salaries, review monthly payroll status, and open payment history by employee.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-[12px]">
+            <span className="rounded-full bg-[#E3F7EC] px-3 py-1 font-semibold text-[#0F9D66]">
+              Paid {payrollSummary.paid}
+            </span>
+            <span className="rounded-full bg-[#FEF3C7] px-3 py-1 font-semibold text-[#B45309]">
+              Pending {payrollSummary.pending}
+            </span>
+            <span className="rounded-full bg-[#E7EEFF] px-3 py-1 font-semibold text-[#1D4ED8]">
+              Partial {payrollSummary.partial}
+            </span>
+            <span className="rounded-full bg-[#F3F4F6] px-3 py-1 font-semibold text-[#5B6472]">
+              Not Set {payrollSummary.notConfigured}
+            </span>
+          </div>
+        </div>
+      </header>
 
-      <div className="mb-8 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <section className="rounded-[16px] border border-hairline bg-canvas p-5">
-          <div className="mb-4">
-            <h3 className="text-[15px] font-semibold text-ink">Monthly Salary Budget</h3>
-            <p className="mt-1 text-[12px] text-slate">Fixed and commission projection</p>
-          </div>
-          <div className="h-[240px]">
-            <ResponsiveContainer height="100%" minHeight={1} minWidth={1} width="100%">
-              <BarChart data={overview?.budget_trend || []}>
-                <CartesianGrid stroke="#E4E8EB" strokeDasharray="4 4" vertical={false} />
-                <XAxis dataKey="month" tick={{ fill: '#5B6472', fontSize: 11 }} tickFormatter={formatMonth} tickLine={false} />
-                <YAxis tick={{ fill: '#5B6472', fontSize: 11 }} tickFormatter={(value) => `${Math.round(value / 1000)}K`} tickLine={false} />
-                <Tooltip formatter={(value) => formatPkr(value)} labelFormatter={formatMonth} />
-                <Bar dataKey="fixed" fill="#4338CA" name="Fixed" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="commission" fill="#7C3AED" name="Commission" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-
-        <section className="rounded-[16px] border border-hairline bg-canvas p-5">
-          <div className="mb-4">
-            <h3 className="text-[15px] font-semibold text-ink">Salary Types</h3>
-            <p className="mt-1 text-[12px] text-slate">Configured vs pending</p>
-          </div>
-          <div className="h-[240px]">
-            <ResponsiveContainer height="100%" minHeight={1} minWidth={1} width="100%">
-              <PieChart>
-                <Tooltip />
-                <Pie
-                  data={overview?.salary_type_distribution || []}
-                  dataKey="value"
-                  innerRadius={58}
-                  outerRadius={86}
-                  paddingAngle={4}
-                >
-                  {(overview?.salary_type_distribution || []).map((entry, index) => (
-                    <Cell fill={CHART_COLORS[index % CHART_COLORS.length]} key={entry.name} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-      </div>
+      <section className="mb-6 rounded-[16px] border border-hairline bg-canvas p-5">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[180px_minmax(220px,1fr)_180px_170px] md:items-end">
+          <label className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Payroll Month</span>
+            <input
+              className="h-11 w-full rounded-control border border-hairline bg-canvas px-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+              onChange={(event) => setPayrollMonth(event.target.value)}
+              type="month"
+              value={payrollMonth}
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Search</span>
+            <span className="relative block">
+              <Search aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate/60" />
+              <input
+                className="h-11 w-full rounded-control border border-hairline bg-canvas py-2 pl-9 pr-3 text-[14px] text-ink outline-none transition placeholder:text-slate/60 focus:border-brand focus:ring-1 focus:ring-brand"
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Employee or department"
+                type="search"
+              value={search}
+            />
+            </span>
+          </label>
+          <label className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Department</span>
+            <select
+              className="h-11 w-full rounded-control border border-hairline bg-canvas px-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+              onChange={(event) => setDepartmentFilter(event.target.value)}
+              value={departmentFilter}
+            >
+              <option value="">All departments</option>
+              {departments.map((department) => (
+                <option key={department} value={department}>
+                  {department}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Payment Status</span>
+            <select
+              className="h-11 w-full rounded-control border border-hairline bg-canvas px-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+              onChange={(event) => setStatusFilter(event.target.value)}
+              value={statusFilter}
+            >
+              {PAYROLL_STATUS_OPTIONS.map((status) => (
+                <option key={status.value || 'all'} value={status.value}>
+                  {status.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </section>
 
       <div className="mb-6 flex border-b border-hairline">
         {[
+          { id: 'all', label: 'All Employees' },
           { id: 'doctors', label: 'Doctors' },
           { id: 'staff', label: 'Staff' },
         ].map((tab) => (
@@ -450,12 +558,13 @@ function AdminSalaryView() {
       ) : (
         <SalaryTable
           emptyIcon={activeTab === 'doctors' ? Stethoscope : Users}
-          emptyLabel={activeTab === 'doctors' ? 'No doctors added yet. Add a doctor first.' : 'No staff members added yet.'}
+          emptyLabel={activeTab === 'doctors' ? 'No doctors added yet. Add a doctor first.' : 'No staff members found.'}
           emptyLink={activeTab === 'doctors' ? { label: 'Go to Doctors', to: '/doctors' } : { label: 'Go to Staff', to: '/staff' }}
           onConfigure={(person) => setConfigModal({ open: true, staff: person })}
           onHistory={handleHistory}
+          payrollRecords={payrollRecords}
           people={currentRows}
-          type={activeTab === 'doctors' ? 'doctor' : 'staff'}
+          type={tableType}
         />
       )}
 

@@ -1,13 +1,12 @@
 /* src/shared/components/Topbar.jsx - Renders frosted page chrome with search and profile menu. */
 import { useState } from 'react'
 import { Bell, LogOut, Menu } from 'lucide-react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
 import { useAuth } from '@shared/context/AuthContext'
 import Avatar from './Avatar'
 
 export function Topbar({ onMenuClick, subtitle, title }) {
-  const location = useLocation()
   const navigate = useNavigate()
   const { logout, role, user } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)

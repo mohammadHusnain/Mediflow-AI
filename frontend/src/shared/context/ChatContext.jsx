@@ -149,12 +149,15 @@ export function ChatProvider({ children }) {
     [activeConversation],
   )
   const isOpenRef = useRef(isOpen)
-  isOpenRef.current = isOpen
   const activeConversationKeyRef = useRef(activeConversationKey)
-  activeConversationKeyRef.current = activeConversationKey
   const currentUserIdRef = useRef(currentUserId)
-  currentUserIdRef.current = currentUserId
   const wsUrl = useMemo(() => (chatAvailable ? getChatWebSocketUrl() : ''), [chatAvailable])
+
+  useEffect(() => {
+    isOpenRef.current = isOpen
+    activeConversationKeyRef.current = activeConversationKey
+    currentUserIdRef.current = currentUserId
+  }, [activeConversationKey, currentUserId, isOpen])
 
   const clearTypingUser = useCallback((conversationKey, userId) => {
     setTypingUsers((currentTyping) => {

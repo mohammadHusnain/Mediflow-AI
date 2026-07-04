@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { DollarSign, Loader2, Percent, X } from 'lucide-react'
 import { useForm, useWatch } from 'react-hook-form'
 
+import { translucentBackdropClass } from '@shared/components/FormPrimitives'
 import { upsertSalaryConfig } from '@shared/services/salaryApi'
 
 function currentMonth() {
@@ -187,7 +188,7 @@ export function SalaryConfigForm({
 
       {salaryType === 'fixed' ? (
         <div>
-          <label className="text-[13px] font-medium text-ink" htmlFor="fixed_amount">
+            <label className="text-[13px] font-medium text-ink" htmlFor="fixed_amount">
             Monthly Fixed Amount (PKR) <span className="text-[#C8102E]">*</span>
           </label>
           <div className="relative mt-2">
@@ -255,13 +256,13 @@ export function SalaryConfigForm({
 
       <div>
         <label className="text-[13px] font-medium text-ink" htmlFor="effective_from">
-          Effective From <span className="text-[#C8102E]">*</span>
+          Effective Salary Month <span className="text-[#C8102E]">*</span>
         </label>
         <input
           className="mt-2 h-11 w-full rounded-control border border-hairline bg-canvas px-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
           id="effective_from"
           type="month"
-          {...register('effective_from', { required: 'Effective month is required' })}
+          {...register('effective_from', { required: 'Effective salary month is required' })}
         />
         <FieldError message={errors.effective_from?.message} />
         {retroactiveWarning ? (
@@ -325,7 +326,7 @@ export default function SalaryConfigModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4 py-6 backdrop-blur-sm"
+      className={`fixed inset-0 z-50 flex items-center justify-center px-4 py-6 ${translucentBackdropClass}`}
       onClick={onClose}
     >
       <section

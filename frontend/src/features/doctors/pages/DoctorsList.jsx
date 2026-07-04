@@ -146,7 +146,7 @@ function formatArrival(value) {
 export function DoctorsList() {
   const navigate = useNavigate()
   const toast = useToast()
-  const { canDelete: canDeleteRecords, canWrite, isAdmin } = usePermission()
+  const { canDelete: canDeleteRecords, isAdmin } = usePermission()
 
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')

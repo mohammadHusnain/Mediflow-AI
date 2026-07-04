@@ -314,6 +314,38 @@ function getPersonById(id) {
   return demoSalaryPeople.find((person) => String(person.id) === String(id))
 }
 
+function recordPerson(record) {
+  return getPersonById(record.user_id) || null
+}
+
+function recordStatusMatches(record, status) {
+  const requestedStatus = String(status || '').trim().toLowerCase()
+  if (!requestedStatus) return true
+
+  const currentStatus = String(record.status || '').trim().toLowerCase()
+  if (requestedStatus === 'paid') return ['paid', 'disbursed'].includes(currentStatus)
+  if (requestedStatus === 'partially_paid') return ['partial', 'partially_paid'].includes(currentStatus)
+
+  return currentStatus === requestedStatus
+}
+
+function recordDepartmentMatches(record, department) {
+  const requestedDepartment = String(department || '').trim().toLowerCase()
+  if (!requestedDepartment) return true
+
+  const person = recordPerson(record)
+  return String(person?.role || record.role || '').trim().toLowerCase() === requestedDepartment
+}
+
+function recordEmployeeMatches(record, employee) {
+  const query = String(employee || '').trim().toLowerCase()
+  if (!query) return true
+
+  const person = recordPerson(record)
+  return [record.employee_name, record.staff_name, person?.name, person?.email, record.role]
+    .some((value) => String(value || '').toLowerCase().includes(query))
+}
+
 function applyConfig(payload = {}) {
   const userId = payload.user_id ?? payload.staff_id ?? payload.id
   const person = getPersonById(userId)
@@ -350,22 +382,46 @@ function applyConfig(payload = {}) {
     nextConfig.salary_type === 'commission'
       ? Math.round((appointmentsCount * 6000 * Number(nextConfig.commission_rate || 0)) / 100)
       : baseAmount
+  const salaryMonth = nextConfig.effective_from || CURRENT_MONTH
+  const historyRecord = {
+    id: Date.now(),
+    appointments_count: appointmentsCount,
+    base_amount: baseAmount,
+    calculated_amount: calculatedAmount,
+    employee_name: person.name,
+    role: person.role,
+    salary_month: salaryMonth,
+    salary_type: nextConfig.salary_type,
+    status: 'pending',
+    total_earned: calculatedAmount,
+    user_id: person.id,
+  }
+  const disbursementRecord = {
+    id: Date.now() + 1,
+    base_amount: calculatedAmount,
+    bonus: 0,
+    disbursed_on: '',
+    employee_name: person.name,
+    role: person.role,
+    salary_month: salaryMonth,
+    salary_type: nextConfig.salary_type,
+    status: 'pending',
+    total: calculatedAmount,
+    user_id: person.id,
+  }
 
   demoHistory = [
-    {
-      id: Date.now(),
-      appointments_count: appointmentsCount,
-      base_amount: baseAmount,
-      calculated_amount: calculatedAmount,
-      employee_name: person.name,
-      role: person.role,
-      salary_month: CURRENT_MONTH,
-      salary_type: nextConfig.salary_type,
-      status: 'pending',
-      total_earned: calculatedAmount,
-      user_id: person.id,
-    },
-    ...demoHistory,
+    historyRecord,
+    ...demoHistory.filter((record) =>
+      String(record.user_id) !== String(person.id) || record.salary_month !== salaryMonth
+    ),
+  ]
+
+  demoDisbursements = [
+    disbursementRecord,
+    ...demoDisbursements.filter((record) =>
+      String(record.user_id) !== String(person.id) || record.salary_month !== salaryMonth
+    ),
   ]
 
   return clone({ ...person, current_config: nextConfig })
@@ -478,7 +534,10 @@ export async function getSalaryHistory(params = {}) {
     const filtered = demoHistory.filter((record) => {
       const matchesUser = !params.user_id || String(record.user_id) === String(params.user_id)
       const matchesMonth = !month || record.salary_month === month
-      return matchesUser && matchesMonth
+      const matchesDepartment = recordDepartmentMatches(record, params.department)
+      const matchesEmployee = recordEmployeeMatches(record, params.employee)
+      const matchesStatus = recordStatusMatches(record, params.status)
+      return matchesUser && matchesMonth && matchesDepartment && matchesEmployee && matchesStatus
     })
     return paginate(filtered, params)
   }
@@ -495,7 +554,12 @@ export async function getDisbursements(params = {}) {
   if (PUBLIC_ROUTES_FOR_TESTING) {
     const month = normalizeMonth(params)
     return paginate(
-      demoDisbursements.filter((record) => !month || record.salary_month === month),
+      demoDisbursements.filter((record) =>
+        (!month || record.salary_month === month) &&
+        recordDepartmentMatches(record, params.department) &&
+        recordEmployeeMatches(record, params.employee) &&
+        recordStatusMatches(record, params.status)
+      ),
       params,
     )
   }

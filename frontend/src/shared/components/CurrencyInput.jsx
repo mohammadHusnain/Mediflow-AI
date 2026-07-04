@@ -1,6 +1,6 @@
 import { CURRENCIES, getStoredCurrency } from '@shared/lib/currency'
 
-export default function CurrencyInput({ currency, onChange, onCurrencyChange, ...inputProps }) {
+export default function CurrencyInput({ currency, onCurrencyChange, ...inputProps }) {
   const currentCurrency = currency || getStoredCurrency()
 
   return (

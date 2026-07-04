@@ -122,8 +122,8 @@ export function ConversationView({ entity, group = false, memberCount, onBack, t
 
   useEffect(() => {
     if (!group || !entity?.id) {
-      setMembers([])
-      return
+      const timeoutId = window.setTimeout(() => setMembers([]), 0)
+      return () => window.clearTimeout(timeoutId)
     }
 
     let cancelled = false

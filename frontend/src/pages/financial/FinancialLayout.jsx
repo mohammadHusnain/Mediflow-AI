@@ -24,10 +24,10 @@ const SALARY_TABS = [
 
 function tabClass(active) {
   return [
-    'border-b-2 px-5 py-3.5 text-[14px] transition',
+    'inline-flex min-w-[132px] items-center justify-center whitespace-nowrap border-b-2 px-5 py-4 text-center text-[15px] font-bold transition',
     active
-      ? 'border-brand font-semibold text-brand'
-      : 'border-transparent font-medium text-slate hover:text-ink',
+      ? 'border-brand text-brand'
+      : 'border-transparent text-slate hover:text-ink',
   ].join(' ')
 }
 
@@ -88,8 +88,8 @@ export default function FinancialLayout() {
 
   return (
     <div className="animate-fade-up">
-      <div className="sticky top-16 z-10 -mx-4 border-b border-hairline bg-canvas md:-mx-6 lg:-mx-8">
-        <nav className="mx-auto flex max-w-[1200px] gap-0 overflow-x-auto px-6">
+      <div className="sticky top-16 z-10 -mx-4 -mt-4 border-b border-hairline bg-canvas md:-mx-6 md:-mt-6 lg:-mx-8 lg:-mt-8">
+        <nav className="mx-auto flex max-w-[1200px] justify-start gap-0 overflow-x-auto px-6 sm:justify-center">
           {primaryTabs.map((tab) => (
             <NavLink
               className={() => tabClass(location.pathname.startsWith(tab.match))}

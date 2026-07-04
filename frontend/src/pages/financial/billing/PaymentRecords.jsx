@@ -1,19 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AlertCircle,
-  Calendar,
   CreditCard,
-  DollarSign,
   Search,
-  TrendingUp,
   X,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 import InvoiceBadge from '../../../components/financial/InvoiceBadge.jsx'
-import StatCard from '../../../components/financial/StatCard.jsx'
 import { useDebounce } from '@shared/hooks/useDebounce'
-import { getPayments, getPaymentSummary } from '@shared/services/billingApi'
+import { getPayments } from '@shared/services/billingApi'
 
 const PAGE_SIZE = 20
 
@@ -134,7 +130,6 @@ function SkeletonRows() {
 
 export default function PaymentRecords() {
   const navigate = useNavigate()
-  const [summary, setSummary] = useState(null)
   const [payments, setPayments] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -164,13 +159,9 @@ export default function PaymentRecords() {
     setLoading(true)
     setError(false)
     try {
-      const [summaryData, paymentData] = await Promise.all([
-        getPaymentSummary(),
-        getPayments(params),
-      ])
+      const paymentData = await getPayments(params)
       const normalized = normalizePaginated(paymentData)
 
-      setSummary(summaryData || {})
       setPayments(normalized.results)
       setTotal(normalized.count)
     } catch {
@@ -204,62 +195,65 @@ export default function PaymentRecords() {
     setPage(1)
   }
 
+  const visibleTotal = payments.reduce((sum, payment) => sum + numberValue(paymentAmount(payment)), 0)
+
   return (
     <div>
-      <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-3">
-        <StatCard
-          accentColor="green"
-          icon={DollarSign}
-          label="Total Received"
-          loading={loading && !summary}
-          sub="all time PKR"
-          value={summary?.total_received === undefined ? undefined : formatPkr(summary.total_received)}
-        />
-        <StatCard
-          icon={Calendar}
-          label="This Month"
-          loading={loading && !summary}
-          sub="PKR received"
-          value={summary?.this_month === undefined ? undefined : formatPkr(summary.this_month)}
-        />
-        <StatCard
-          accentColor="amber"
-          icon={TrendingUp}
-          label="Avg per Day"
-          loading={loading && !summary}
-          sub="last 30 days PKR"
-          value={summary?.avg_daily === undefined ? undefined : formatPkr(summary.avg_daily)}
-        />
-      </div>
+      <header className="mb-5 rounded-[18px] border border-hairline bg-canvas px-6 py-5 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-2xl">
+            <h2 className="font-display text-[26px] text-ink">Payment Records</h2>
+            <p className="mt-2 text-[15px] font-normal leading-6 text-slate">
+              Track receipts, invoice links, payment methods, and reconciliation status.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-[13px] text-slate">
+            <span className="rounded-full border border-hairline bg-mist px-3 py-1 font-medium">
+              {loading ? 'Loading payments' : `${total.toLocaleString()} records`}
+            </span>
+            <span className="rounded-full border border-hairline bg-mist px-3 py-1 font-medium">
+              Visible total {formatPkr(visibleTotal)}
+            </span>
+          </div>
+        </div>
+      </header>
 
-      <section className="mb-6 rounded-[12px] border border-hairline bg-canvas p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="relative">
-            <span className="sr-only">Search payments</span>
-            <Search aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate/60" />
+      <section className="mb-6 rounded-[16px] border border-hairline bg-canvas p-5">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(280px,1fr)_160px_160px_auto] xl:items-end">
+          <label className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Search</span>
+            <span className="relative block">
+              <Search aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate/60" />
+              <input
+                className="h-11 w-full rounded-control border border-hairline px-3 py-2 pl-9 text-[14px] font-normal text-ink outline-none transition placeholder:text-slate/60 focus:border-brand focus:ring-1 focus:ring-brand"
+                onChange={resetPageAndSet(setSearch)}
+                placeholder="Patient or payment ref"
+                type="search"
+                value={search}
+              />
+            </span>
+          </label>
+          <label className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Date From</span>
             <input
-              className="w-[280px] rounded-control border border-hairline px-3 py-2 pl-9 text-[14px] font-normal text-ink outline-none transition placeholder:text-slate/60 focus:border-brand focus:ring-1 focus:ring-brand"
-              onChange={resetPageAndSet(setSearch)}
-              placeholder="Search patient or payment ref"
-              type="search"
-              value={search}
+              className="h-11 w-full rounded-control border border-hairline px-3 py-2 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+              onChange={resetPageAndSet(setDateFrom)}
+              type="date"
+              value={dateFrom}
             />
           </label>
-          <input
-            className="w-[150px] rounded-control border border-hairline px-3 py-2 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
-            onChange={resetPageAndSet(setDateFrom)}
-            type="date"
-            value={dateFrom}
-          />
-          <input
-            className="w-[150px] rounded-control border border-hairline px-3 py-2 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
-            onChange={resetPageAndSet(setDateTo)}
-            type="date"
-            value={dateTo}
-          />
+          <label className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Date To</span>
+            <input
+              className="h-11 w-full rounded-control border border-hairline px-3 py-2 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+              onChange={resetPageAndSet(setDateTo)}
+              type="date"
+              value={dateTo}
+            />
+          </label>
           {filtersActive ? (
             <button
-              className="inline-flex items-center gap-1 text-[13px] font-medium text-slate transition hover:text-ink"
+              className="inline-flex h-11 items-center justify-center gap-1 rounded-control border border-hairline px-4 text-[13px] font-medium text-slate transition hover:bg-mist hover:text-ink"
               onClick={clearFilters}
               type="button"
             >

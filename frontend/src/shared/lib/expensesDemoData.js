@@ -54,6 +54,40 @@ function dateInMonth(monthOffset, preferredDay) {
   return toDateKey(new Date(now.getFullYear(), now.getMonth() + monthOffset, day))
 }
 
+function expenseMonthValue(expense) {
+  return String(expense.expense_month || String(expense.expense_date || '').slice(5, 7)).padStart(2, '0')
+}
+
+function expenseYearValue(expense) {
+  return String(expense.expense_year || String(expense.expense_date || '').slice(0, 4))
+}
+
+function expenseMonthKey(expense) {
+  return `${expenseYearValue(expense)}-${expenseMonthValue(expense)}`
+}
+
+function dateForExpenseMonth(month, year, preferredDate = toDateKey(new Date())) {
+  const monthValue = String(month || String(preferredDate).slice(5, 7) || new Date().getMonth() + 1).padStart(2, '0')
+  const yearValue = String(year || String(preferredDate).slice(0, 4) || new Date().getFullYear())
+  const maxDay = new Date(Number(yearValue), Number(monthValue), 0).getDate()
+  const preferredDay = Number(String(preferredDate || '').slice(-2)) || 1
+  const day = String(Math.max(1, Math.min(preferredDay, maxDay))).padStart(2, '0')
+
+  return `${yearValue}-${monthValue}-${day}`
+}
+
+function resolveExpensePeriod(data = {}, fallbackDate = toDateKey(new Date())) {
+  const fallback = String(fallbackDate || toDateKey(new Date()))
+  const month = String(data.expense_month || fallback.slice(5, 7) || new Date().getMonth() + 1).padStart(2, '0')
+  const year = String(data.expense_year || fallback.slice(0, 4) || new Date().getFullYear())
+
+  return {
+    date: dateForExpenseMonth(month, year, data.expense_date || fallback),
+    month: Number(month),
+    year: Number(year),
+  }
+}
+
 function monthKeyForOffset(monthOffset) {
   return toMonthKey(new Date(new Date().getFullYear(), new Date().getMonth() + monthOffset, 1))
 }
@@ -89,37 +123,43 @@ function isMonthInPeriod(monthValue, period = 'month') {
   return date >= new Date(start.getFullYear(), start.getMonth(), 1) && date <= end
 }
 
-function makeExpense(id, category, description, amount, expenseType, monthOffset, day) {
+function makeExpense(id, category, expenseName, description, amount, expenseType, monthOffset, day, status = 'recorded') {
+  const expenseDate = dateInMonth(monthOffset, day)
+
   return {
     added_by: DEMO_ADDED_BY,
     amount,
     category,
-    created_at: `${dateInMonth(monthOffset, day)}T09:30:00.000Z`,
+    created_at: `${expenseDate}T09:30:00.000Z`,
     description,
-    expense_date: dateInMonth(monthOffset, day),
+    expense_date: expenseDate,
+    expense_month: Number(expenseDate.slice(5, 7)),
+    expense_name: expenseName,
     expense_type: expenseType,
+    expense_year: Number(expenseDate.slice(0, 4)),
     id,
+    status,
   }
 }
 
 function makeDemoExpenses() {
   return [
-    makeExpense(1, 'Rent', 'Main clinic floor monthly rent', 85000, 'operational', 0, 1),
-    makeExpense(2, 'Electricity', 'July electricity bill', 32500, 'operational', 0, 2),
-    makeExpense(3, 'Staff Salary', 'Reception and nursing salary payout', 62000, 'salary', 0, 3),
-    makeExpense(4, 'Doctor Salary', 'Consultant base salary payout', 98000, 'salary', -1, 28),
-    makeExpense(5, 'Lab Supplies', 'Gloves, syringes, and sample tubes', 18500, 'supplies', -1, 18),
-    makeExpense(6, 'Furniture', 'Waiting area chairs', 42000, 'equipment', -2, 12),
-    makeExpense(7, 'Internet', 'Fiber internet bill', 8500, 'operational', -2, 5),
-    makeExpense(8, 'Cleaning Supplies', 'Disinfectant and sanitation stock', 7400, 'supplies', -3, 22),
-    makeExpense(9, 'Ultrasound Repair', 'Probe maintenance service', 67000, 'equipment', -4, 9),
-    makeExpense(10, 'Security', 'Night security service', 22000, 'operational', -5, 14),
-    makeExpense(11, 'Software', 'Accounting software subscription', 12000, 'other', -6, 7),
-    makeExpense(12, 'Generator Fuel', 'Backup power fuel', 16500, 'operational', -7, 19),
-    makeExpense(13, 'Stationery', 'Forms and prescription pads', 5600, 'supplies', -8, 11),
-    makeExpense(14, 'Equipment Calibration', 'Annual equipment calibration', 49000, 'equipment', -9, 21),
-    makeExpense(15, 'Pharmacy Restock', 'Basic consumables restock', 23500, 'supplies', -10, 16),
-    makeExpense(16, 'Insurance', 'Clinic asset insurance', 31000, 'other', -11, 2),
+    makeExpense(1, 'Rent', 'Monthly Clinic Rent', 'Main clinic floor monthly rent', 85000, 'operational', 0, 1),
+    makeExpense(2, 'Electricity', 'Electricity Bill', 'Current month electricity bill', 32500, 'operational', 0, 2),
+    makeExpense(3, 'Staff Salary', 'Staff Salary Payout', 'Reception and nursing salary payout', 62000, 'salary', 0, 3),
+    makeExpense(4, 'Doctor Salary', 'Consultant Salary Payout', 'Consultant base salary payout', 98000, 'salary', -1, 28),
+    makeExpense(5, 'Lab Supplies', 'Clinical Consumables', 'Gloves, syringes, and sample tubes', 18500, 'supplies', -1, 18),
+    makeExpense(6, 'Furniture', 'Waiting Area Chairs', 'Waiting area chairs', 42000, 'equipment', -2, 12),
+    makeExpense(7, 'Internet', 'Fiber Internet Bill', 'Fiber internet bill', 8500, 'operational', -2, 5),
+    makeExpense(8, 'Cleaning Supplies', 'Sanitation Stock', 'Disinfectant and sanitation stock', 7400, 'supplies', -3, 22),
+    makeExpense(9, 'Ultrasound Repair', 'Ultrasound Probe Service', 'Probe maintenance service', 67000, 'equipment', -4, 9),
+    makeExpense(10, 'Security', 'Night Security Service', 'Night security service', 22000, 'operational', -5, 14),
+    makeExpense(11, 'Software', 'Accounting Software', 'Accounting software subscription', 12000, 'other', -6, 7),
+    makeExpense(12, 'Generator Fuel', 'Backup Fuel Purchase', 'Backup power fuel', 16500, 'operational', -7, 19),
+    makeExpense(13, 'Stationery', 'Printed Forms', 'Forms and prescription pads', 5600, 'supplies', -8, 11),
+    makeExpense(14, 'Equipment Calibration', 'Annual Calibration', 'Annual equipment calibration', 49000, 'equipment', -9, 21),
+    makeExpense(15, 'Pharmacy Restock', 'Pharmacy Consumables', 'Basic consumables restock', 23500, 'supplies', -10, 16),
+    makeExpense(16, 'Insurance', 'Asset Insurance', 'Clinic asset insurance', 31000, 'other', -11, 2),
   ]
 }
 
@@ -211,17 +251,25 @@ function normalizeCategoryFilter(category) {
 }
 
 function getFilteredExpenses(params = {}) {
-  const period = params.period || 'month'
+  const period = params.month || params.year || params.date_from || params.date_to ? '' : params.period || 'month'
   const search = String(params.search || '').trim().toLowerCase()
   const category = normalizeCategoryFilter(params.category)
   const expenseType = String(params.expense_type || '').trim().toLowerCase()
+  const month = params.month ? String(params.month).padStart(2, '0') : ''
+  const year = params.year ? String(params.year) : ''
+  const dateFrom = String(params.date_from || '')
+  const dateTo = String(params.date_to || '')
 
   return getExpenseStore()
-    .filter((expense) => isInPeriod(expense.expense_date, period))
+    .filter((expense) => !period || isInPeriod(expense.expense_date, period))
+    .filter((expense) => !month || expenseMonthValue(expense) === month)
+    .filter((expense) => !year || expenseYearValue(expense) === year)
+    .filter((expense) => !dateFrom || expense.expense_date >= dateFrom)
+    .filter((expense) => !dateTo || expense.expense_date <= dateTo)
     .filter((expense) => {
       if (!search) return true
 
-      return [expense.category, expense.description]
+      return [expense.category, expense.description, expense.expense_name]
         .some((field) => String(field || '').toLowerCase().includes(search))
     })
     .filter((expense) => {
@@ -232,7 +280,10 @@ function getFilteredExpenses(params = {}) {
       if (!expenseType) return true
       return expense.expense_type === expenseType
     })
-    .sort((left, right) => right.expense_date.localeCompare(left.expense_date))
+    .sort((left, right) =>
+      expenseMonthKey(right).localeCompare(expenseMonthKey(left)) ||
+      right.expense_date.localeCompare(left.expense_date)
+    )
 }
 
 export function getDemoExpenses(params = {}) {
@@ -278,15 +329,20 @@ export function getDemoExpenseCategories() {
 export function createDemoExpense(data = {}) {
   const expenses = getExpenseStore()
   const amount = Number(data.amount)
+  const period = resolveExpensePeriod(data)
   const nextExpense = {
     added_by: DEMO_ADDED_BY,
     amount: Number.isFinite(amount) ? Number(amount.toFixed(2)) : 0,
     category: String(data.category || '').trim(),
     created_at: new Date().toISOString(),
     description: String(data.description || '').trim(),
-    expense_date: data.expense_date || toDateKey(new Date()),
+    expense_date: period.date,
+    expense_month: period.month,
+    expense_name: String(data.expense_name || data.name || data.category || '').trim(),
     expense_type: data.expense_type || 'other',
+    expense_year: period.year,
     id: Math.max(0, ...expenses.map((expense) => Number(expense.id) || 0)) + 1,
+    status: data.status || 'recorded',
   }
 
   setExpenseStore([nextExpense, ...expenses])
@@ -301,13 +357,18 @@ export function updateDemoExpense(id, data = {}) {
     }
 
     const amount = Number(data.amount)
+    const period = resolveExpensePeriod(data, expense.expense_date)
     updatedExpense = {
       ...expense,
       amount: Number.isFinite(amount) ? Number(amount.toFixed(2)) : expense.amount,
       category: String(data.category || expense.category).trim(),
       description: String(data.description ?? expense.description).trim(),
-      expense_date: data.expense_date || expense.expense_date,
+      expense_date: period.date,
+      expense_month: period.month,
+      expense_name: String(data.expense_name || data.name || expense.expense_name || expense.category).trim(),
       expense_type: data.expense_type || expense.expense_type,
+      expense_year: period.year,
+      status: data.status || expense.status || 'recorded',
     }
 
     return updatedExpense
@@ -381,7 +442,7 @@ function getMonthlyBreakdown(period, periodExpenses) {
   }
 
   return getMonthsForPeriod(period).map((month) => {
-    const expenses = periodExpenses.filter((expense) => expense.expense_date.startsWith(month))
+    const expenses = periodExpenses.filter((expense) => expenseMonthKey(expense) === month)
     const revenue = getRevenueForMonth(month)
 
     return {

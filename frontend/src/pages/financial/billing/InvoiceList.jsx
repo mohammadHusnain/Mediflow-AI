@@ -1,26 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AlertCircle,
-  CheckCircle2,
-  Clock,
-  DollarSign,
   Download,
   Eye,
   FileX,
-  Receipt,
   Search,
   X,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 import InvoiceBadge from '../../../components/financial/InvoiceBadge.jsx'
-import StatCard from '../../../components/financial/StatCard.jsx'
 import { useAuth } from '@shared/context/AuthContext'
 import { useDebounce } from '@shared/hooks/useDebounce'
 import {
   downloadBlob,
   downloadInvoicePDF,
-  getBillingStats,
   getInvoices,
 } from '@shared/services/billingApi'
 
@@ -158,7 +152,6 @@ function SkeletonRows() {
 export default function InvoiceList() {
   const navigate = useNavigate()
   const { role } = useAuth()
-  const [stats, setStats] = useState(null)
   const [invoices, setInvoices] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -193,13 +186,9 @@ export default function InvoiceList() {
     setLoading(true)
     setError(false)
     try {
-      const [statsData, invoiceData] = await Promise.all([
-        getBillingStats(),
-        getInvoices(params),
-      ])
+      const invoiceData = await getInvoices(params)
       const normalized = normalizePaginated(invoiceData)
 
-      setStats(statsData || {})
       setInvoices(normalized.results)
       setTotal(normalized.count)
     } catch {
@@ -246,77 +235,81 @@ export default function InvoiceList() {
 
   return (
     <div>
-      <div className="mb-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          icon={Receipt}
-          label="Total Invoices"
-          loading={loading && !stats}
-          value={stats?.total_invoices}
-        />
-        <StatCard
-          accentColor="green"
-          icon={CheckCircle2}
-          label="Paid"
-          loading={loading && !stats}
-          sub="invoices"
-          value={stats?.paid_count}
-        />
-        <StatCard
-          accentColor="amber"
-          icon={Clock}
-          label="Pending"
-          loading={loading && !stats}
-          sub="awaiting payment"
-          value={stats?.pending_count}
-        />
-        <StatCard
-          icon={DollarSign}
-          label="Revenue This Month"
-          loading={loading && !stats}
-          sub="PKR"
-          value={stats?.revenue_month === undefined ? undefined : formatPkr(stats.revenue_month)}
-        />
-      </div>
+      <header className="mb-5 rounded-[18px] border border-hairline bg-canvas px-6 py-5 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-2xl">
+            <h2 className="font-display text-[26px] text-ink">Invoice Management</h2>
+            <p className="mt-2 text-[15px] font-normal leading-6 text-slate">
+              Create, review, download, and follow up appointment invoices.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-[13px] text-slate">
+            <span className="rounded-full border border-hairline bg-mist px-3 py-1 font-medium">
+              {loading ? 'Loading invoices' : `${total.toLocaleString()} invoices`}
+            </span>
+            {filtersActive ? (
+              <span className="rounded-full border border-brand/20 bg-brand/5 px-3 py-1 font-semibold text-brand">
+                Filtered register
+              </span>
+            ) : (
+              <span className="rounded-full border border-hairline bg-mist px-3 py-1 font-medium">
+                Current operating register
+              </span>
+            )}
+          </div>
+        </div>
+      </header>
 
-      <section className="mb-6 rounded-[12px] border border-hairline bg-canvas p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="relative">
-            <span className="sr-only">Search invoices</span>
-            <Search aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate/60" />
+      <section className="mb-6 rounded-[16px] border border-hairline bg-canvas p-5">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(280px,1fr)_150px_160px_160px_auto] xl:items-end">
+          <label className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Search</span>
+            <span className="relative block">
+              <Search aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate/60" />
+              <input
+                className="h-11 w-full rounded-control border border-hairline px-3 py-2 pl-9 text-[14px] font-normal text-ink outline-none transition placeholder:text-slate/60 focus:border-brand focus:ring-1 focus:ring-brand"
+                onChange={resetPageAndSet(setSearch)}
+                placeholder="Patient or invoice #"
+                type="search"
+                value={search}
+              />
+            </span>
+          </label>
+          <label className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Status</span>
+            <select
+              className="h-11 w-full rounded-control border border-hairline bg-canvas px-3 py-2 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+              onChange={resetPageAndSet(setStatus)}
+              value={status}
+            >
+              {STATUS_OPTIONS.map((option) => (
+                <option key={option.value || 'all'} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Date From</span>
             <input
-              className="w-[280px] rounded-control border border-hairline px-3 py-2 pl-9 text-[14px] font-normal text-ink outline-none transition placeholder:text-slate/60 focus:border-brand focus:ring-1 focus:ring-brand"
-              onChange={resetPageAndSet(setSearch)}
-              placeholder="Search patient or invoice #"
-              type="search"
-              value={search}
+              className="h-11 w-full rounded-control border border-hairline px-3 py-2 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+              onChange={resetPageAndSet(setDateFrom)}
+              type="date"
+              value={dateFrom}
             />
           </label>
-          <select
-            className="w-[140px] rounded-control border border-hairline bg-canvas px-3 py-2 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
-            onChange={resetPageAndSet(setStatus)}
-            value={status}
-          >
-            {STATUS_OPTIONS.map((option) => (
-              <option key={option.value || 'all'} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <input
-            className="w-[150px] rounded-control border border-hairline px-3 py-2 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
-            onChange={resetPageAndSet(setDateFrom)}
-            type="date"
-            value={dateFrom}
-          />
-          <input
-            className="w-[150px] rounded-control border border-hairline px-3 py-2 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
-            onChange={resetPageAndSet(setDateTo)}
-            type="date"
-            value={dateTo}
-          />
+          <label className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Date To</span>
+            <input
+              className="h-11 w-full rounded-control border border-hairline px-3 py-2 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+              onChange={resetPageAndSet(setDateTo)}
+              type="date"
+              value={dateTo}
+            />
+          </label>
           {filtersActive ? (
             <button
-              className="inline-flex items-center gap-1 text-[13px] font-medium text-slate transition hover:text-ink"
+              className="inline-flex h-11 items-center justify-center gap-1 rounded-control border border-hairline px-4 text-[13px] font-medium text-slate transition hover:bg-mist hover:text-ink"
               onClick={clearFilters}
               type="button"
             >

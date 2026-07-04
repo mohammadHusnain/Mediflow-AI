@@ -119,7 +119,7 @@ function IconButton({ children, label, onClick, tone = 'slate' }) {
 export function StaffList() {
   const navigate = useNavigate()
   const toast = useToast()
-  const { canWrite, isAdmin } = usePermission()
+  const { isAdmin } = usePermission()
   const [staff, setStaff] = useState([])
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)

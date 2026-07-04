@@ -30,12 +30,45 @@ const EXPENSE_TYPES = [
   { label: 'Supplies', value: 'supplies' },
   { label: 'Other', value: 'other' },
 ]
+const EXPENSE_STATUS_OPTIONS = [
+  { label: 'Recorded', value: 'recorded' },
+  { label: 'Approved', value: 'approved' },
+  { label: 'Void', value: 'void' },
+]
+const MONTH_OPTIONS = [
+  { label: 'January', value: '01' },
+  { label: 'February', value: '02' },
+  { label: 'March', value: '03' },
+  { label: 'April', value: '04' },
+  { label: 'May', value: '05' },
+  { label: 'June', value: '06' },
+  { label: 'July', value: '07' },
+  { label: 'August', value: '08' },
+  { label: 'September', value: '09' },
+  { label: 'October', value: '10' },
+  { label: 'November', value: '11' },
+  { label: 'December', value: '12' },
+]
+
+function getCurrentMonthParts() {
+  const today = new Date()
+  return {
+    month: String(today.getMonth() + 1).padStart(2, '0'),
+    year: String(today.getFullYear()),
+  }
+}
+
+const CURRENT_MONTH_PARTS = getCurrentMonthParts()
 const EMPTY_FORM = {
   amount: '',
   category: '',
   description: '',
   expense_date: new Date().toISOString().slice(0, 10),
+  expense_month: CURRENT_MONTH_PARTS.month,
+  expense_name: '',
   expense_type: 'operational',
+  expense_year: CURRENT_MONTH_PARTS.year,
+  status: 'recorded',
 }
 
 function normalizeCategoryItems(response) {
@@ -59,11 +92,52 @@ function getToday() {
   return new Date().toISOString().slice(0, 10)
 }
 
+function getMonthFromDate(dateValue) {
+  return String(dateValue || '').slice(5, 7) || CURRENT_MONTH_PARTS.month
+}
+
+function getYearFromDate(dateValue) {
+  return String(dateValue || '').slice(0, 4) || CURRENT_MONTH_PARTS.year
+}
+
+function getExpenseYearOptions() {
+  const currentYear = Number(CURRENT_MONTH_PARTS.year)
+  return Array.from({ length: 8 }, (_, index) => String(currentYear - index))
+}
+
+function isFutureExpenseMonth(month, year) {
+  const monthNumber = Number(month)
+  const yearNumber = Number(year)
+  const currentMonth = Number(CURRENT_MONTH_PARTS.month)
+  const currentYear = Number(CURRENT_MONTH_PARTS.year)
+
+  return yearNumber > currentYear || (yearNumber === currentYear && monthNumber > currentMonth)
+}
+
+function getLastDayOfMonth(month, year) {
+  return new Date(Number(year), Number(month), 0).getDate()
+}
+
+function buildExpenseDate(month, year, preferredDate = getToday()) {
+  const monthValue = String(month || CURRENT_MONTH_PARTS.month).padStart(2, '0')
+  const yearValue = String(year || CURRENT_MONTH_PARTS.year)
+  const preferredDay = Number(String(preferredDate || '').slice(-2)) || 1
+  const maxDay = getLastDayOfMonth(monthValue, yearValue)
+  const currentDayCap = monthValue === CURRENT_MONTH_PARTS.month && yearValue === CURRENT_MONTH_PARTS.year
+    ? Number(getToday().slice(-2))
+    : maxDay
+  const day = String(Math.max(1, Math.min(preferredDay, maxDay, currentDayCap))).padStart(2, '0')
+
+  return `${yearValue}-${monthValue}-${day}`
+}
+
 function validateForm(form) {
   const errors = {}
   const category = String(form.category || '').trim()
   const amountText = String(form.amount ?? '').trim()
   const amount = Number.parseFloat(amountText)
+  const month = String(form.expense_month || '').padStart(2, '0')
+  const year = String(form.expense_year || '')
 
   if (!category) {
     errors.category = 'Category is required'
@@ -71,8 +145,26 @@ function validateForm(form) {
     errors.category = 'Category must be at least 2 characters'
   }
 
+  if (!String(form.expense_name || '').trim()) {
+    errors.expense_name = 'Expense name is required'
+  }
+
   if (!form.expense_type) {
     errors.expense_type = 'Expense type is required'
+  }
+
+  if (!MONTH_OPTIONS.some((option) => option.value === month)) {
+    errors.expense_month = 'Expense month is required'
+  }
+
+  if (!year || Number.isNaN(Number(year))) {
+    errors.expense_year = 'Expense year is required'
+  } else if (isFutureExpenseMonth(month, year)) {
+    errors.expense_year = 'Cannot record a future expense month'
+  }
+
+  if (!form.status) {
+    errors.status = 'Status is required'
   }
 
   if (!amountText || Number.isNaN(amount)) {
@@ -184,6 +276,7 @@ export default function ExpenseFormPage({ mode = 'add' }) {
   const [categoryOpen, setCategoryOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const yearOptions = useMemo(() => getExpenseYearOptions(), [])
   const amount = Number.parseFloat(String(form.amount || '').trim())
   const largeAmountWarning = Number.isFinite(amount) && amount > 10000000
     ? 'Large amount - please verify'
@@ -227,12 +320,17 @@ export default function ExpenseFormPage({ mode = 'add' }) {
         const expense = await getExpenseById(id)
 
         if (mounted) {
+          const expenseDate = expense.expense_date || getToday()
           setForm({
             amount: String(expense.amount ?? ''),
             category: expense.category || '',
             description: expense.description || '',
-            expense_date: expense.expense_date || getToday(),
+            expense_date: expenseDate,
+            expense_month: String(expense.expense_month || getMonthFromDate(expenseDate)).padStart(2, '0'),
+            expense_name: expense.expense_name || expense.name || expense.category || '',
             expense_type: expense.expense_type || 'operational',
+            expense_year: String(expense.expense_year || getYearFromDate(expenseDate)),
+            status: expense.status || 'recorded',
           })
         }
       } catch (error) {
@@ -254,7 +352,24 @@ export default function ExpenseFormPage({ mode = 'add' }) {
   }, [id, isEdit])
 
   function updateField(name, value) {
-    setForm((currentForm) => ({ ...currentForm, [name]: value }))
+    setForm((currentForm) => {
+      const nextForm = { ...currentForm, [name]: value }
+
+      if (name === 'expense_month' || name === 'expense_year') {
+        nextForm.expense_date = buildExpenseDate(
+          name === 'expense_month' ? value : currentForm.expense_month,
+          name === 'expense_year' ? value : currentForm.expense_year,
+          currentForm.expense_date,
+        )
+      }
+
+      if (name === 'expense_date') {
+        nextForm.expense_month = getMonthFromDate(value)
+        nextForm.expense_year = getYearFromDate(value)
+      }
+
+      return nextForm
+    })
     setErrors((currentErrors) => ({ ...currentErrors, [name]: '' }))
     setSubmitError('')
   }
@@ -270,8 +385,12 @@ export default function ExpenseFormPage({ mode = 'add' }) {
       amount: Number(amountValue.toFixed(2)),
       category: existingCategory?.name || categoryInput,
       description: form.description.trim(),
-      expense_date: form.expense_date,
+      expense_date: buildExpenseDate(form.expense_month, form.expense_year, form.expense_date),
+      expense_month: Number(form.expense_month),
+      expense_name: form.expense_name.trim(),
       expense_type: form.expense_type,
+      expense_year: Number(form.expense_year),
+      status: form.status,
     }
   }
 
@@ -364,6 +483,16 @@ export default function ExpenseFormPage({ mode = 'add' }) {
               </h2>
               <div className="mb-3.5 h-px bg-hairline" />
               <div className="grid gap-4 md:grid-cols-2">
+                <FormField error={errors.expense_name} label="Expense Name">
+                  <input
+                    className={getFieldClass(errors.expense_name)}
+                    onChange={(event) => updateField('expense_name', event.target.value)}
+                    placeholder="Monthly rent, generator fuel, lab supplies"
+                    type="text"
+                    value={form.expense_name}
+                  />
+                </FormField>
+
                 <CategoryField
                   categories={categories}
                   error={errors.category}
@@ -378,6 +507,34 @@ export default function ExpenseFormPage({ mode = 'add' }) {
                   value={form.category}
                 />
 
+                <FormField error={errors.expense_month} label="Expense Month">
+                  <select
+                    className={getFieldClass(errors.expense_month)}
+                    onChange={(event) => updateField('expense_month', event.target.value)}
+                    value={form.expense_month}
+                  >
+                    {MONTH_OPTIONS.map((month) => (
+                      <option key={month.value} value={month.value}>
+                        {month.label}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+
+                <FormField error={errors.expense_year} label="Expense Year">
+                  <select
+                    className={getFieldClass(errors.expense_year)}
+                    onChange={(event) => updateField('expense_year', event.target.value)}
+                    value={form.expense_year}
+                  >
+                    {yearOptions.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+
                 <FormField error={errors.expense_type} label="Expense Type">
                   <select
                     className={getFieldClass(errors.expense_type)}
@@ -387,6 +544,20 @@ export default function ExpenseFormPage({ mode = 'add' }) {
                     {EXPENSE_TYPES.map((type) => (
                       <option key={type.value} value={type.value}>
                         {type.label}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+
+                <FormField error={errors.status} label="Status">
+                  <select
+                    className={getFieldClass(errors.status)}
+                    onChange={(event) => updateField('status', event.target.value)}
+                    value={form.status}
+                  >
+                    {EXPENSE_STATUS_OPTIONS.map((status) => (
+                      <option key={status.value} value={status.value}>
+                        {status.label}
                       </option>
                     ))}
                   </select>
@@ -410,7 +581,7 @@ export default function ExpenseFormPage({ mode = 'add' }) {
                   <FieldError tone="warning">{largeAmountWarning}</FieldError>
                 </FormField>
 
-                <FormField error={errors.expense_date} label="Expense Date">
+                <FormField error={errors.expense_date} label="Ledger Date">
                   <input
                     className={getFieldClass(errors.expense_date)}
                     max={getToday()}

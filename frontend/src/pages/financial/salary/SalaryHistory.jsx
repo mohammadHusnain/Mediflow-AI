@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Calendar,
   CheckCircle2,
   FileText,
   Loader2,
@@ -58,6 +57,14 @@ function recordName(record) {
 function recordRole(record) {
   return record.role || record.staff_role || '-'
 }
+
+const SALARY_STATUS_OPTIONS = [
+  { label: 'All Statuses', value: '' },
+  { label: 'Paid', value: 'paid' },
+  { label: 'Pending', value: 'pending' },
+  { label: 'Partially Paid', value: 'partially_paid' },
+  { label: 'On Hold', value: 'on_hold' },
+]
 
 function EmptyState({ month }) {
   return (
@@ -261,7 +268,9 @@ export default function SalaryHistory() {
   const isDoctor = role?.slug === 'doctor'
   const [activeTab, setActiveTab] = useState('history')
   const [month, setMonth] = useState(currentMonth())
+  const [departmentFilter, setDepartmentFilter] = useState('')
   const [selectedUserId, setSelectedUserId] = useState(location.state?.userId || '')
+  const [statusFilter, setStatusFilter] = useState('')
   const [people, setPeople] = useState([])
   const [history, setHistory] = useState([])
   const [disbursements, setDisbursements] = useState([])
@@ -275,6 +284,10 @@ export default function SalaryHistory() {
     () => [...people].sort((first, second) => first.name.localeCompare(second.name)),
     [people],
   )
+  const departments = useMemo(() => {
+    return [...new Set(people.map((person) => person.role).filter(Boolean))]
+      .sort((first, second) => first.localeCompare(second))
+  }, [people])
 
   const loadPeople = useCallback(async () => {
     if (isDoctor) return
@@ -290,27 +303,33 @@ export default function SalaryHistory() {
     setLoadingHistory(true)
     try {
       const data = await getSalaryHistory({
+        department: departmentFilter || undefined,
         month,
+        status: statusFilter || undefined,
         user_id: isDoctor ? user?.id || user?.user_id || user?.doctor_id : selectedUserId || undefined,
       })
       setHistory(listFromResponse(data))
     } finally {
       setLoadingHistory(false)
     }
-  }, [isDoctor, month, selectedUserId, user])
+  }, [departmentFilter, isDoctor, month, selectedUserId, statusFilter, user])
 
   const loadDisbursements = useCallback(async () => {
     if (isDoctor) return
 
     setLoadingDisbursements(true)
     try {
-      const data = await getDisbursements({ month })
+      const data = await getDisbursements({
+        department: departmentFilter || undefined,
+        month,
+        status: statusFilter || undefined,
+      })
       setDisbursements(listFromResponse(data))
       setSelectedIds(new Set())
     } finally {
       setLoadingDisbursements(false)
     }
-  }, [isDoctor, month])
+  }, [departmentFilter, isDoctor, month, statusFilter])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(loadPeople, 0)
@@ -360,8 +379,10 @@ export default function SalaryHistory() {
   }
 
   function clearFilters() {
+    setDepartmentFilter('')
     setMonth(currentMonth())
     setSelectedUserId('')
+    setStatusFilter('')
   }
 
   return (
@@ -398,42 +419,79 @@ export default function SalaryHistory() {
 
       {activeTab === 'history' ? (
         <>
-          <section className="mb-6 flex flex-wrap items-center gap-3 rounded-[12px] border border-hairline bg-canvas p-4">
-            {!isDoctor ? (
-              <select
-                className="h-10 w-[220px] rounded-control border border-hairline bg-canvas px-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
-                onChange={(event) => setSelectedUserId(event.target.value)}
-                value={selectedUserId}
-              >
-                <option value="">All staff members</option>
-                {sortedPeople.map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.name} - {person.role}
-                  </option>
-                ))}
-              </select>
-            ) : null}
+          <section className="mb-6 rounded-[16px] border border-hairline bg-canvas p-5">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(220px,1fr)_170px_minmax(160px,220px)_170px_auto] md:items-end">
+              {!isDoctor ? (
+                <label className="space-y-1">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Staff Member</span>
+                  <select
+                    className="h-11 w-full rounded-control border border-hairline bg-canvas px-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+                    onChange={(event) => setSelectedUserId(event.target.value)}
+                    value={selectedUserId}
+                  >
+                    <option value="">All staff members</option>
+                    {sortedPeople.map((person) => (
+                      <option key={person.id} value={person.id}>
+                        {person.name} - {person.role}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
 
-            <label className="inline-flex items-center gap-2">
-              <span className="sr-only">Month</span>
-              <Calendar aria-hidden="true" className="h-4 w-4 text-slate" />
-              <input
-                className="h-10 w-[160px] rounded-control border border-hairline bg-canvas px-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
-                onChange={(event) => setMonth(event.target.value)}
-                type="month"
-                value={month}
-              />
-            </label>
+              <label className="space-y-1">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Month</span>
+                <input
+                  className="h-11 w-full rounded-control border border-hairline bg-canvas px-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+                  onChange={(event) => setMonth(event.target.value)}
+                  type="month"
+                  value={month}
+                />
+              </label>
 
-            {(selectedUserId || month !== currentMonth()) ? (
-              <button
-                className="text-[13px] font-medium text-slate transition hover:text-ink"
-                onClick={clearFilters}
-                type="button"
-              >
-                Clear
-              </button>
-            ) : null}
+              {!isDoctor ? (
+                <label className="space-y-1">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Department</span>
+                  <select
+                    className="h-11 w-full rounded-control border border-hairline bg-canvas px-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+                    onChange={(event) => setDepartmentFilter(event.target.value)}
+                    value={departmentFilter}
+                  >
+                    <option value="">All departments</option>
+                    {departments.map((department) => (
+                      <option key={department} value={department}>
+                        {department}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+
+              <label className="space-y-1">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Status</span>
+                <select
+                  className="h-11 w-full rounded-control border border-hairline bg-canvas px-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+                  onChange={(event) => setStatusFilter(event.target.value)}
+                  value={statusFilter}
+                >
+                  {SALARY_STATUS_OPTIONS.map((status) => (
+                    <option key={status.value || 'all'} value={status.value}>
+                      {status.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {(selectedUserId || departmentFilter || statusFilter || month !== currentMonth()) ? (
+                <button
+                  className="inline-flex h-11 items-center justify-center rounded-control border border-hairline px-4 text-[13px] font-medium text-slate transition hover:bg-mist hover:text-ink"
+                  onClick={clearFilters}
+                  type="button"
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
           </section>
 
           {loadingHistory ? (
@@ -450,26 +508,58 @@ export default function SalaryHistory() {
 
       {activeTab === 'disbursements' && !isDoctor ? (
         <>
-          <section className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-hairline bg-canvas p-4">
-            <label className="inline-flex items-center gap-2">
-              <span className="sr-only">Disbursement month</span>
-              <Calendar aria-hidden="true" className="h-4 w-4 text-slate" />
-              <input
-                className="h-10 w-[160px] rounded-control border border-hairline bg-canvas px-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
-                onChange={(event) => setMonth(event.target.value)}
-                type="month"
-                value={month}
-              />
-            </label>
+          <section className="mb-6 rounded-[16px] border border-hairline bg-canvas p-5">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-[180px_minmax(160px,220px)_170px_auto] md:items-end">
+              <label className="space-y-1">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Disbursement Month</span>
+                <input
+                  className="h-11 w-[180px] rounded-control border border-hairline bg-canvas px-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+                  onChange={(event) => setMonth(event.target.value)}
+                  type="month"
+                  value={month}
+                />
+              </label>
 
-            <button
-              className="inline-flex items-center gap-2 rounded-control border border-brand/30 px-4 py-2 text-[13px] font-semibold text-brand transition hover:bg-brand/5"
-              onClick={() => setReportMessage('Disbursement report generation is coming soon.')}
-              type="button"
-            >
-              <FileText aria-hidden="true" className="h-4 w-4" />
-              Generate Disbursement Report
-            </button>
+              <label className="space-y-1">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Department</span>
+                <select
+                  className="h-11 w-full rounded-control border border-hairline bg-canvas px-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+                  onChange={(event) => setDepartmentFilter(event.target.value)}
+                  value={departmentFilter}
+                >
+                  <option value="">All departments</option>
+                  {departments.map((department) => (
+                    <option key={department} value={department}>
+                      {department}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-1">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Status</span>
+                <select
+                  className="h-11 w-full rounded-control border border-hairline bg-canvas px-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+                  onChange={(event) => setStatusFilter(event.target.value)}
+                  value={statusFilter}
+                >
+                  {SALARY_STATUS_OPTIONS.map((status) => (
+                    <option key={status.value || 'all'} value={status.value}>
+                      {status.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <button
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-control border border-brand/30 px-4 text-[13px] font-semibold text-brand transition hover:bg-brand/5 md:justify-self-end"
+                onClick={() => setReportMessage('Disbursement report generation is coming soon.')}
+                type="button"
+              >
+                <FileText aria-hidden="true" className="h-4 w-4" />
+                Generate Disbursement Report
+              </button>
+            </div>
           </section>
 
           {reportMessage ? (

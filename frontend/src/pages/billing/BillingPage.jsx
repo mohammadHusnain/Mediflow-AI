@@ -65,7 +65,8 @@ export default function BillingPage() {
   }, [search, statusFilter, page])
 
   useEffect(() => {
-    load()
+    const timeoutId = window.setTimeout(load, 0)
+    return () => window.clearTimeout(timeoutId)
   }, [load])
 
   return (

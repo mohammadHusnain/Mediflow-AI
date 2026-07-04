@@ -41,7 +41,8 @@ export default function SalaryRecordsTab() {
   }, [period])
 
   useEffect(() => {
-    load()
+    const timeoutId = window.setTimeout(load, 0)
+    return () => window.clearTimeout(timeoutId)
   }, [load])
 
   const markPaid = async (id) => {

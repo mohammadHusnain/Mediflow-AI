@@ -32,15 +32,3 @@ export default function CurrencySelect() {
     </select>
   )
 }
-
-export function useCurrency() {
-  const [currency, setCurrency] = useState(getStoredCurrency)
-
-  useEffect(() => {
-    const handler = () => setCurrency(getStoredCurrency())
-    window.addEventListener('storage', handler)
-    return () => window.removeEventListener('storage', handler)
-  }, [])
-
-  return currency
-}
