@@ -3,7 +3,7 @@ import { DollarSign, Loader2, Percent, X } from 'lucide-react'
 import { useForm, useWatch } from 'react-hook-form'
 
 import { translucentBackdropClass } from '@shared/components/FormPrimitives'
-import { upsertSalaryConfig } from '@shared/services/salaryApi'
+import { createSalaryConfig, updateSalaryConfig } from '@shared/services/billingApi'
 
 function currentMonth() {
   return new Date().toISOString().slice(0, 7)
@@ -21,13 +21,22 @@ function getDefaultValues(staffMember) {
   const type = role !== 'doctor' && config.salary_type === 'commission'
     ? 'fixed'
     : config.salary_type || 'fixed'
+  const commissionMode = config.commission_rate > 0
+    ? 'rate'
+    : config.commission_per_appointment > 0
+      ? 'flat'
+      : 'rate'
 
   return {
-    commission_base: config.commission_base || 'consultation_fee',
+    base_salary: config.base_salary ?? config.fixed_amount ?? '',
     commission_rate: config.commission_rate ?? '',
+    commission_per_appointment: config.commission_per_appointment ?? '',
+    commission_mode: commissionMode,
     effective_from: config.effective_from || currentMonth(),
-    fixed_amount: config.fixed_amount ?? '',
+    allowances: config.allowances ?? '',
+    deductions: config.deductions ?? '',
     salary_type: type,
+    notes: config.notes ?? '',
   }
 }
 
@@ -89,9 +98,11 @@ export function SalaryConfigForm({
     reset,
     setValue,
     control,
+    setError,
   } = useForm({ defaultValues: getDefaultValues(staffMember) })
   const salaryType = useWatch({ control, name: 'salary_type' })
   const effectiveFrom = useWatch({ control, name: 'effective_from' })
+  const watchAll = useWatch({ control })
   const isDoctor = String(staffMember?.role || '').toLowerCase() === 'doctor'
   const retroactiveWarning = effectiveFrom && effectiveFrom < threeMonthsAgo()
 
@@ -103,28 +114,70 @@ export function SalaryConfigForm({
 
   useEffect(() => {
     if (salaryType === 'fixed') {
-      clearErrors(['commission_rate', 'commission_base'])
+      clearErrors(['commission_rate', 'commission_per_appointment'])
       return
     }
 
-    clearErrors('fixed_amount')
+    clearErrors('base_salary')
   }, [clearErrors, salaryType])
 
   const staffLabel = staffMember?.name || 'this staff member'
 
-  async function onSubmit(values) {
+  async function onSubmit(formValues) {
+    if (!staffMember?.id) {
+      setApiError('Please select a staff member first.')
+      return
+    }
+
+    if (formValues.salary_type === 'commission' && formValues.commission_mode === 'rate') {
+      const rate = Number(formValues.commission_rate)
+      if (!formValues.commission_rate && formValues.commission_rate !== 0) {
+        setError('commission_rate', { message: 'Commission rate is required' })
+        return
+      }
+      if (rate < 0.1 || rate > 100) {
+        setError('commission_rate', { message: 'Commission rate must be between 0.1% and 100%' })
+        return
+      }
+    }
+
+    if (formValues.salary_type === 'commission' && formValues.commission_mode === 'flat') {
+      const amount = Number(formValues.commission_per_appointment)
+      if (!formValues.commission_per_appointment && formValues.commission_per_appointment !== 0) {
+        setError('commission_per_appointment', { message: 'Flat amount is required' })
+        return
+      }
+      if (amount < 100) {
+        setError('commission_per_appointment', { message: 'Minimum is PKR 100' })
+        return
+      }
+    }
+
     setSaving(true)
     setApiError('')
 
     try {
-      await upsertSalaryConfig({
-        commission_base: values.salary_type === 'commission' ? values.commission_base : undefined,
-        commission_rate: values.salary_type === 'commission' ? Number(values.commission_rate) : undefined,
-        effective_from: values.effective_from,
-        fixed_amount: values.salary_type === 'fixed' ? Number(values.fixed_amount) : undefined,
-        salary_type: values.salary_type,
-        user_id: staffMember?.id,
-      })
+      const payload = {
+        employee_id: staffMember?.id,
+        salary_type: formValues.salary_type,
+        base_salary: Number(formValues.base_salary),
+        allowances: Number(formValues.allowances || 0),
+        deductions: Number(formValues.deductions || 0),
+        effective_from: formValues.effective_from ? `${formValues.effective_from}-01` : '',
+        notes: formValues.notes || '',
+        commission_rate: formValues.salary_type === 'commission' && formValues.commission_mode === 'rate'
+          ? Number(formValues.commission_rate)
+          : 0,
+        commission_per_appointment: formValues.salary_type === 'commission' && formValues.commission_mode === 'flat'
+          ? Number(formValues.commission_per_appointment)
+          : 0,
+      }
+
+      if (staffMember?.current_config?.id) {
+        await updateSalaryConfig(staffMember.current_config.id, payload)
+      } else {
+        await createSalaryConfig(payload)
+      }
       await onSaved?.()
     } catch (error) {
       setApiError(getApiError(error))
@@ -133,28 +186,12 @@ export function SalaryConfigForm({
     }
   }
 
-  const fixedRegistration = register('fixed_amount', {
-    validate: (value) => {
-      if (salaryType !== 'fixed') return true
-
-      const amount = Number(value)
-      if (!value && value !== 0) return 'Monthly fixed amount is required'
-      if (amount < 1000) return 'Minimum salary is PKR 1,000'
-      if (amount > 10000000) return 'Please verify this amount'
-      return true
-    },
+  const baseSalaryRegistration = register('base_salary', {
+    required: 'Base salary is required',
+    min: { value: 1000, message: 'Minimum salary is PKR 1,000' },
   })
-  const commissionRateRegistration = register('commission_rate', {
-    validate: (value) => {
-      if (salaryType !== 'commission') return true
-
-      const rate = Number(value)
-      if (!value && value !== 0) return 'Commission rate is required'
-      if (rate < 0.1) return 'Commission rate must be at least 0.1%'
-      if (rate > 100) return 'Commission rate cannot exceed 100%'
-      return true
-    },
-  })
+  const commissionRateRegistration = register('commission_rate')
+  const commissionFlatRegistration = register('commission_per_appointment')
 
   return (
     <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
@@ -188,7 +225,7 @@ export function SalaryConfigForm({
 
       {salaryType === 'fixed' ? (
         <div>
-            <label className="text-[13px] font-medium text-ink" htmlFor="fixed_amount">
+            <label className="text-[13px] font-medium text-ink" htmlFor="base_salary">
             Monthly Fixed Amount (PKR) <span className="text-[#C8102E]">*</span>
           </label>
           <div className="relative mt-2">
@@ -197,62 +234,126 @@ export function SalaryConfigForm({
             </span>
             <input
               className="h-11 w-full rounded-control border border-hairline bg-canvas py-2 pl-14 pr-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
-              id="fixed_amount"
+              id="base_salary"
               min="0"
               step="100"
               type="number"
-              {...fixedRegistration}
+              {...baseSalaryRegistration}
             />
           </div>
-          <FieldError message={errors.fixed_amount?.message} />
+          <FieldError message={errors.base_salary?.message} />
         </div>
       ) : null}
 
       {salaryType === 'commission' ? (
         <>
-          <div>
-            <label className="text-[13px] font-medium text-ink" htmlFor="commission_rate">
-              Commission Rate (%) <span className="text-[#C8102E]">*</span>
-            </label>
-            <div className="relative mt-2">
-              <input
-                className="h-11 w-full rounded-control border border-hairline bg-canvas py-2 pl-3 pr-10 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
-                id="commission_rate"
-                max="100"
-                min="0"
-                step="0.5"
-                type="number"
-                {...commissionRateRegistration}
-              />
-              <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[13px] font-medium text-slate">
-                %
-              </span>
+          <div className="space-y-3 rounded-control bg-brand-light p-4">
+            <p className="text-[12px] font-semibold text-brand">Commission Mode</p>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 text-[13px] cursor-pointer font-medium">
+                <input
+                  type="radio"
+                  checked={watchAll.commission_mode === 'rate'}
+                  onChange={() => setValue('commission_mode', 'rate', { shouldValidate: true })}
+                />
+                Rate (% of fee)
+              </label>
+              <label className="flex items-center gap-2 text-[13px] cursor-pointer font-medium">
+                <input
+                  type="radio"
+                  checked={watchAll.commission_mode === 'flat'}
+                  onChange={() => setValue('commission_mode', 'flat', { shouldValidate: true })}
+                />
+                Flat per appointment
+              </label>
             </div>
-            <p className="mt-1 text-[12px] font-normal italic text-slate">
-              Applied to each appointment consultation fee
-            </p>
-            <FieldError message={errors.commission_rate?.message} />
           </div>
 
-          <div>
-            <label className="text-[13px] font-medium text-ink" htmlFor="commission_base">
-              Calculate commission from <span className="text-[#C8102E]">*</span>
-            </label>
-            <select
-              className="mt-2 h-11 w-full rounded-control border border-hairline bg-canvas px-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
-              id="commission_base"
-              {...register('commission_base', {
-                validate: (value) =>
-                  salaryType !== 'commission' || value ? true : 'Commission base is required',
-              })}
-            >
-              <option value="consultation_fee">Consultation Fee (per appointment)</option>
-              <option value="monthly_revenue">Monthly Revenue Total</option>
-            </select>
-            <FieldError message={errors.commission_base?.message} />
-          </div>
+          {watchAll.commission_mode === 'rate' ? (
+            <div>
+              <label className="text-[13px] font-medium text-ink" htmlFor="commission_rate">
+                Commission Rate (%) <span className="text-[#C8102E]">*</span>
+              </label>
+              <div className="relative mt-2">
+                <input
+                  className="h-11 w-full rounded-control border border-hairline bg-canvas py-2 pl-3 pr-10 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+                  id="commission_rate"
+                  max="100"
+                  min="0"
+                  step="0.5"
+                  type="number"
+                  {...commissionRateRegistration}
+                />
+                <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[13px] font-medium text-slate">
+                  %
+                </span>
+              </div>
+              <p className="mt-1 text-[12px] font-normal italic text-slate">
+                Applied to each appointment consultation fee
+              </p>
+              <FieldError message={errors.commission_rate?.message} />
+            </div>
+          ) : (
+            <div>
+              <label className="text-[13px] font-medium text-ink" htmlFor="commission_per_appointment">
+                Flat Amount per Appointment (PKR) <span className="text-[#C8102E]">*</span>
+              </label>
+              <div className="relative mt-2">
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[13px] font-medium text-slate">
+                  PKR
+                </span>
+                <input
+                  className="h-11 w-full rounded-control border border-hairline bg-canvas py-2 pl-14 pr-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+                  id="commission_per_appointment"
+                  min="0"
+                  step="100"
+                  type="number"
+                  {...commissionFlatRegistration}
+                />
+              </div>
+              <p className="mt-1 text-[12px] font-normal italic text-slate">
+                Paid per completed appointment
+              </p>
+              <FieldError message={errors.commission_per_appointment?.message} />
+            </div>
+          )}
         </>
       ) : null}
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="text-[13px] font-medium text-ink" htmlFor="allowances">
+            Allowances (PKR)
+          </label>
+          <div className="relative mt-2">
+            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[13px] font-medium text-slate">PKR</span>
+            <input
+              className="h-11 w-full rounded-control border border-hairline bg-canvas py-2 pl-14 pr-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+              id="allowances"
+              min="0"
+              step="100"
+              type="number"
+              {...register('allowances')}
+            />
+          </div>
+        </div>
+        <div>
+          <label className="text-[13px] font-medium text-ink" htmlFor="deductions">
+            Deductions (PKR)
+          </label>
+          <div className="relative mt-2">
+            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[13px] font-medium text-slate">PKR</span>
+            <input
+              className="h-11 w-full rounded-control border border-hairline bg-canvas py-2 pl-14 pr-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+              id="deductions"
+              min="0"
+              step="100"
+              type="number"
+              {...register('deductions')}
+            />
+          </div>
+        </div>
+      </div>
 
       <div>
         <label className="text-[13px] font-medium text-ink" htmlFor="effective_from">
@@ -277,6 +378,18 @@ export function SalaryConfigForm({
           {apiError}
         </div>
       ) : null}
+
+      <div>
+        <label className="text-[13px] font-medium text-ink" htmlFor="salary_notes">
+          Notes
+        </label>
+        <textarea
+          className="mt-2 h-[72px] w-full resize-y rounded-control border border-hairline bg-canvas px-3 py-2 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+          id="salary_notes"
+          placeholder="Optional notes..."
+          {...register('notes')}
+        />
+      </div>
 
       <button
         className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-control bg-brand px-6 py-3 text-[14px] font-semibold text-white transition hover:bg-brand-dark disabled:opacity-60"

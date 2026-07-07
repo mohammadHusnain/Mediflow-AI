@@ -595,7 +595,7 @@ export async function getPlans(params = {}) {
     return paginate(sortPlans(plans), params)
   }
 
-  const { data } = await api.get('/post-treatment/plans/', { params })
+  const { data } = await api.get('/plans/', { params })
   return data
 }
 
@@ -604,7 +604,7 @@ export async function getPlanById(id) {
     return clone(findPlanOrThrow(readStoredDemo(), id))
   }
 
-  const { data } = await api.get(`/post-treatment/plans/${id}/`)
+  const { data } = await api.get(`/plans/${id}/`)
   return data
 }
 
@@ -624,7 +624,7 @@ export async function createPlan(payload) {
     return clone(plan)
   }
 
-  const response = await api.post('/post-treatment/plans/', payload)
+  const response = await api.post('/plans/', payload)
   return unwrap(response)
 }
 
@@ -667,7 +667,7 @@ export async function updatePlan(id, payload) {
     return clone(nextPlan)
   }
 
-  const response = await api.put(`/post-treatment/plans/${id}/`, payload)
+  const response = await api.put(`/plans/${id}/`, payload)
   return unwrap(response)
 }
 
@@ -683,7 +683,7 @@ export async function cancelPlan(id) {
     return clone(updated)
   }
 
-  const response = await api.patch(`/post-treatment/plans/${id}/`, { status: 'cancelled' })
+  const response = await api.patch(`/plans/${id}/`, { status: 'cancelled' })
   return unwrap(response)
 }
 
@@ -692,7 +692,7 @@ export async function getConditionPresets() {
     return clone(CONDITION_PRESETS)
   }
 
-  const response = await api.get('/post-treatment/presets/')
+  const response = await api.get('/presets/')
   return unwrap(response)
 }
 
@@ -708,7 +708,7 @@ export async function getPlanSteps(planId) {
       .map(decorateStep)
   }
 
-  const response = await api.get(`/post-treatment/plans/${planId}/steps/`)
+  const response = await api.get(`/plans/${planId}/steps/`)
   return unwrap(response)
 }
 
@@ -723,7 +723,7 @@ export async function getMessageLog(planId) {
     )
   }
 
-  const response = await api.get(`/post-treatment/plans/${planId}/messages/`)
+  const response = await api.get(`/plans/${planId}/messages/`)
   return unwrap(response)
 }
 
@@ -737,7 +737,7 @@ export async function getPatientMessages(patientId, params = {}) {
     return paginate(messages, params)
   }
 
-  const response = await api.get(`/post-treatment/patients/${patientId}/messages/`, { params })
+  const response = await api.get(`/patients/${patientId}/messages/`, { params })
   return unwrap(response)
 }
 
@@ -765,7 +765,7 @@ export async function sendManualMessage(planId, content) {
     return clone(message)
   }
 
-  const response = await api.post(`/post-treatment/plans/${planId}/messages/`, {
+  const response = await api.post(`/plans/${planId}/messages/`, {
     content,
     message_type: 'manual',
   })
@@ -837,7 +837,7 @@ export async function logPatientReply(messageLogId, content) {
     return clone(reply)
   }
 
-  const response = await api.post(`/post-treatment/messages/${messageLogId}/reply/`, { content })
+  const response = await api.post(`/messages/${messageLogId}/reply/`, { content })
   return unwrap(response)
 }
 
@@ -863,7 +863,7 @@ export async function getCriticalAlerts(params = {}) {
     return paginate(sortAlerts(alerts), params)
   }
 
-  const { data } = await api.get('/post-treatment/alerts/', { params })
+  const { data } = await api.get('/alerts/', { params })
   return data
 }
 
@@ -894,7 +894,7 @@ export async function acknowledgeAlert(id) {
     return clone(updated)
   }
 
-  const response = await api.patch(`/post-treatment/alerts/${id}/`, { status: 'acknowledged' })
+  const response = await api.patch(`/alerts/${id}/`, { status: 'acknowledged' })
   return unwrap(response)
 }
 
@@ -931,7 +931,7 @@ export async function resolveAlert(id, notes) {
     return clone(updated)
   }
 
-  const response = await api.patch(`/post-treatment/alerts/${id}/`, {
+  const response = await api.patch(`/alerts/${id}/`, {
     resolution_notes: notes,
     status: 'resolved',
   })
@@ -967,7 +967,7 @@ export async function markPatientCalled(id) {
     return clone(updated)
   }
 
-  const response = await api.post(`/post-treatment/alerts/${id}/mark-called/`)
+  const response = await api.post(`/alerts/${id}/mark-called/`)
   return unwrap(response)
 }
 

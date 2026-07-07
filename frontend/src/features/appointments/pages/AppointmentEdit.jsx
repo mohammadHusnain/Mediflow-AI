@@ -111,16 +111,21 @@ export function AppointmentEdit() {
     setFormError('')
 
     try {
-      const payload = toAppointmentPayload(values)
+      const payload = {
+        ...toAppointmentPayload(values),
+        patient: getAppointmentPatientId(appointment),
+      }
 
       if (getPaymentStatus(appointment?.payment_status) === 'paid') {
         payload.payment_status = 'paid'
       }
 
-      await updateAppointment(id, {
-        ...payload,
-        patient: getAppointmentPatientId(appointment),
-      })
+      if (isOwnAppointment && appointment?.status !== 'completed' && appointment?.status !== 'cancelled') {
+        payload.status = 'completed'
+      }
+
+      await updateAppointment(id, payload)
+
       toast.success('Appointment updated successfully.')
       navigate(`/appointments/${id}`, { replace: true })
     } catch (error) {

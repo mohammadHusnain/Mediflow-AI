@@ -16,11 +16,17 @@ import SalaryBadge from '../../../components/financial/SalaryBadge.jsx'
 import SalaryConfigModal from '../../../components/financial/SalaryConfigModal.jsx'
 import Avatar from '@shared/components/Avatar'
 import { useAuth } from '@shared/context/AuthContext'
+import { getDoctors, getStaff } from '@shared/services/api'
 import {
-  getDoctorSalaries,
-  getOwnSalary,
-  getSalaryHistory,
-  getStaffSalaries,
+  getSalaryConfigs,
+  getSalaryRecords,
+} from '@shared/services/billingApi'
+import { PUBLIC_ROUTES_FOR_TESTING } from '@shared/lib/testingAccess'
+import {
+  getDoctorSalaries as getDemoDoctorSalaries,
+  getStaffSalaries as getDemoStaffSalaries,
+  getSalaryHistory as getDemoSalaryHistory,
+  getOwnSalary as getDemoOwnSalary,
 } from '@shared/services/salaryApi'
 
 function currentMonth() {
@@ -54,24 +60,29 @@ function formatMonth(value) {
   }).format(new Date(Number(year), Number(month) - 1, 1))
 }
 
-function commissionBaseLabel(value) {
-  if (value === 'monthly_revenue') return 'Monthly Revenue Total'
-  return 'Consultation Fee (per appointment)'
-}
-
 function amountLabel(person) {
   const config = person?.current_config
 
   if (!config) return '-'
   if (config.salary_type === 'commission') {
-    return `${numberValue(config.commission_rate)}% per appt`
+    if (config.commission_rate > 0) return `${numberValue(config.commission_rate)}%`
+    if (config.commission_per_appointment > 0) return `${formatPkr(config.commission_per_appointment)}/appt`
+    return 'Commission'
   }
 
-  return `${formatPkr(config.fixed_amount)}/mo`
+  const amount = config.base_salary ?? config.fixed_amount ?? 0
+  return `${formatPkr(amount)}/mo`
 }
 
 function payrollRecordFor(person, records) {
-  return records.find((record) => String(record.user_id) === String(person.id))
+  if (!records?.length) return null
+  return records.find((record) => {
+    const recordUserId = record.user_id ?? record.employee?.id
+    const recordEmail = record.employee?.email?.toLowerCase()
+    if (String(recordUserId) === String(person.id)) return true
+    if (recordEmail && String(person.email || '').toLowerCase() === recordEmail) return true
+    return false
+  })
 }
 
 function payrollStatusValue(person, records) {
@@ -82,6 +93,7 @@ function payrollStatusValue(person, records) {
 
   if (['paid', 'disbursed'].includes(status)) return 'paid'
   if (['partial', 'partially_paid'].includes(status)) return 'partially_paid'
+  if (status === 'processed') return 'processed'
   return 'pending'
 }
 
@@ -107,8 +119,16 @@ function PaymentStatus({ configured, record }) {
     return <InvoiceBadge status="pending" />
   }
 
-  if (record.status === 'disbursed') {
+  if (record.status === 'paid' || record.status === 'disbursed') {
     return <InvoiceBadge status="paid" />
+  }
+
+  if (record.status === 'processed') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-light px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-brand">
+        Processed
+      </span>
+    )
   }
 
   return <InvoiceBadge status={record.status || 'pending'} />
@@ -267,17 +287,37 @@ function SalaryTable({
 
 function DoctorSalaryView() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [salary, setSalary] = useState(null)
   const [loading, setLoading] = useState(true)
 
   const loadOwnSalary = useCallback(async () => {
     setLoading(true)
     try {
-      setSalary(await getOwnSalary())
+      if (PUBLIC_ROUTES_FOR_TESTING) {
+        const demoData = await getDemoOwnSalary()
+        setSalary(demoData)
+        return
+      }
+
+      const configsRes = await getSalaryConfigs()
+      const configs = configsRes?.data?.results ?? configsRes?.data ?? []
+      const ownConfig = configs.find(
+        (c) => String(c.employee?.id) === String(user?.id)
+      )
+      setSalary(ownConfig ? {
+        salary_type: ownConfig.salary_type,
+        base_salary: ownConfig.base_salary,
+        commission_rate: ownConfig.commission_rate,
+        commission_per_appointment: ownConfig.commission_per_appointment,
+        effective_from: ownConfig.effective_from,
+        configured_by: ownConfig.employee?.full_name || '',
+        updated_at: ownConfig.updated_at,
+      } : null)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [user?.id])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(loadOwnSalary, 0)
@@ -315,15 +355,14 @@ function DoctorSalaryView() {
           <div className="mt-6">
             {salary.salary_type === 'fixed' ? (
               <>
-                <p className="font-display text-[42px] leading-none text-brand">{formatPkr(salary.fixed_amount)}</p>
+                <p className="font-display text-[42px] leading-none text-brand">{formatPkr(salary.base_salary ?? salary.fixed_amount)}</p>
                 <p className="mt-2 text-[14px] font-normal text-slate">per month - fixed</p>
               </>
             ) : (
               <>
                 <p className="font-display text-[42px] leading-none text-brand">{numberValue(salary.commission_rate)}%</p>
-                <p className="mt-2 text-[14px] font-normal text-slate">per consultation - commission-based</p>
-                <p className="mt-2 text-[13px] font-medium text-slate">
-                  Based on: {commissionBaseLabel(salary.commission_base)}
+                <p className="mt-2 text-[14px] font-normal text-slate">
+                  per consultation - commission-based
                 </p>
               </>
             )}
@@ -382,14 +421,84 @@ function AdminSalaryView() {
   const loadSalaryData = useCallback(async () => {
     setLoading(true)
     try {
-      const [doctorsData, staffData, historyData] = await Promise.all([
-        getDoctorSalaries(),
-        getStaffSalaries(),
-        getSalaryHistory({ month: payrollMonth }),
+      if (PUBLIC_ROUTES_FOR_TESTING) {
+        const [doctorsData, staffData, historyData] = await Promise.all([
+          getDemoDoctorSalaries(),
+          getDemoStaffSalaries(),
+          getDemoSalaryHistory({ month: payrollMonth }),
+        ])
+        setDoctors(listFromResponse(doctorsData))
+        setStaff(listFromResponse(staffData))
+        setPayrollRecords(listFromResponse(historyData))
+        return
+      }
+
+      const [doctorsRes, staffRes, configsRes] = await Promise.all([
+        getDoctors(),
+        getStaff(),
+        getSalaryConfigs(),
       ])
-      setDoctors(listFromResponse(doctorsData))
-      setStaff(listFromResponse(staffData))
-      setPayrollRecords(listFromResponse(historyData))
+
+      const doctorsList = listFromResponse(doctorsRes)
+      const staffList = listFromResponse(staffRes)
+      const configs = configsRes?.data?.results ?? configsRes?.data ?? []
+
+      const configMap = new Map()
+      const configByEmail = new Map()
+      for (const config of configs) {
+        const empId = config.employee?.id
+        const empEmail = config.employee?.email?.toLowerCase()
+        if (empId) configMap.set(empId, config)
+        if (empEmail) configByEmail.set(empEmail, config)
+      }
+
+      const findConfig = (person) => {
+        const byId = configMap.get(person.user_id) || configMap.get(person.id)
+        if (byId) return byId
+        const email = person.email?.toLowerCase()
+        if (email) return configByEmail.get(email)
+        return null
+      }
+
+      const mapPerson = (person, employeeType) => {
+        const empId = employeeType === 'staff' ? (person.user_id ?? person.id) : person.id
+        const config = findConfig(person)
+        return {
+          id: empId,
+          name: person.full_name ?? person.name ?? '',
+          email: person.email ?? person.user?.email ?? '',
+          role: person.role ?? employeeType,
+          employee_type: employeeType,
+          current_config: config ? {
+            id: config.id,
+            salary_type: config.salary_type,
+            base_salary: config.base_salary,
+            fixed_amount: config.base_salary,
+            commission_rate: config.commission_rate,
+            commission_per_appointment: config.commission_per_appointment,
+            allowances: config.allowances,
+            deductions: config.deductions,
+            effective_from: config.effective_from,
+            configured_by: config.employee?.full_name ?? '',
+            updated_at: config.updated_at,
+          } : null,
+        }
+      }
+
+      setDoctors(doctorsList.map((d) => mapPerson(d, 'doctor')))
+      setStaff(staffList.map((s) => mapPerson(s, 'staff')))
+
+      try {
+        const [month, year] = payrollMonth.split('-')
+        const recordsRes = await getSalaryRecords({ month: Number(month), year: Number(year) })
+        setPayrollRecords(listFromResponse(recordsRes))
+      } catch {
+        setPayrollRecords([])
+      }
+    } catch {
+      setDoctors([])
+      setStaff([])
+      setPayrollRecords([])
     } finally {
       setLoading(false)
     }

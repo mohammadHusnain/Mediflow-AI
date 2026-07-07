@@ -739,9 +739,119 @@ export async function markInvoicePaid(id) {
   }
 }
 
-export const getSalaryConfigs = (params) => api.get('/billing/salary/config/', { params })
-export const createSalaryConfig = (data) => api.post('/billing/salary/config/', data)
-export const updateSalaryConfig = (id, data) => api.patch(`/billing/salary/config/${id}/`, data)
+let demoSalaryConfigs = [
+  {
+    id: 1,
+    employee: { id: 201, full_name: 'Nora Patel', role: 'doctor', email: 'doctor.testing@mediflow.local' },
+    salary_type: 'commission',
+    base_salary: 30000,
+    commission_rate: 30,
+    commission_per_appointment: 0,
+    allowances: 5000,
+    deductions: 0,
+    effective_from: '2026-05',
+    notes: '',
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 2,
+    employee: { id: 202, full_name: 'Ayesha Rahman', role: 'doctor', email: 'ayesha.rahman@clinic.local' },
+    salary_type: 'fixed',
+    base_salary: 180000,
+    commission_rate: 0,
+    commission_per_appointment: 0,
+    allowances: 10000,
+    deductions: 5000,
+    effective_from: '2026-04',
+    notes: '',
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 3,
+    employee: { id: 401, full_name: 'Dana Teller', role: 'receptionist', email: 'reception.testing@mediflow.local' },
+    salary_type: 'fixed',
+    base_salary: 85000,
+    commission_rate: 0,
+    commission_per_appointment: 0,
+    allowances: 3000,
+    deductions: 0,
+    effective_from: '2026-03',
+    notes: '',
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 4,
+    employee: { id: 402, full_name: 'Sana Iqbal', role: 'staff', email: 'sana.iqbal@clinic.local' },
+    salary_type: 'fixed',
+    base_salary: 70000,
+    commission_rate: 0,
+    commission_per_appointment: 0,
+    allowances: 2000,
+    deductions: 0,
+    effective_from: '2026-02',
+    notes: '',
+    updated_at: new Date().toISOString(),
+  },
+]
+
+function createDemoSalaryConfig(data) {
+  const id = demoSalaryConfigs.length + 1
+  const config = {
+    id,
+    employee: { id: data.employee_id, full_name: '', role: '', email: '' },
+    salary_type: data.salary_type,
+    base_salary: Number(data.base_salary || 0),
+    commission_rate: Number(data.commission_rate || 0),
+    commission_per_appointment: Number(data.commission_per_appointment || 0),
+    allowances: Number(data.allowances || 0),
+    deductions: Number(data.deductions || 0),
+    effective_from: data.effective_from,
+    notes: data.notes || '',
+    updated_at: new Date().toISOString(),
+  }
+  demoSalaryConfigs = [config, ...demoSalaryConfigs]
+  return { data: config }
+}
+
+function updateDemoSalaryConfig(id, data) {
+  let updated = null
+  demoSalaryConfigs = demoSalaryConfigs.map((c) => {
+    if (String(c.id) !== String(id)) return c
+    updated = {
+      ...c,
+      salary_type: data.salary_type ?? c.salary_type,
+      base_salary: data.base_salary !== undefined ? Number(data.base_salary) : c.base_salary,
+      commission_rate: data.commission_rate !== undefined ? Number(data.commission_rate) : c.commission_rate,
+      commission_per_appointment: data.commission_per_appointment !== undefined ? Number(data.commission_per_appointment) : c.commission_per_appointment,
+      allowances: data.allowances !== undefined ? Number(data.allowances) : c.allowances,
+      deductions: data.deductions !== undefined ? Number(data.deductions) : c.deductions,
+      effective_from: data.effective_from ?? c.effective_from,
+      notes: data.notes ?? c.notes,
+      updated_at: new Date().toISOString(),
+    }
+    return updated
+  })
+  return { data: updated }
+}
+
+export const getSalaryConfigs = (params) => {
+  if (PUBLIC_ROUTES_FOR_TESTING) {
+    return { data: demoSalaryConfigs }
+  }
+  return api.get('/billing/salary/config/', { params })
+}
+export const createSalaryConfig = (data) => {
+  if (PUBLIC_ROUTES_FOR_TESTING) {
+    return createDemoSalaryConfig(data)
+  }
+  return api.post('/billing/salary/config/', data)
+}
+export const updateSalaryConfig = (id, data) => {
+  if (PUBLIC_ROUTES_FOR_TESTING) {
+    return updateDemoSalaryConfig(id, data)
+  }
+  return api.patch(`/billing/salary/config/${id}/`, data)
+}
 
 export const getSalaryPreview = (month, year) =>
   api.get('/billing/salary/preview/', { params: { month, year } })

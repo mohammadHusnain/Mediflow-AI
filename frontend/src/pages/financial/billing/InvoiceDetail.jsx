@@ -80,7 +80,7 @@ function patientId(invoice) {
 }
 
 function doctorName(invoice) {
-  return invoice?.doctor_name || invoice?.doctor?.full_name || invoice?.doctor?.name || ''
+  return invoice?.doctor_name || invoice?.appointment_info?.doctor_name || invoice?.doctor?.full_name || invoice?.doctor?.name || ''
 }
 
 function appointmentId(invoice) {

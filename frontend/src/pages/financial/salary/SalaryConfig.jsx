@@ -6,9 +6,12 @@ import SalaryBadge from '../../../components/financial/SalaryBadge.jsx'
 import { SalaryConfigForm } from '../../../components/financial/SalaryConfigModal.jsx'
 import Avatar from '@shared/components/Avatar'
 import { useAuth } from '@shared/context/AuthContext'
+import { getDoctors, getStaff } from '@shared/services/api'
+import { getSalaryConfigs } from '@shared/services/billingApi'
+import { PUBLIC_ROUTES_FOR_TESTING } from '@shared/lib/testingAccess'
 import {
-  getDoctorSalaries,
-  getStaffSalaries,
+  getDoctorSalaries as getDemoDoctorSalaries,
+  getStaffSalaries as getDemoStaffSalaries,
 } from '@shared/services/salaryApi'
 
 function listFromResponse(response) {
@@ -41,7 +44,7 @@ function formatMonth(value) {
 function configAmount(config) {
   if (!config) return '-'
   if (config.salary_type === 'commission') return `${numberValue(config.commission_rate)}%`
-  return formatPkr(config.fixed_amount)
+  return formatPkr(config.base_salary ?? config.fixed_amount ?? 0)
 }
 
 function CurrentConfig({ config }) {
@@ -84,12 +87,76 @@ export default function SalaryConfig() {
   const loadPeople = useCallback(async () => {
     setLoading(true)
     try {
-      const [doctorData, staffData] = await Promise.all([
-        getDoctorSalaries(),
-        getStaffSalaries(),
+      if (PUBLIC_ROUTES_FOR_TESTING) {
+        const [doctorData, staffData] = await Promise.all([
+          getDemoDoctorSalaries(),
+          getDemoStaffSalaries(),
+        ])
+        const nextDoctors = listFromResponse(doctorData)
+        const nextStaff = listFromResponse(staffData)
+        setDoctors(nextDoctors)
+        setStaff(nextStaff)
+        setSelectedStaff((current) => {
+          if (!current) return current
+          return [...nextDoctors, ...nextStaff].find((person) => String(person.id) === String(current.id)) || current
+        })
+        return [...nextDoctors, ...nextStaff]
+      }
+
+      const [doctorsRes, staffRes, configsRes] = await Promise.all([
+        getDoctors(),
+        getStaff(),
+        getSalaryConfigs(),
       ])
-      const nextDoctors = listFromResponse(doctorData)
-      const nextStaff = listFromResponse(staffData)
+
+      const doctorsList = listFromResponse(doctorsRes)
+      const staffList = listFromResponse(staffRes)
+      const configs = configsRes?.data?.results ?? configsRes?.data ?? []
+
+      const configMap = new Map()
+      const configByEmail = new Map()
+      for (const config of configs) {
+        const empId = config.employee?.id
+        const empEmail = config.employee?.email?.toLowerCase()
+        if (empId) configMap.set(empId, config)
+        if (empEmail) configByEmail.set(empEmail, config)
+      }
+
+      const findConfig = (person) => {
+        const byId = configMap.get(person.user_id) || configMap.get(person.id)
+        if (byId) return byId
+        const email = person.email?.toLowerCase()
+        if (email) return configByEmail.get(email)
+        return null
+      }
+
+      const mapPerson = (person, employeeType) => {
+        const empId = employeeType === 'staff' ? (person.user_id ?? person.id) : person.id
+        const config = findConfig(person)
+        return {
+          id: empId,
+          name: person.full_name ?? person.name ?? '',
+          email: person.email ?? person.user?.email ?? '',
+          role: person.role ?? employeeType,
+          employee_type: employeeType,
+          current_config: config ? {
+            id: config.id,
+            salary_type: config.salary_type,
+            base_salary: config.base_salary,
+            fixed_amount: config.base_salary,
+            commission_rate: config.commission_rate,
+            commission_per_appointment: config.commission_per_appointment,
+            effective_from: config.effective_from,
+            configured_by: config.employee?.full_name ?? '',
+            allowances: config.allowances,
+            deductions: config.deductions,
+            updated_at: config.updated_at,
+          } : null,
+        }
+      }
+
+      const nextDoctors = doctorsList.map((d) => mapPerson(d, 'doctor'))
+      const nextStaff = staffList.map((s) => mapPerson(s, 'staff'))
 
       setDoctors(nextDoctors)
       setStaff(nextStaff)
