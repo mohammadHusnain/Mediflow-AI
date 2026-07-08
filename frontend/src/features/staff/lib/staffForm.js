@@ -34,7 +34,6 @@ export const INITIAL_STAFF_FORM_DATA = {
   experience_years: '',
   doctor_status: 'active',
   salary_type: 'fixed',
-  salary_currency: 'PKR',
   base_salary: '',
   salary_commission_mode: 'rate',
   salary_commission_rate: '',
@@ -66,7 +65,8 @@ export const TOUCHED_ALL_STAFF_FIELDS = {
 
 export function validateStaffForm(data) {
   const errors = {}
-  const emailError = validateEmail(data.email)
+  const emailValue = String(data.email || '').trim()
+  const emailError = emailValue ? validateEmail(emailValue) : null
   const phoneError = validatePhone(data.phone)
   const roleLower = String(data.role || '').trim().toLowerCase()
 
@@ -145,11 +145,22 @@ export function validateStaffForm(data) {
 }
 
 export function mapStaffToForm(staffMember) {
+  const fullName = (
+    staffMember.full_name ||
+    staffMember.name ||
+    staffMember.user?.full_name ||
+    [staffMember.user?.first_name, staffMember.user?.last_name].filter(Boolean).join(' ')
+  )
+  const fullNameParts = String(fullName || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+
   return {
-    full_name: staffMember.full_name || '',
+    full_name: fullName || '',
     age: staffMember.age ?? '',
-    phone: staffMember.phone || '',
-    email: staffMember.email || '',
+    phone: staffMember.phone || staffMember.user?.phone || '',
+    email: staffMember.email || staffMember.user?.email || '',
     has_account: staffMember.has_account === true,
     address: staffMember.address || '',
     role: staffMember.role || '',
@@ -158,8 +169,8 @@ export function mapStaffToForm(staffMember) {
     shift_start: staffMember.shift_start || '09:00',
     shift_end: staffMember.shift_end || '17:00',
     notes: staffMember.notes || '',
-    first_name: staffMember.first_name || '',
-    last_name: staffMember.last_name || '',
+    first_name: staffMember.first_name || fullNameParts[0] || '',
+    last_name: staffMember.last_name || fullNameParts.slice(1).join(' ') || '',
     qualification: staffMember.qualification || '',
     specializations: Array.isArray(staffMember.specializations)
       ? staffMember.specializations
@@ -183,7 +194,7 @@ export function prepareStaffPayload(data) {
       Math.max(STAFF_MIN_AGE, Number.parseInt(data.age, 10)),
     ),
     phone: String(data.phone || '').trim(),
-    email: String(data.email || '').trim(),
+    email: String(data.email || '').trim() || null,
     address: String(data.address || '').trim() || null,
     role: String(data.role || '').trim(),
     status: data.status,

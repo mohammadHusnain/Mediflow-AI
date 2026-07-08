@@ -11,6 +11,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 
 import { normalizeAccessLevel } from '@shared/lib/permissions'
+import { DEFAULT_CURRENCY_CODE } from '@shared/lib/currency'
 import {
   getPublicTestingSession,
   PUBLIC_ROUTES_FOR_TESTING,
@@ -107,6 +108,13 @@ function normalizeUser(responseUser = {}, fallbackUser = {}) {
 
 function normalizeSessionPayload(response = {}, fallbackUser = {}) {
   const responseUser = response.user || response
+  const organizationCurrency =
+    response.organization?.currency_code ||
+    response.organization_currency ||
+    responseUser.organization?.currency_code ||
+    responseUser.organization_currency ||
+    responseUser.currency_code ||
+    DEFAULT_CURRENCY_CODE
   const forcePasswordChange = Boolean(
     response.force_password_change ?? responseUser.force_password_change,
   )
@@ -125,7 +133,11 @@ function normalizeSessionPayload(response = {}, fallbackUser = {}) {
 
   return {
     accessToken: response.access_token ?? response.access ?? '',
-    organizationCurrency: response.organization_currency || 'PKR',
+    organization: {
+      ...(response.organization || responseUser.organization || {}),
+      currency_code: organizationCurrency,
+    },
+    organizationCurrency,
     permissions,
     refreshToken: response.refresh_token ?? response.refresh,
     role,
@@ -188,7 +200,13 @@ function getInitialSession() {
     return getPublicTestingSession()
   }
 
-  return { permissions, role, user }
+  return {
+    organization: { currency_code: localStorage.getItem('org_currency') || DEFAULT_CURRENCY_CODE },
+    organizationCurrency: localStorage.getItem('org_currency') || DEFAULT_CURRENCY_CODE,
+    permissions,
+    role,
+    user,
+  }
 }
 
 function getStoredRefreshToken() {
@@ -200,6 +218,12 @@ export function AuthProvider({ children }) {
   const initialSession = getInitialSession()
   const [user, setUser] = useState(initialSession?.user || null)
   const [role, setRole] = useState(initialSession?.role || null)
+  const [organizationCurrency, setOrganizationCurrency] = useState(
+    initialSession?.organizationCurrency ||
+    initialSession?.organization?.currency_code ||
+    localStorage.getItem('org_currency') ||
+    DEFAULT_CURRENCY_CODE,
+  )
   const [permissions, setPermissions] = useState(
     initialSession?.permissions || normalizePermissions(),
   )
@@ -210,11 +234,17 @@ export function AuthProvider({ children }) {
     const nextUser = session.user ?? userRef.current
     const nextRole = session.role ?? roleRef.current
     const nextPermissions = session.permissions ?? permissions
+    const nextOrganizationCurrency =
+      session.organization?.currency_code ||
+      session.organizationCurrency ||
+      organizationCurrency ||
+      localStorage.getItem('org_currency') ||
+      DEFAULT_CURRENCY_CODE
 
     if (session.accessToken !== undefined || session.refreshToken !== undefined || persist) {
       persistSession({
         accessToken: session.accessToken,
-        organizationCurrency: session.organizationCurrency ?? (localStorage.getItem('org_currency') || 'PKR'),
+        organizationCurrency: nextOrganizationCurrency,
         permissions: nextPermissions,
         refreshToken: session.refreshToken,
         role: nextRole,
@@ -226,8 +256,9 @@ export function AuthProvider({ children }) {
     roleRef.current = nextRole
     setUser(nextUser)
     setRole(nextRole)
+    setOrganizationCurrency(nextOrganizationCurrency)
     setPermissions(nextPermissions)
-  }, [permissions])
+  }, [organizationCurrency, permissions])
 
   const homePath = useCallback((targetRole = roleRef.current) => {
     if (!targetRole) {
@@ -298,6 +329,7 @@ export function AuthProvider({ children }) {
     roleRef.current = testingSession?.role || null
     setUser(testingSession?.user || null)
     setRole(testingSession?.role || null)
+    setOrganizationCurrency(testingSession?.organizationCurrency || DEFAULT_CURRENCY_CODE)
     setPermissions(testingSession?.permissions || normalizePermissions())
   }, [])
 
@@ -356,6 +388,8 @@ export function AuthProvider({ children }) {
       login,
       logout,
       markPasswordChangeComplete,
+      organization: { currency_code: organizationCurrency },
+      organizationCurrency,
       permissions,
       refreshSession,
       role,
@@ -366,6 +400,7 @@ export function AuthProvider({ children }) {
       login,
       logout,
       markPasswordChangeComplete,
+      organizationCurrency,
       permissions,
       refreshSession,
       role,

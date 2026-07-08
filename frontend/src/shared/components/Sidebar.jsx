@@ -7,7 +7,10 @@ import { useAuth } from '@shared/context/AuthContext'
 import { usePermission } from '@shared/lib/usePermission'
 import { stagger } from '@shared/lib/motion'
 import { getNavItems } from '@shared/lib/navItems'
-import { getCriticalAlerts } from '@shared/services/postTreatmentApi'
+import {
+  CRITICAL_ALERTS_UPDATED_EVENT,
+  getCriticalAlerts,
+} from '@shared/services/postTreatmentApi'
 import Avatar from './Avatar'
 import UnreadBadge from './chat/UnreadBadge'
 
@@ -55,7 +58,7 @@ export function Sidebar({ mobile = false, onNavigate }) {
   const alertBadgeCount = ['admin', 'doctor', 'receptionist'].includes(role?.slug)
     ? pendingAlertCount
     : 0
-  const financialOpen = financialRouteActive || isFinancialOpen
+  const financialOpen = isFinancialOpen
   const fullName =
     [user?.first_name, user?.last_name].filter(Boolean).join(' ') ||
     'MediFlow User'
@@ -139,10 +142,12 @@ export function Sidebar({ mobile = false, onNavigate }) {
 
     loadPendingAlertCount()
     const intervalId = window.setInterval(loadPendingAlertCount, 30_000)
+    window.addEventListener(CRITICAL_ALERTS_UPDATED_EVENT, loadPendingAlertCount)
 
     return () => {
       cancelled = true
       window.clearInterval(intervalId)
+      window.removeEventListener(CRITICAL_ALERTS_UPDATED_EVENT, loadPendingAlertCount)
     }
   }, [role?.slug])
 

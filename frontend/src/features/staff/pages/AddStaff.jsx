@@ -141,11 +141,31 @@ export function AddStaff() {
         ...data,
         role: canonicalizeRoleName(data.role, roleOptions),
       })
+      const hasEmail = Boolean(payload.email)
       const response = await createStaff(payload)
       const staffId = getRecordId(response)
       const employeeId = response?.user_id || response?.id
 
-      await createSalaryIfNeeded(employeeId)
+      const salaryConfigured = await createSalaryIfNeeded(employeeId)
+
+      if (!hasEmail) {
+        if (response?.role_created) {
+          showRoleCreatedToast(payload.role)
+        } else if (salaryConfigured) {
+          toast.success('Staff member added and salary configured')
+        } else {
+          toast.success('Staff member added')
+        }
+        navigate(
+          salaryConfigured
+            ? '/financial-reports/salary'
+            : staffId
+              ? `/staff/${staffId}`
+              : '/staff',
+          { replace: true },
+        )
+        return
+      }
 
       if (response?.email_sent === false) {
         toast.warning(
@@ -162,10 +182,11 @@ export function AddStaff() {
 
       setCreatedAccount({
         email: String(data.email || '').trim(),
-        fullName: String(data.full_name || '').trim(),
+        fullName: [data.first_name, data.last_name].filter(Boolean).join(' '),
         id: staffId,
         role: payload.role,
         roleCreated: response?.role_created === true,
+        salaryConfigured,
       })
     } catch (error) {
       const message = getBackendError(error, 'Staff member could not be created.')
@@ -179,7 +200,7 @@ export function AddStaff() {
 
   async function createSalaryIfNeeded(employeeId) {
     const baseSalary = Number(data.base_salary)
-    if (!baseSalary || !employeeId) return
+    if (!baseSalary || !employeeId) return false
 
     const salaryData = {
       employee_id: employeeId,
@@ -202,8 +223,10 @@ export function AddStaff() {
 
     try {
       await createSalaryConfig(salaryData)
+      return true
     } catch {
-      // salary creation is optional, don't block
+      toast.warning('Staff member was added, but salary could not be configured.')
+      return false
     }
   }
 
@@ -224,9 +247,14 @@ export function AddStaff() {
       showRoleCreatedToast(createdAccount.role)
     }
 
-    navigate(createdAccount?.id ? `/staff/${createdAccount.id}` : '/staff', {
-      replace: true,
-    })
+    navigate(
+      createdAccount?.salaryConfigured
+        ? '/financial-reports/salary'
+        : createdAccount?.id
+          ? `/staff/${createdAccount.id}`
+          : '/staff',
+      { replace: true },
+    )
   }
 
   return (

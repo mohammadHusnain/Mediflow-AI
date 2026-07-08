@@ -182,6 +182,88 @@ function getDemoTopMetrics(params = {}) {
   }
 }
 
+function formatPdfAmount(value) {
+  return `PKR ${new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+  }).format(numberValue(value))}`
+}
+
+function escapePdfText(value) {
+  return String(value ?? '')
+    .replace(/[^\x20-\x7E]/g, ' ')
+    .replace(/[\\()]/g, '\\$&')
+}
+
+function pdfTextCommand(text, { size = 12, x = 72, y = 720 } = {}) {
+  return `BT /F1 ${size} Tf ${x} ${y} Td (${escapePdfText(text)}) Tj ET`
+}
+
+function byteLength(value) {
+  return new TextEncoder().encode(value).length
+}
+
+function createSimplePdfBlob(lines) {
+  const content = lines
+    .map((line) => pdfTextCommand(line.text, line))
+    .join('\n')
+  const objects = [
+    '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n',
+    '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n',
+    '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n',
+    '4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n',
+    `5 0 obj\n<< /Length ${byteLength(content)} >>\nstream\n${content}\nendstream\nendobj\n`,
+  ]
+  let pdf = '%PDF-1.4\n'
+  const offsets = []
+
+  objects.forEach((object) => {
+    offsets.push(byteLength(pdf))
+    pdf += object
+  })
+
+  const xrefOffset = byteLength(pdf)
+  pdf += `xref\n0 ${objects.length + 1}\n`
+  pdf += '0000000000 65535 f \n'
+  offsets.forEach((offset) => {
+    pdf += `${String(offset).padStart(10, '0')} 00000 n \n`
+  })
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`
+
+  return new Blob([pdf], {
+    type: 'application/pdf',
+  })
+}
+
+function buildDemoReportPdf(params = {}) {
+  const reportParams = { ...params, ...buildReportParams(params) }
+  const summary = getDemoSummary(reportParams)
+  const trend = getDemoTrend(reportParams)
+  const period =
+    reportParams.period === 'custom'
+      ? `${reportParams.date_from || 'Custom'} to ${reportParams.date_to || 'range'}`
+      : String(reportParams.period || 'monthly').replace(/_/g, ' ')
+  const lines = [
+    { text: 'MediFlow Financial Report', size: 18, y: 744 },
+    { text: `Period: ${period}`, size: 11, y: 718 },
+    { text: `Generated: ${new Date().toLocaleDateString('en-US')}`, size: 11, y: 700 },
+    { text: 'Summary', size: 14, y: 666 },
+    { text: `Total Revenue: ${formatPdfAmount(summary.total_revenue)}`, y: 642 },
+    { text: `Total Salary: ${formatPdfAmount(summary.total_salary)}`, y: 624 },
+    { text: `Total Expenses: ${formatPdfAmount(summary.total_expenses)}`, y: 606 },
+    { text: `Net Profit: ${formatPdfAmount(summary.net_profit)}`, y: 588 },
+    { text: 'Revenue, Salary & Expense Trend', size: 14, y: 552 },
+    { text: 'Period              Revenue             Salary              Expenses', size: 11, y: 528 },
+    ...trend.slice(0, 12).map((row, index) => ({
+      text: `${String(row.label).padEnd(18)} ${formatPdfAmount(row.revenue).padEnd(19)} ${formatPdfAmount(row.salary).padEnd(19)} ${formatPdfAmount(row.expenses)}`,
+      size: 10,
+      y: 506 - index * 18,
+    })),
+  ]
+
+  return createSimplePdfBlob(lines)
+}
+
 export function buildReportParams(params = {}) {
   const period = VALID_PERIODS.has(params.period) ? params.period : 'monthly'
   const nextParams = { period }
@@ -248,9 +330,7 @@ export async function getTopMetrics(params = {}, options = {}) {
 
 export async function downloadReportPDF(params = {}, options = {}) {
   if (PUBLIC_ROUTES_FOR_TESTING) {
-    return new Blob(['Demo MediFlow financial report'], {
-      type: 'application/pdf',
-    })
+    return buildDemoReportPdf(params)
   }
 
   try {

@@ -5,9 +5,11 @@ import { useNavigate } from 'react-router-dom'
 
 import DoctorFormFields from '@features/doctors/components/DoctorFormFields'
 import AccountCreatedModal from '@shared/components/AccountCreatedModal'
+import CurrencyInput from '@shared/components/CurrencyInput'
 import {
   ErrorBanner,
   FieldLabel,
+  FormSectionHeading,
   LoadingSpinner,
 } from '@shared/components/FormPrimitives'
 import { useToast } from '@shared/components/Toast'
@@ -16,7 +18,6 @@ import { usePermission } from '@shared/lib/usePermission'
 import { validateEmail, validatePhone } from '@shared/lib/validation'
 import { createDoctor } from '@shared/services/api'
 import { createSalaryConfig } from '@shared/services/billingApi'
-import { CURRENCIES } from '@shared/lib/currency'
 
 const INITIAL_FORM_DATA = {
   first_name: '',
@@ -286,25 +287,7 @@ export function AddDoctor() {
         />
 
         <div className="space-y-4 border-t border-hairline pt-5">
-          <h3 className="flex items-center gap-2 text-[14px] font-semibold text-ink">
-            <span>Salary Configuration</span>
-            <span className="text-[12px] font-normal text-slate">optional</span>
-          </h3>
-
-          <label className="block">
-            <FieldLabel label="Currency" optional />
-            <select
-              className="w-full rounded-control border border-hairline bg-mist px-3 py-2.5 text-[13px] text-ink outline-none focus:border-brand"
-              name="salary_currency"
-              onBlur={handleBlur}
-              onChange={handleChange}
-              value={data.salary_currency || 'PKR'}
-            >
-              {CURRENCIES.map((c) => (
-                <option key={c.code} value={c.code}>{c.symbol} {c.code} - {c.name}</option>
-              ))}
-            </select>
-          </label>
+          <FormSectionHeading optional title="Salary Configuration" />
 
           <label className="block">
             <FieldLabel label="Salary Type" optional />
@@ -322,14 +305,12 @@ export function AddDoctor() {
 
           <label className="block">
             <FieldLabel label="Base Salary" optional />
-            <input
-              className="w-full rounded-control border border-hairline bg-mist px-3 py-2.5 text-[13px] text-ink outline-none font-sans focus:border-brand"
-              min="0"
+            <CurrencyInput
+              inputClassName="bg-mist"
               name="base_salary"
               onBlur={handleBlur}
               onChange={handleChange}
               placeholder="50000"
-              type="number"
               value={data.base_salary || ''}
             />
           </label>
@@ -361,10 +342,14 @@ export function AddDoctor() {
               ) : (
                 <label className="block">
                   <FieldLabel label="Flat per Appointment" optional />
-                  <input
-                    className="w-full rounded-control border border-hairline bg-mist px-3 py-2.5 text-[13px] text-ink outline-none font-sans focus:border-brand"
-                    min="0" name="salary_commission_per_appointment" onBlur={handleBlur} onChange={handleChange}
-                    placeholder="500" type="number" value={data.salary_commission_per_appointment || ''} />
+                  <CurrencyInput
+                    inputClassName="bg-mist"
+                    name="salary_commission_per_appointment"
+                    onBlur={handleBlur}
+                    onChange={handleChange}
+                    placeholder="500"
+                    value={data.salary_commission_per_appointment || ''}
+                  />
                 </label>
               )}
             </div>
@@ -373,17 +358,25 @@ export function AddDoctor() {
           <div className="grid grid-cols-2 gap-4">
             <label className="block">
               <FieldLabel label="Allowances" optional />
-              <input
-                className="w-full rounded-control border border-hairline bg-mist px-3 py-2.5 text-[13px] text-ink outline-none font-sans focus:border-brand"
-                min="0" name="salary_allowances" onBlur={handleBlur} onChange={handleChange}
-                placeholder="5000" type="number" value={data.salary_allowances || ''} />
+              <CurrencyInput
+                inputClassName="bg-mist"
+                name="salary_allowances"
+                onBlur={handleBlur}
+                onChange={handleChange}
+                placeholder="5000"
+                value={data.salary_allowances || ''}
+              />
             </label>
             <label className="block">
               <FieldLabel label="Deductions" optional />
-              <input
-                className="w-full rounded-control border border-hairline bg-mist px-3 py-2.5 text-[13px] text-ink outline-none font-sans focus:border-brand"
-                min="0" name="salary_deductions" onBlur={handleBlur} onChange={handleChange}
-                placeholder="2000" type="number" value={data.salary_deductions || ''} />
+              <CurrencyInput
+                inputClassName="bg-mist"
+                name="salary_deductions"
+                onBlur={handleBlur}
+                onChange={handleChange}
+                placeholder="2000"
+                value={data.salary_deductions || ''}
+              />
             </label>
           </div>
 

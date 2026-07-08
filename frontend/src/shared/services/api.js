@@ -10,6 +10,7 @@ import {
   updateDemoRole,
 } from '@shared/lib/accessControlData'
 import {
+  createDemoExpenseCategory,
   createDemoExpense,
   deleteDemoExpense,
   getDemoExpenseById,
@@ -555,6 +556,13 @@ export async function getExpenseCategories() {
   if (PUBLIC_ROUTES_FOR_TESTING) return getDemoExpenseCategories()
   ensureAuthenticated()
   const { data } = await api.get('/expenses/categories/')
+  return data
+}
+
+export async function createExpenseCategory(name) {
+  if (PUBLIC_ROUTES_FOR_TESTING) return createDemoExpenseCategory(name)
+  ensureAuthenticated()
+  const { data } = await api.post('/expenses/categories/', { name })
   return data
 }
 

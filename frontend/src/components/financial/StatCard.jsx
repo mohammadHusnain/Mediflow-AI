@@ -36,7 +36,7 @@ export default function StatCard({
         {loading ? (
           <div className="h-8 w-20 animate-pulse rounded bg-mist" />
         ) : (
-          <p className={`truncate font-display text-[32px] leading-none ${valueColorClass}`}>
+          <p className={`break-words font-display text-[32px] leading-none ${valueColorClass}`}>
             {formatValue(value)}
           </p>
         )}

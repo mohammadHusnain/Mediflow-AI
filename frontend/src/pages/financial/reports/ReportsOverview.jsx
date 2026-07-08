@@ -1,30 +1,21 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   AlertCircle,
-  BarChart3,
-  ChevronDown,
-  ChevronUp,
-  Percent,
   PiggyBank,
   Receipt,
-  Stethoscope,
   TrendingUp,
-  Users,
   Wallet,
 } from 'lucide-react'
 
 import DateRangePicker from '../../../components/financial/DateRangePicker.jsx'
-import ExpenseBreakdownChart from '../../../components/financial/ExpenseBreakdownChart.jsx'
 import ReportsBreakdownTable from '../../../components/financial/ReportsBreakdownTable.jsx'
 import RevenueChart from '../../../components/financial/RevenueChart.jsx'
-import SalaryVsRevenueChart from '../../../components/financial/SalaryVsRevenueChart.jsx'
 import StatCard from '../../../components/financial/StatCard.jsx'
 import { useToast } from '@shared/components/Toast'
 import { exportReportPdf } from '@shared/lib/exportPdf'
+import { formatCurrencyAmount } from '@shared/lib/currency'
 import { getBackendError } from '@shared/lib/records'
 import * as reportsApi from '@shared/services/reportsApi'
-
-const PKR_FORMATTER = new Intl.NumberFormat('en-PK')
 
 const PERIOD_LABELS = {
   daily: 'today',
@@ -39,19 +30,8 @@ function numberValue(value) {
   return Number.isFinite(number) ? number : 0
 }
 
-function isMissing(value) {
-  return value === null || value === undefined || value === ''
-}
-
-function formatPkr(value) {
-  return `PKR ${PKR_FORMATTER.format(numberValue(value))}`
-}
-
-function formatPercent(value) {
-  if (isMissing(value)) return '-'
-  if (typeof value === 'string') return value.includes('%') ? value : `${value}%`
-
-  return `${PKR_FORMATTER.format(numberValue(value))}%`
+function formatMoney(value) {
+  return formatCurrencyAmount(numberValue(value))
 }
 
 function normalizeArray(response, key) {
@@ -67,23 +47,6 @@ function normalizeTrendRows(rows = []) {
     label: row.label || row.period || '-',
     revenue: numberValue(row.revenue ?? row.total_revenue),
     salary: numberValue(row.salary ?? row.total_salary ?? row.salary_cost),
-  }))
-}
-
-function normalizeExpenseBreakdown(rows = []) {
-  return rows.map((row) => ({
-    amount: numberValue(row.amount ?? row.total),
-    category: row.category || row.name || '-',
-    percentage: numberValue(row.percentage ?? row.percent),
-  }))
-}
-
-function normalizeSalaryRows(rows = []) {
-  return rows.map((row) => ({
-    label: row.label || row.period || '-',
-    ratio: numberValue(row.ratio),
-    revenue: numberValue(row.revenue ?? row.total_revenue),
-    salary_cost: numberValue(row.salary_cost ?? row.salary ?? row.total_salary),
   }))
 }
 
@@ -120,26 +83,13 @@ function getSummaryValue(summaryData, key, fallback) {
 }
 
 function normalizeReportModel({
-  expenseData,
-  salaryData,
   summaryData,
-  topMetricsData,
   trendData,
 }) {
   const trend = normalizeTrendRows(
     normalizeArray(trendData, 'trend').length
       ? normalizeArray(trendData, 'trend')
       : normalizeArray(summaryData, 'trend'),
-  )
-  const expenseBreakdown = normalizeExpenseBreakdown(
-    normalizeArray(expenseData, 'expense_breakdown').length
-      ? normalizeArray(expenseData, 'expense_breakdown')
-      : normalizeArray(summaryData, 'expense_breakdown'),
-  )
-  const salaryVsRevenue = normalizeSalaryRows(
-    normalizeArray(salaryData, 'salary_vs_revenue').length
-      ? normalizeArray(salaryData, 'salary_vs_revenue')
-      : normalizeArray(summaryData, 'salary_vs_revenue'),
   )
   const trendRevenue = trend.reduce((sum, row) => sum + numberValue(row.revenue), 0)
   const trendSalary = trend.reduce((sum, row) => sum + numberValue(row.salary), 0)
@@ -150,17 +100,7 @@ function normalizeReportModel({
 
   return {
     breakdown_rows: getBreakdownRows(summaryData, trend),
-    expense_breakdown: expenseBreakdown,
     net_profit: getSummaryValue(summaryData, 'net_profit', totalRevenue - totalSalary - totalExpenses),
-    salary_vs_revenue: salaryVsRevenue.length > 0
-      ? salaryVsRevenue
-      : trend.map((row) => ({
-          label: row.label,
-          ratio: row.revenue ? Math.round((row.salary / row.revenue) * 100) : 0,
-          revenue: row.revenue,
-          salary_cost: row.salary,
-        })),
-    top_metrics: topMetricsData?.top_metrics || topMetricsData || summaryData?.top_metrics || {},
     total_expenses: totalExpenses,
     total_revenue: totalRevenue,
     total_salary: totalSalary,
@@ -213,7 +153,7 @@ function EmptyState({
 }) {
   return (
     <div className="py-16 text-center">
-      <BarChart3 aria-hidden="true" className="mx-auto mb-3 h-10 w-10 text-hairline" />
+      <Receipt aria-hidden="true" className="mx-auto mb-3 h-10 w-10 text-hairline" />
       <p className="font-display text-[18px] italic text-slate">{title}</p>
       <p className="mt-1 text-[14px] font-normal text-slate/70">{subtitle}</p>
     </div>
@@ -229,33 +169,6 @@ function LegendDot({ color, label }) {
   )
 }
 
-function metricValue(label, amount) {
-  if (isMissing(label)) return '-'
-  if (isMissing(amount)) return label
-
-  return `${label} - ${formatPkr(amount)}`
-}
-
-function MetricRow({ icon: Icon, label, value }) {
-  return (
-    <div className="flex items-center justify-between gap-4 border-b border-hairline pb-4 last:border-0 last:pb-0">
-      <div className="flex min-w-0 items-center gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-brand/10 text-brand">
-          <Icon aria-hidden="true" className="h-4 w-4" />
-        </span>
-        <span className="truncate text-[14px] font-medium text-ink">{label}</span>
-      </div>
-      <span className="max-w-[48%] truncate text-right font-mono text-[14px] text-ink">
-        {value || '-'}
-      </span>
-    </div>
-  )
-}
-
-function hasNonZeroAmount(rows, key = 'amount') {
-  return rows.some((row) => numberValue(row[key]) !== 0)
-}
-
 export default function ReportsOverview() {
   const toast = useToast()
   const [range, setRange] = useState({ dateFrom: null, dateTo: null, period: 'monthly' })
@@ -264,7 +177,6 @@ export default function ReportsOverview() {
   const [error, setError] = useState(null)
   const [exporting, setExporting] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
-  const [showTable, setShowTable] = useState(false)
 
   const loadReports = useCallback(async (signal) => {
     setLoading(true)
@@ -274,24 +186,15 @@ export default function ReportsOverview() {
       const [
         summaryData,
         trendData,
-        expenseData,
-        salaryData,
-        topMetricsData,
       ] = await Promise.all([
         reportsApi.getFinancialSummary(range, { signal }),
         reportsApi.getRevenueTrend(range, { signal }),
-        reportsApi.getExpenseBreakdown(range, { signal }),
-        reportsApi.getSalaryVsRevenue(range, { signal }),
-        reportsApi.getTopMetrics(range, { signal }),
       ])
 
       if (signal.aborted) return
 
       setSummary(normalizeReportModel({
-        expenseData,
-        salaryData,
         summaryData,
-        topMetricsData,
         trendData,
       }))
     } catch (loadError) {
@@ -319,51 +222,9 @@ export default function ReportsOverview() {
   }, [loadReports, reloadKey])
 
   const label = periodLabel(range)
-  const topMetrics = useMemo(() => summary?.top_metrics || {}, [summary?.top_metrics])
   const trend = summary?.trend || []
-  const expenseBreakdown = summary?.expense_breakdown || []
-  const salaryVsRevenue = summary?.salary_vs_revenue || []
   const onePointTrend = trend.length === 1
   const canShowTrendChart = trend.length >= 2
-  const canShowSalaryChart = salaryVsRevenue.length >= 2
-  const canShowExpenseChart = expenseBreakdown.length > 0 && hasNonZeroAmount(expenseBreakdown)
-
-  const metricRows = useMemo(
-    () => [
-      {
-        icon: Stethoscope,
-        label: 'Top Earning Doctor',
-        value: metricValue(
-          topMetrics.top_doctor_name,
-          topMetrics.top_doctor_revenue ?? topMetrics.top_doctor_amount,
-        ),
-      },
-      {
-        icon: Users,
-        label: 'Most Billed Patient Type',
-        value: topMetrics.top_condition || '-',
-      },
-      {
-        icon: Receipt,
-        label: 'Largest Expense Category',
-        value: metricValue(
-          topMetrics.top_expense_category,
-          topMetrics.top_expense_amount,
-        ),
-      },
-      {
-        icon: TrendingUp,
-        label: 'Best Revenue Day',
-        value: metricValue(topMetrics.best_day, topMetrics.best_day_amount),
-      },
-      {
-        icon: Percent,
-        label: 'Avg Commission Payout',
-        value: formatPercent(topMetrics.avg_commission),
-      },
-    ],
-    [topMetrics],
-  )
 
   async function handleExport() {
     if (loading || !summary) return
@@ -381,13 +242,6 @@ export default function ReportsOverview() {
 
   return (
     <div>
-      <header className="mb-6">
-        <h2 className="font-display text-[26px] text-ink">Financial Reports</h2>
-        <p className="mt-1 text-[14px] font-normal text-slate">
-          Revenue, salary, and expense insights across your clinic
-        </p>
-      </header>
-
       <DateRangePicker
         disabled={loading || !summary}
         exporting={exporting}
@@ -405,24 +259,24 @@ export default function ReportsOverview() {
               icon={TrendingUp}
               label="Total Revenue"
               loading={loading}
-              sub={`PKR - ${label}`}
-              value={formatPkr(summary?.total_revenue)}
+              sub={label}
+              value={formatMoney(summary?.total_revenue)}
             />
             <StatCard
               accentColor="amber"
               icon={Wallet}
               label="Total Salary Paid"
               loading={loading}
-              sub={`PKR - ${label}`}
-              value={formatPkr(summary?.total_salary)}
+              sub={label}
+              value={formatMoney(summary?.total_salary)}
             />
             <StatCard
               accentColor="red"
               icon={Receipt}
               label="Total Expenses"
               loading={loading}
-              sub={`PKR - ${label}`}
-              value={formatPkr(summary?.total_expenses)}
+              sub={label}
+              value={formatMoney(summary?.total_expenses)}
             />
             <StatCard
               accentColor={numberValue(summary?.net_profit) < 0 ? 'red' : 'green'}
@@ -430,7 +284,7 @@ export default function ReportsOverview() {
               label="Net Profit"
               loading={loading}
               sub="revenue - salary - expenses"
-              value={formatPkr(summary?.net_profit)}
+              value={formatMoney(summary?.net_profit)}
               valueColorClass={numberValue(summary?.net_profit) < 0 ? 'text-[#C8102E]' : 'text-ink'}
             />
           </section>
@@ -459,64 +313,10 @@ export default function ReportsOverview() {
                 )}
               </section>
 
-              <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <div className="rounded-[16px] border border-hairline bg-canvas p-6">
-                  <h3 className="mb-6 text-[16px] font-semibold text-ink">Expense Breakdown</h3>
-                  {canShowExpenseChart ? (
-                    <ExpenseBreakdownChart data={expenseBreakdown} />
-                  ) : (
-                    <EmptyState
-                      subtitle="No expenses recorded for this period"
-                      title="No expenses recorded"
-                    />
-                  )}
-                </div>
-
-                <div className="rounded-[16px] border border-hairline bg-canvas p-6">
-                  <h3 className="mb-6 text-[16px] font-semibold text-ink">Highlights</h3>
-                  <div className="space-y-4">
-                    {metricRows.map((row) => (
-                      <MetricRow
-                        icon={row.icon}
-                        key={row.label}
-                        label={row.label}
-                        value={row.value}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </section>
-
-              <section className="mt-6 rounded-[16px] border border-hairline bg-canvas p-6">
-                <h3 className="mb-6 text-[16px] font-semibold text-ink">Salary vs Revenue</h3>
-                {canShowSalaryChart ? (
-                  <SalaryVsRevenueChart data={salaryVsRevenue} />
-                ) : onePointTrend ? (
-                  <EmptyState title="Select a wider range to see trend charts" />
-                ) : (
-                  <EmptyState />
-                )}
-              </section>
-
-              <button
-                className="mb-4 mt-8 flex items-center gap-2 text-[14px] font-semibold text-brand transition hover:text-brandDark"
-                onClick={() => setShowTable((current) => !current)}
-                type="button"
-              >
-                {showTable ? (
-                  <ChevronUp aria-hidden="true" className="h-4 w-4" />
-                ) : (
-                  <ChevronDown aria-hidden="true" className="h-4 w-4" />
-                )}
-                {showTable ? 'Hide' : 'View'} Detailed Breakdown Table
-              </button>
-
-              {showTable ? (
-                <ReportsBreakdownTable
-                  period={range.period}
-                  rows={summary?.breakdown_rows || []}
-                />
-              ) : null}
+              <ReportsBreakdownTable
+                period={range.period}
+                rows={summary?.breakdown_rows || []}
+              />
             </>
           )}
         </>

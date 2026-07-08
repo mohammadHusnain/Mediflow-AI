@@ -1,4 +1,14 @@
 import { api } from './api'
+import {
+  getAppointmentIdFromGeneratedInvoiceId,
+  getGeneratedInvoiceIdForAppointment,
+  getInvoiceAppointmentId,
+  isAppointmentInvoiceEligible,
+} from '@shared/lib/invoices'
+import {
+  getDemoAppointment,
+  getDemoAppointments,
+} from '@shared/lib/seedData'
 import { PUBLIC_ROUTES_FOR_TESTING } from '@shared/lib/testingAccess'
 import {
   assertBillingInvoicePayload,
@@ -7,6 +17,13 @@ import {
 
 const DEMO_NOW = new Date()
 const DAY_MS = 24 * 60 * 60 * 1000
+const LEGACY_DEMO_APPOINTMENT_IDS = new Map([
+  ['501', 301],
+  ['502', 302],
+  ['503', 303],
+  ['504', 316],
+  ['505', 317],
+])
 
 function isoDate(daysOffset = 0) {
   return new Date(DEMO_NOW.getTime() + daysOffset * DAY_MS).toISOString()
@@ -233,6 +250,182 @@ function inDateRange(value, dateFrom, dateTo) {
   return true
 }
 
+function datePart(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toISOString().slice(0, 10)
+}
+
+function normalizePaymentStatus(value) {
+  return String(value || 'unpaid').toLowerCase() === 'paid' ? 'paid' : 'unpaid'
+}
+
+function addDaysToDate(value, days) {
+  const date = new Date(value || new Date())
+  if (Number.isNaN(date.getTime())) return isoDate(days)
+
+  date.setDate(date.getDate() + days)
+  return date.toISOString()
+}
+
+function paginatedResults(response) {
+  if (Array.isArray(response)) return response
+  if (Array.isArray(response?.results)) return response.results
+  return []
+}
+
+function buildDemoInvoiceFromAppointment(appointment) {
+  const id = getGeneratedInvoiceIdForAppointment(appointment?.id)
+  const paymentStatus = normalizePaymentStatus(appointment?.payment_status)
+  const invoiceStatus = paymentStatus === 'paid' ? 'paid' : 'pending'
+  const appointmentDate = appointment?.appointment_dt || new Date().toISOString()
+  const amount = Number(appointment?.consultation_fee ?? appointment?.amount ?? 0)
+
+  return {
+    id,
+    amount,
+    appointment: {
+      appointment_dt: appointmentDate,
+      id: appointment?.id,
+    },
+    appointment_date: appointmentDate,
+    appointment_id: appointment?.id,
+    created_at: appointment?.booked_at || appointmentDate,
+    doctor: appointment?.doctor
+      ? { full_name: appointment.doctor_name || '', id: appointment.doctor }
+      : null,
+    doctor_name: appointment?.doctor_name || '',
+    due_date: addDaysToDate(appointmentDate, 7),
+    invoice_date: appointmentDate,
+    invoice_number: `INV-APT-${appointment?.id}`,
+    paid_at: invoiceStatus === 'paid' ? appointmentDate : null,
+    patient: {
+      full_name: appointment?.patient_name || 'Unknown patient',
+      id: appointment?.patient || null,
+      phone: appointment?.patient_phone || '',
+    },
+    patient_id: appointment?.patient || null,
+    patient_name: appointment?.patient_name || 'Unknown patient',
+    patient_phone: appointment?.patient_phone || '',
+    payment_method: appointment?.payment_method || (invoiceStatus === 'paid' ? 'cash' : ''),
+    status: invoiceStatus,
+    total_amount: amount,
+  }
+}
+
+function ensureDemoInvoicesForCompletedAppointments() {
+  if (!PUBLIC_ROUTES_FOR_TESTING) return
+  if (typeof localStorage === 'undefined') return
+
+  const completedAppointments = paginatedResults(
+    getDemoAppointments({
+      page_size: 1000,
+      status: 'completed',
+    }),
+  )
+  const existingAppointmentIds = new Set(
+    demoInvoices
+      .map((invoice) => getInvoiceAppointmentId(invoice))
+      .filter(Boolean)
+      .map((id) => String(id)),
+  )
+  const generatedInvoices = []
+
+  completedAppointments.forEach((appointment) => {
+    if (!isAppointmentInvoiceEligible(appointment)) return
+
+    const appointmentId = appointment?.id
+    if (!appointmentId || existingAppointmentIds.has(String(appointmentId))) {
+      return
+    }
+
+    generatedInvoices.push(buildDemoInvoiceFromAppointment(appointment))
+    existingAppointmentIds.add(String(appointmentId))
+  })
+
+  if (generatedInvoices.length > 0) {
+    demoInvoices = [...generatedInvoices, ...demoInvoices]
+  }
+}
+
+function findDemoInvoiceByAppointmentId(appointmentId) {
+  return demoInvoices.find(
+    (invoice) => String(getInvoiceAppointmentId(invoice)) === String(appointmentId),
+  )
+}
+
+function normalizeLegacyDemoInvoiceLink(invoice) {
+  const legacyAppointmentId = getInvoiceAppointmentId(invoice)
+  const appointmentId = LEGACY_DEMO_APPOINTMENT_IDS.get(String(legacyAppointmentId))
+
+  if (!appointmentId || typeof localStorage === 'undefined') {
+    return invoice
+  }
+
+  try {
+    const appointment = getDemoAppointment(appointmentId)
+    const normalizedInvoice = {
+      ...invoice,
+      appointment: {
+        ...(typeof invoice.appointment === 'object' ? invoice.appointment : {}),
+        appointment_dt: appointment.appointment_dt,
+        id: appointment.id,
+      },
+      appointment_date: appointment.appointment_dt || invoice.appointment_date,
+      appointment_id: appointment.id,
+      doctor: appointment.doctor
+        ? { full_name: appointment.doctor_name || invoice.doctor_name || '', id: appointment.doctor }
+        : invoice.doctor,
+      doctor_name: appointment.doctor_name || invoice.doctor_name,
+      patient: {
+        ...(typeof invoice.patient === 'object' ? invoice.patient : {}),
+        full_name: appointment.patient_name || invoice.patient_name,
+        id: appointment.patient || invoice.patient_id || null,
+      },
+      patient_id: appointment.patient || invoice.patient_id || null,
+      patient_name: appointment.patient_name || invoice.patient_name,
+    }
+
+    demoInvoices = demoInvoices.map((candidate) =>
+      String(candidate.id) === String(invoice.id) ? normalizedInvoice : candidate,
+    )
+
+    return normalizedInvoice
+  } catch {
+    return invoice
+  }
+}
+
+function getOrCreateDemoInvoiceForAppointment(appointmentId) {
+  const existing = findDemoInvoiceByAppointmentId(appointmentId)
+  if (existing) return existing
+
+  const appointment = getDemoAppointment(appointmentId)
+  if (!isAppointmentInvoiceEligible(appointment)) {
+    createDemoError('Invoice not found.')
+  }
+
+  const invoice = buildDemoInvoiceFromAppointment(appointment)
+  demoInvoices = [invoice, ...demoInvoices]
+  return invoice
+}
+
+function findDemoInvoice(id) {
+  ensureDemoInvoicesForCompletedAppointments()
+
+  const invoice = demoInvoices.find((candidate) => String(candidate.id) === String(id))
+  if (invoice) return normalizeLegacyDemoInvoiceLink(invoice)
+
+  const appointmentId = getAppointmentIdFromGeneratedInvoiceId(id)
+  return appointmentId ? getOrCreateDemoInvoiceForAppointment(appointmentId) : null
+}
+
+function getPaymentTimestamp(data = {}, fallback = new Date().toISOString()) {
+  if (data.paid_at) return data.paid_at
+  if (data.payment_date) return `${data.payment_date}T12:00:00.000Z`
+  return fallback
+}
+
 function paginate(items, params = {}) {
   const page = Math.max(1, Number(params.page || 1))
   const pageSize = Math.max(1, Number(params.page_size || 20))
@@ -248,6 +441,7 @@ function paginate(items, params = {}) {
 }
 
 function getDemoInvoices(params = {}) {
+  ensureDemoInvoicesForCompletedAppointments()
   assertDateRange(params.date_from, params.date_to)
 
   const search = normalizeSearch(params.search)
@@ -301,6 +495,7 @@ function getDemoHistory(params = {}) {
 }
 
 function getDemoBillingStats() {
+  ensureDemoInvoicesForCompletedAppointments()
   const monthKey = DEMO_NOW.toISOString().slice(0, 7)
 
   return {
@@ -376,6 +571,9 @@ function createDemoInvoice(data = {}) {
   const id = nextInvoiceId()
   const now = new Date().toISOString()
   const amount = Number(data.amount ?? data.total_amount ?? data.total ?? 0)
+  const paidAt = data.status === 'paid' || data.status === 'partial'
+    ? getPaymentTimestamp(data, now)
+    : data.paid_at || null
   const patientName = data.patient_name || data.patient?.full_name || data.patient?.name
   const patientPhone = data.patient_phone || data.patient?.phone || ''
   const doctorName = data.doctor_name || data.doctor?.full_name || data.doctor?.name || ''
@@ -394,7 +592,7 @@ function createDemoInvoice(data = {}) {
     due_date: data.due_date || '',
     invoice_date: data.invoice_date || now,
     invoice_number: data.invoice_number || nextInvoiceNumber(id),
-    paid_at: data.status === 'paid' ? data.paid_at || now : data.paid_at || null,
+    paid_at: paidAt,
     patient: data.patient || {
       full_name: patientName,
       id: data.patient_id || null,
@@ -404,6 +602,7 @@ function createDemoInvoice(data = {}) {
     patient_name: patientName,
     patient_phone: patientPhone,
     payment_method: data.payment_method || '',
+    payment_date: paidAt ? datePart(paidAt) : data.payment_date || '',
     status: data.status || 'pending',
     total_amount: amount,
   }
@@ -431,6 +630,7 @@ function createDemoInvoice(data = {}) {
 }
 
 function updateDemoInvoice(id, data = {}) {
+  ensureDemoInvoicesForCompletedAppointments()
   assertBillingInvoicePayload(data, { partial: true })
 
   let updatedInvoice = null
@@ -438,6 +638,11 @@ function updateDemoInvoice(id, data = {}) {
     if (String(invoice.id) !== String(id)) return invoice
 
     const amount = data.amount ?? data.total_amount ?? data.total
+    const nextStatus = data.status || invoice.status
+    const paidAt = ['paid', 'partial'].includes(nextStatus)
+      ? getPaymentTimestamp(data, invoice.paid_at || new Date().toISOString())
+      : null
+
     updatedInvoice = {
       ...invoice,
       ...data,
@@ -445,12 +650,10 @@ function updateDemoInvoice(id, data = {}) {
       doctor_name: data.doctor_name || data.doctor?.full_name || data.doctor?.name || invoice.doctor_name,
       patient_name: data.patient_name || data.patient?.full_name || data.patient?.name || invoice.patient_name,
       patient_phone: data.patient_phone || data.patient?.phone || invoice.patient_phone,
-      status: data.status || invoice.status,
+      paid_at: paidAt,
+      payment_date: paidAt ? datePart(paidAt) : '',
+      status: nextStatus,
       total_amount: amount === undefined ? invoice.total_amount : Number(amount),
-    }
-
-    if (updatedInvoice.status === 'paid' && !updatedInvoice.paid_at) {
-      updatedInvoice.paid_at = new Date().toISOString()
     }
 
     return updatedInvoice
@@ -462,6 +665,10 @@ function updateDemoInvoice(id, data = {}) {
 
   if (updatedInvoice.status === 'paid' || updatedInvoice.status === 'partial') {
     upsertPaymentForInvoice(updatedInvoice, updatedInvoice.paid_at || new Date().toISOString())
+  } else {
+    demoPayments = demoPayments.filter(
+      (payment) => String(payment.invoice_id) !== String(updatedInvoice.id),
+    )
   }
 
   demoHistory = [
@@ -482,6 +689,7 @@ function updateDemoInvoice(id, data = {}) {
 }
 
 function deleteDemoInvoice(id) {
+  ensureDemoInvoicesForCompletedAppointments()
   const invoice = demoInvoices.find((candidate) => String(candidate.id) === String(id))
 
   if (!invoice) {
@@ -526,7 +734,7 @@ export async function getInvoices(params) {
 
 export async function getInvoice(id) {
   if (PUBLIC_ROUTES_FOR_TESTING) {
-    const invoice = demoInvoices.find((candidate) => String(candidate.id) === String(id))
+    const invoice = findDemoInvoice(id)
 
     if (!invoice) {
       createDemoError('Invoice not found.')
@@ -586,7 +794,7 @@ export async function deleteInvoice(id) {
 
 export async function downloadInvoicePDF(id) {
   if (PUBLIC_ROUTES_FOR_TESTING) {
-    const invoice = demoInvoices.find((candidate) => String(candidate.id) === String(id))
+    const invoice = findDemoInvoice(id)
 
     if (!invoice) {
       createDemoError('Invoice not found.')
@@ -692,6 +900,7 @@ export async function getBillingStats() {
 
 export async function markInvoicePaid(id) {
   if (PUBLIC_ROUTES_FOR_TESTING) {
+    ensureDemoInvoicesForCompletedAppointments()
     const paidAt = new Date().toISOString()
     let updatedInvoice = null
 
@@ -701,6 +910,7 @@ export async function markInvoicePaid(id) {
       updatedInvoice = {
         ...invoice,
         paid_at: paidAt,
+        payment_date: datePart(paidAt),
         payment_method: invoice.payment_method || 'cash',
         status: 'paid',
       }
@@ -794,13 +1004,135 @@ let demoSalaryConfigs = [
   },
 ]
 
+let demoSalaryRecordOverrides = new Map()
+
+function salaryEmployeeId(config = {}) {
+  return (
+    config.employee?.id ||
+    config.employee_id ||
+    config.user_id ||
+    config.staff_id ||
+    null
+  )
+}
+
+function normalizeSalaryMonth(value) {
+  if (!value) return new Date().toISOString().slice(0, 7)
+
+  const text = String(value)
+  if (/^\d{4}-\d{2}$/.test(text)) return text
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 7)
+
+  const date = new Date(text)
+  if (Number.isNaN(date.getTime())) return new Date().toISOString().slice(0, 7)
+
+  return date.toISOString().slice(0, 7)
+}
+
+function salaryMonthFromParams(params = {}) {
+  if (params.month && String(params.month).includes('-')) {
+    return normalizeSalaryMonth(params.month)
+  }
+
+  if (params.year && params.month) {
+    return `${params.year}-${String(params.month).padStart(2, '0')}`
+  }
+
+  return normalizeSalaryMonth(params.month)
+}
+
+function salaryRecordId(employeeId, month) {
+  return `salary-${employeeId}-${month}`
+}
+
+function getConfigAmount(config = {}) {
+  return Number(config.base_salary ?? config.fixed_amount ?? 0)
+}
+
+function buildDemoSalaryRecord(config, month) {
+  const employeeId = salaryEmployeeId(config)
+  const id = salaryRecordId(employeeId, month)
+  const override = demoSalaryRecordOverrides.get(id) || {}
+  const baseAmount = getConfigAmount(config)
+  const allowances = Number(config.allowances || 0)
+  const deductions = Number(config.deductions || 0)
+  const netSalary = Math.max(0, baseAmount + allowances - deductions)
+
+  return {
+    id,
+    amount: netSalary,
+    base_amount: baseAmount,
+    calculated_amount: netSalary,
+    employee: config.employee || { id: employeeId },
+    employee_id: employeeId,
+    employee_name: config.employee?.full_name || config.employee_name || 'Employee',
+    net_salary: netSalary,
+    paid_date: override.paid_date || null,
+    role: config.employee?.role || config.role || 'Staff',
+    salary_month: month,
+    salary_type: config.salary_type || 'fixed',
+    status: override.status || 'pending',
+    total_earned: netSalary,
+    user_id: employeeId,
+  }
+}
+
+function getDemoSalaryRecords(params = {}) {
+  const month = salaryMonthFromParams(params)
+  const records = demoSalaryConfigs
+    .filter((config) => {
+      const employeeId = salaryEmployeeId(config)
+      const effectiveMonth = normalizeSalaryMonth(config.effective_from)
+
+      return employeeId && getConfigAmount(config) > 0 && effectiveMonth <= month
+    })
+    .map((config) => buildDemoSalaryRecord(config, month))
+
+  return { data: paginate(records, params) }
+}
+
+function updateDemoSalaryRecord(id, data = {}) {
+  const month =
+    data.salary_month ||
+    String(id).match(/(\d{4}-\d{2})$/)?.[1] ||
+    new Date().toISOString().slice(0, 7)
+  const existingRecord = getDemoSalaryRecords({ month }).data.results.find(
+    (record) => String(record.id) === String(id),
+  )
+
+  if (!existingRecord) {
+    createDemoError('Salary record not found.', 404)
+  }
+
+  demoSalaryRecordOverrides.set(String(id), {
+    paid_date: data.paid_date ?? existingRecord.paid_date,
+    status: data.status ?? existingRecord.status,
+  })
+
+  return {
+    data: {
+      ...existingRecord,
+      ...demoSalaryRecordOverrides.get(String(id)),
+    },
+  }
+}
+
 function createDemoSalaryConfig(data) {
+  const employeeId = data.employee_id || data.user_id || data.staff_id
+  const existing = demoSalaryConfigs.find(
+    (config) => String(salaryEmployeeId(config)) === String(employeeId),
+  )
+
+  if (existing) {
+    return updateDemoSalaryConfig(existing.id, data)
+  }
+
   const id = demoSalaryConfigs.length + 1
   const config = {
     id,
-    employee: { id: data.employee_id, full_name: '', role: '', email: '' },
+    employee: data.employee || { id: employeeId, full_name: '', role: '', email: '' },
     salary_type: data.salary_type,
-    base_salary: Number(data.base_salary || 0),
+    base_salary: Number(data.base_salary ?? data.fixed_amount ?? 0),
     commission_rate: Number(data.commission_rate || 0),
     commission_per_appointment: Number(data.commission_per_appointment || 0),
     allowances: Number(data.allowances || 0),
@@ -820,7 +1152,9 @@ function updateDemoSalaryConfig(id, data) {
     updated = {
       ...c,
       salary_type: data.salary_type ?? c.salary_type,
-      base_salary: data.base_salary !== undefined ? Number(data.base_salary) : c.base_salary,
+      base_salary: data.base_salary !== undefined || data.fixed_amount !== undefined
+        ? Number(data.base_salary ?? data.fixed_amount)
+        : c.base_salary,
       commission_rate: data.commission_rate !== undefined ? Number(data.commission_rate) : c.commission_rate,
       commission_per_appointment: data.commission_per_appointment !== undefined ? Number(data.commission_per_appointment) : c.commission_per_appointment,
       allowances: data.allowances !== undefined ? Number(data.allowances) : c.allowances,
@@ -856,8 +1190,50 @@ export const updateSalaryConfig = (id, data) => {
 export const getSalaryPreview = (month, year) =>
   api.get('/billing/salary/preview/', { params: { month, year } })
 export const processSalary = (data) => api.post('/billing/salary/process/', data)
-export const getSalaryRecords = (params) => api.get('/billing/salary/records/', { params })
-export const updateSalaryRecord = (id, data) => api.patch(`/billing/salary/records/${id}/`, data)
+export const getSalaryRecords = (params) => {
+  if (PUBLIC_ROUTES_FOR_TESTING) {
+    return getDemoSalaryRecords(params)
+  }
+
+  return api.get('/billing/salary/records/', { params })
+}
+export const updateSalaryRecord = (id, data) => {
+  if (PUBLIC_ROUTES_FOR_TESTING) {
+    return updateDemoSalaryRecord(id, data)
+  }
+
+  return api.patch(`/billing/salary/records/${id}/`, data)
+}
+export const paySalary = ({ employeeId, employee_id, month, recordId, record_id }) => {
+  const resolvedRecordId = recordId || record_id
+  const paidDate = new Date().toISOString().slice(0, 10)
+
+  if (resolvedRecordId) {
+    return updateSalaryRecord(resolvedRecordId, {
+      paid_date: paidDate,
+      status: 'paid',
+    })
+  }
+
+  if (PUBLIC_ROUTES_FOR_TESTING) {
+    const resolvedEmployeeId = employeeId || employee_id
+    const resolvedMonth = normalizeSalaryMonth(month)
+    return updateDemoSalaryRecord(
+      salaryRecordId(resolvedEmployeeId, resolvedMonth),
+      {
+        paid_date: paidDate,
+        salary_month: resolvedMonth,
+        status: 'paid',
+      },
+    )
+  }
+
+  return api.post('/billing/salary/payments/', {
+    employee_id: employeeId || employee_id,
+    month,
+    paid_date: paidDate,
+  })
+}
 
 export const getFinancialReportData = (params) => api.get('/billing/reports/data/', { params })
 export const downloadFinancialReportPDF = (params) =>

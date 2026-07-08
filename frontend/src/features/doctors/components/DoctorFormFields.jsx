@@ -273,8 +273,15 @@ export function DoctorFormFields({
         <PhoneInput
           error={touched.phone && errors.phone}
           name="phone"
-          onBlur={onBlur}
-          onChange={onChange}
+          onBlur={() => onBlur({ target: { name: 'phone' } })}
+          onChange={(nextValue) =>
+            onChange({
+              target: {
+                name: 'phone',
+                value: nextValue,
+              },
+            })
+          }
           required
           value={data.phone}
         />

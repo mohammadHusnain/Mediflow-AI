@@ -75,7 +75,7 @@ export function getNavItems({ canRead, isAdmin, role, user }) {
             icon: Receipt,
             label: 'Billing',
             matchPaths: ['/financial-reports/billing'],
-            to: '/financial-reports/billing/invoices',
+            to: '/financial-reports/billing',
           },
           {
             icon: Wallet,

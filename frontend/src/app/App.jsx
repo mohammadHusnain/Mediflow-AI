@@ -36,12 +36,10 @@ import ExpenseFormPage from '../pages/expenses/ExpenseFormPage.jsx'
 import FinancialReports from '../pages/FinancialReports.jsx'
 import FinancialLayout from '../pages/financial/FinancialLayout.jsx'
 import InvoiceDetail from '../pages/financial/billing/InvoiceDetail.jsx'
-import InvoiceHistory from '../pages/financial/billing/InvoiceHistory.jsx'
+import InvoiceEdit from '../pages/financial/billing/InvoiceEdit.jsx'
 import InvoiceList from '../pages/financial/billing/InvoiceList.jsx'
-import PaymentRecords from '../pages/financial/billing/PaymentRecords.jsx'
 import ReportsOverview from '../pages/financial/reports/ReportsOverview.jsx'
-import SalaryConfig from '../pages/financial/salary/SalaryConfig.jsx'
-import SalaryHistory from '../pages/financial/salary/SalaryHistory.jsx'
+import SalaryFormPage from '../pages/financial/salary/SalaryFormPage.jsx'
 import SalaryOverview from '../pages/financial/salary/SalaryOverview.jsx'
 import Login from '../pages/Login.jsx'
 import NotAvailable from '../pages/NotAvailable.jsx'
@@ -79,7 +77,7 @@ function FinancialIndexRedirect() {
     return <Navigate replace to="/financial-reports/expenses?tab=report" />
   }
 
-  return <Navigate replace to="/financial-reports/billing/invoices" />
+  return <Navigate replace to="/financial-reports/billing" />
 }
 
 export function App() {
@@ -248,7 +246,7 @@ export function App() {
             <Route path="/post-treatment/alerts" element={<CriticalAlertsQueue />} />
             <Route
               path="/billing"
-              element={<Navigate replace to="/financial-reports/billing/invoices" />}
+              element={<Navigate replace to="/financial-reports/billing" />}
             />
             <Route
               path="/salary"
@@ -263,17 +261,17 @@ export function App() {
               }
             >
               <Route index element={<FinancialIndexRedirect />} />
-              <Route
-                path="billing"
-                element={<Navigate replace to="/financial-reports/billing/invoices" />}
-              />
-              <Route path="billing/invoices" element={<InvoiceList />} />
+              <Route path="billing" element={<InvoiceList />} />
+              <Route path="billing/invoices" element={<Navigate replace to="/financial-reports/billing" />} />
+              <Route path="billing/invoice/:invoiceId" element={<InvoiceDetail />} />
+              <Route path="billing/invoice/:invoiceId/edit" element={<InvoiceEdit />} />
               <Route path="billing/invoices/:id" element={<InvoiceDetail />} />
-              <Route path="billing/payments" element={<PaymentRecords />} />
-              <Route path="billing/history" element={<InvoiceHistory />} />
+              <Route path="billing/invoices/:id/edit" element={<InvoiceEdit />} />
               <Route path="salary" element={<SalaryOverview />} />
-              <Route path="salary/config" element={<SalaryConfig />} />
-              <Route path="salary/history" element={<SalaryHistory />} />
+              <Route path="salary/:employeeId/add" element={<SalaryFormPage mode="add" />} />
+              <Route path="salary/:employeeId/edit" element={<SalaryFormPage mode="edit" />} />
+              <Route path="salary/config" element={<Navigate replace to="/financial-reports/salary" />} />
+              <Route path="salary/history" element={<Navigate replace to="/financial-reports/salary" />} />
               <Route path="reports" element={<ReportsOverview />} />
               <Route path="expenses" element={<FinancialReports />} />
               <Route path="expenses/add" element={<ExpenseFormPage mode="add" />} />

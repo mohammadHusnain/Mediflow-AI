@@ -9,6 +9,8 @@ import {
 const DEMO_STORAGE_KEY = 'mediflow_post_treatment_demo_v1'
 const DAY_MS = 24 * 60 * 60 * 1000
 
+export const CRITICAL_ALERTS_UPDATED_EVENT = 'mediflow:critical-alerts-updated'
+
 let memoryStore = null
 
 const DEMO_PATIENTS = [
@@ -149,6 +151,18 @@ function writeStoredDemo(data) {
   return clone(data)
 }
 
+function dispatchCriticalAlertsUpdated(detail = {}) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.dispatchEvent(
+    new CustomEvent(CRITICAL_ALERTS_UPDATED_EVENT, {
+      detail,
+    }),
+  )
+}
+
 function nextId(records, floor = 1) {
   return records.reduce((max, record) => {
     const id = Number(record.id)
@@ -221,14 +235,41 @@ function scopePlans(plans) {
   return plans.filter((plan) => String(plan.doctor_id) === String(doctorId))
 }
 
-function scopeAlerts(alerts) {
+function getAlertPlan(alert, plans = []) {
+  return plans.find((plan) => String(plan.id) === String(alert.plan_id)) || null
+}
+
+function alertWithPlanContext(alert, plans = []) {
+  const plan = getAlertPlan(alert, plans)
+
+  return {
+    ...alert,
+    condition: alert.condition || plan?.condition || null,
+    doctor_id:
+      alert.doctor_id ??
+      alert.doctor?.id ??
+      alert.plan?.doctor_id ??
+      plan?.doctor_id ??
+      null,
+  }
+}
+
+function scopeAlerts(alerts, plans = []) {
   const doctorId = currentDoctorId()
 
   if (!doctorId) {
-    return alerts
+    return alerts.map((alert) => alertWithPlanContext(alert, plans))
   }
 
-  return alerts.filter((alert) => String(alert.doctor_id) === String(doctorId))
+  return alerts
+    .map((alert) => alertWithPlanContext(alert, plans))
+    .filter((alert) => {
+      if (!alert.doctor_id) {
+        return true
+      }
+
+      return String(alert.doctor_id) === String(doctorId)
+    })
 }
 
 function paginate(items, params = {}) {
@@ -833,19 +874,32 @@ export async function logPatientReply(messageLogId, content) {
     }
 
     writeStoredDemo(data)
+    dispatchCriticalAlertsUpdated({
+      critical: isCritical,
+      messageLogId: reply.id,
+      planId: plan.id,
+    })
 
     return clone(reply)
   }
 
   const response = await api.post(`/messages/${messageLogId}/reply/`, { content })
-  return unwrap(response)
+  const reply = unwrap(response)
+
+  dispatchCriticalAlertsUpdated({
+    critical: reply?.is_critical_flag,
+    messageLogId: reply?.id,
+    planId: reply?.plan_id,
+  })
+
+  return reply
 }
 
 export async function getCriticalAlerts(params = {}) {
   if (PUBLIC_ROUTES_FOR_TESTING) {
     const data = readStoredDemo()
     const search = String(params.search || '').trim().toLowerCase()
-    let alerts = scopeAlerts(data.alerts)
+    let alerts = scopeAlerts(data.alerts, data.plans)
 
     if (params.status && params.status !== 'all') {
       alerts = alerts.filter((alert) => alert.status === params.status)

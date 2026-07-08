@@ -10,6 +10,7 @@ import {
 import { Link, useNavigate } from 'react-router-dom'
 
 import ConfirmationModal from '@shared/components/ConfirmationModal'
+import CurrencyDisplay from '@shared/components/CurrencyDisplay'
 import Pagination from '@shared/components/Pagination'
 import SkeletonRow from '@shared/components/SkeletonRow'
 import { useToast } from '@shared/components/Toast'
@@ -47,12 +48,6 @@ const MONTH_OPTIONS = [
   ['12', 'December'],
 ]
 
-const STATUS_STYLES = {
-  approved: 'bg-[#E3F7EC] text-[#0F9D66]',
-  recorded: 'bg-[#E7EEFF] text-[#1D4ED8]',
-  void: 'bg-[#FCE4E8] text-[#C8102E]',
-}
-
 function currentMonthParts() {
   const now = new Date()
   return {
@@ -64,10 +59,6 @@ function currentMonthParts() {
 function numberValue(value) {
   const number = Number(value)
   return Number.isFinite(number) ? number : 0
-}
-
-function formatPkr(value) {
-  return `PKR ${numberValue(value).toLocaleString()}`
 }
 
 function titleCase(value) {
@@ -112,23 +103,19 @@ function getExpenseYear(expense) {
   return String(expense.expense_year || String(expense.expense_date || '').slice(0, 4))
 }
 
-function StatusBadge({ status }) {
-  const normalized = String(status || 'recorded').toLowerCase()
-  const style = STATUS_STYLES[normalized] || 'bg-[#F3F4F6] text-[#5B6472]'
-
-  return (
-    <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${style}`}>
-      {titleCase(normalized)}
-    </span>
-  )
-}
-
 function ExpenseTypeBadge({ type }) {
   return (
     <span className="inline-flex rounded-full border border-hairline bg-mist px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate">
       {titleCase(type)}
     </span>
   )
+}
+
+function isWithinLast24Hours(value) {
+  if (!value) return false
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return false
+  return Date.now() - date.getTime() <= 24 * 60 * 60 * 1000
 }
 
 function groupExpensesByMonth(expenses) {
@@ -157,19 +144,15 @@ function ExpenseRows({ canManage, expenses, onDelete }) {
   const navigate = useNavigate()
 
   return (
-    <table className="w-full min-w-[1180px] border-collapse text-left">
+    <table className="w-full min-w-[860px] border-collapse text-left">
       <thead className="border-b border-hairline bg-mist/70">
         <tr>
           {[
+            'Date',
             'Category',
-            'Expense Name',
+            'Type',
             'Description',
             'Amount',
-            'Expense Month',
-            'Expense Year',
-            'Date Added',
-            'Added By',
-            'Status',
             'Actions',
           ].map((header) => (
             <th
@@ -185,25 +168,27 @@ function ExpenseRows({ canManage, expenses, onDelete }) {
       <tbody>
         {expenses.map((expense) => (
           <tr className="border-b border-hairline last:border-0 hover:bg-mist/40" key={expense.id}>
-            <td className="px-4 py-3.5">
-              <div className="space-y-1">
-                <p className="text-[13px] font-semibold text-ink">{expense.category || '-'}</p>
-                <ExpenseTypeBadge type={expense.expense_type} />
+            <td className="px-4 py-2.5 font-mono text-[12px] text-slate">
+              <div className="flex items-center gap-2">
+                {formatDate(expense.expense_date || expense.created_at)}
+                {isWithinLast24Hours(expense.created_at) ? (
+                  <span className="rounded-full bg-brand-light px-1.5 py-0.5 text-[9px] font-semibold text-brand">
+                    NEW
+                  </span>
+                ) : null}
               </div>
             </td>
-            <td className="px-4 py-3.5 text-[14px] font-semibold text-ink">{getExpenseName(expense)}</td>
-            <td className="max-w-[260px] truncate px-4 py-3.5 text-[13px] text-slate">
+            <td className="px-4 py-2.5 text-[13px] font-semibold text-ink">{expense.category || '-'}</td>
+            <td className="px-4 py-2.5">
+              <ExpenseTypeBadge type={expense.expense_type} />
+            </td>
+            <td className="max-w-[340px] truncate px-4 py-2.5 text-[13px] text-slate">
               {expense.description || '-'}
             </td>
-            <td className="px-4 py-3.5 font-mono text-[14px] font-semibold text-ink">{formatPkr(expense.amount)}</td>
-            <td className="px-4 py-3.5 text-[13px] text-slate">{MONTH_OPTIONS.find(([month]) => month === getExpenseMonth(expense))?.[1] || '-'}</td>
-            <td className="px-4 py-3.5 font-mono text-[13px] text-slate">{getExpenseYear(expense)}</td>
-            <td className="px-4 py-3.5 font-mono text-[12px] text-slate">{formatDate(expense.created_at || expense.expense_date)}</td>
-            <td className="px-4 py-3.5 text-[13px] text-slate">{expense.added_by || '-'}</td>
-            <td className="px-4 py-3.5">
-              <StatusBadge status={expense.status} />
+            <td className="px-4 py-2.5 text-[14px] font-semibold text-ink">
+              <CurrencyDisplay amount={expense.amount} />
             </td>
-            <td className="px-4 py-3.5">
+            <td className="px-4 py-2.5">
               {canManage ? (
                 <div className="flex items-center gap-2">
                   <button
@@ -347,10 +332,7 @@ export default function ExpensesTab() {
     if (!deleteTarget) return
 
     const target = deleteTarget
-    const previousExpenses = expenses
     setIsDeleting(true)
-    setExpenses((currentExpenses) => currentExpenses.filter((expense) => expense.id !== target.id))
-    setExpenseCount((currentCount) => Math.max(0, currentCount - 1))
 
     try {
       await deleteExpense(target.id)
@@ -358,7 +340,6 @@ export default function ExpensesTab() {
       setDeleteTarget(null)
       await Promise.all([loadExpenses(), loadCategories()])
     } catch (error) {
-      setExpenses(previousExpenses)
       toast.error(getBackendError(error, 'Expense could not be deleted.'))
     } finally {
       setIsDeleting(false)
@@ -369,38 +350,30 @@ export default function ExpensesTab() {
 
   return (
     <>
-      <header className="mb-5 rounded-[18px] border border-hairline bg-canvas px-6 py-5 shadow-sm">
-        <div className="flex flex-col gap-5">
-          <div className="max-w-3xl">
-            <h2 className="font-display text-[26px] text-ink">Expense Management</h2>
-            <p className="mt-2 text-[15px] font-normal leading-6 text-slate">
-              Record clinic expenses month-wise and manage historical reconciliation entries.
-            </p>
-          </div>
-          <div className="flex flex-col gap-3 border-t border-hairline pt-4 sm:flex-row sm:items-center sm:justify-between">
-            {canManage ? (
-              <Link
-                className="inline-flex h-11 min-w-[190px] items-center justify-center gap-2 rounded-control bg-brand px-5 text-[14px] font-semibold text-white shadow-[0_10px_24px_rgba(67,56,202,0.22)] transition hover:bg-brand-dark"
-                to="/financial-reports/expenses/add"
-              >
-                <Plus aria-hidden="true" className="h-4 w-4" />
-                Add Expense
-              </Link>
-            ) : null}
-            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-              <span className="rounded-full border border-hairline bg-mist px-3 py-1 text-[13px] font-medium text-slate">
-                {monthLabel(month, year)}
-              </span>
-              <span className="rounded-full border border-hairline bg-mist px-3 py-1 text-[13px] font-medium text-slate">
-                {expenseCount.toLocaleString()} records
-              </span>
-              <span className="rounded-full border border-hairline bg-mist px-3 py-1 text-[13px] font-semibold text-ink">
-                Total {formatPkr(periodTotal)}
-              </span>
-            </div>
+      <section className="mb-5 rounded-[16px] border border-hairline bg-canvas px-6 py-4 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          {canManage ? (
+            <Link
+              className="inline-flex h-11 min-w-[190px] items-center justify-center gap-2 rounded-control bg-brand px-5 text-[14px] font-semibold text-white shadow-[0_10px_24px_rgba(67,56,202,0.22)] transition hover:bg-brand-dark"
+              to="/financial-reports/expenses/add"
+            >
+              <Plus aria-hidden="true" className="h-4 w-4" />
+              Add Expense
+            </Link>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <span className="rounded-full border border-hairline bg-mist px-3 py-1 text-[13px] font-medium text-slate">
+              {monthLabel(month, year)}
+            </span>
+            <span className="rounded-full border border-hairline bg-mist px-3 py-1 text-[13px] font-medium text-slate">
+              {expenseCount.toLocaleString()} records
+            </span>
+            <span className="rounded-full border border-hairline bg-mist px-3 py-1 text-[13px] font-semibold text-ink">
+              Total <CurrencyDisplay amount={periodTotal} />
+            </span>
           </div>
         </div>
-      </header>
+      </section>
 
       <section className="mb-6 rounded-[16px] border border-hairline bg-canvas p-5">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -512,10 +485,10 @@ export default function ExpensesTab() {
 
       <section className="overflow-hidden rounded-[16px] border border-hairline bg-canvas">
         {loading ? (
-          <table className="w-full min-w-[1180px] border-collapse text-left">
+          <table className="w-full min-w-[860px] border-collapse text-left">
             <tbody>
               {Array.from({ length: 8 }).map((_, index) => (
-                <SkeletonRow columns={10} index={index} key={index} />
+                <SkeletonRow columns={6} index={index} key={index} />
               ))}
             </tbody>
           </table>
@@ -542,7 +515,7 @@ export default function ExpensesTab() {
                   <h3 className="text-[14px] font-semibold text-ink">{monthLabel(group.month, group.year)}</h3>
                   <div className="flex flex-wrap gap-2 text-[12px] font-medium text-slate">
                     <span>{group.expenses.length} entries</span>
-                    <span className="font-mono text-ink">{formatPkr(group.total)}</span>
+                    <CurrencyDisplay amount={group.total} className="text-ink" />
                   </div>
                 </div>
                 <div className="overflow-x-auto">
@@ -556,12 +529,23 @@ export default function ExpensesTab() {
             ))}
           </div>
         )}
+        <div className="flex items-center justify-end gap-3 border-t border-hairline bg-mist/50 px-5 py-3">
+          <span className="text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">
+            Period Total
+          </span>
+          <CurrencyDisplay amount={periodTotal} className="text-[14px] font-bold text-ink" />
+        </div>
         <Pagination currentPage={page} onPageChange={setPage} totalCount={expenseCount} />
       </section>
 
       {deleteTarget ? (
         <ConfirmationModal
-          body={`This will permanently delete ${getExpenseName(deleteTarget)} for ${formatPkr(deleteTarget.amount)}.`}
+          body={
+            <>
+              This will permanently delete {getExpenseName(deleteTarget)} for{' '}
+              <CurrencyDisplay amount={deleteTarget.amount} className="font-semibold text-ink" />.
+            </>
+          }
           confirmLabel="Delete Expense"
           isLoading={isDeleting}
           onCancel={() => setDeleteTarget(null)}

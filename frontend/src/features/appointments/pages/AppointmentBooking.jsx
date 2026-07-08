@@ -168,7 +168,9 @@ export function AppointmentBooking() {
           return
         }
 
-        const createdPatient = await createPatient(toPatientPayload(patientValues))
+        const createdPatient = await createPatient(
+          toPatientPayload(patientValues, { optionalVitals: true }),
+        )
         patientId = getRecordId(createdPatient)
       }
 
@@ -351,6 +353,7 @@ export function AppointmentBooking() {
                 New Patient Details
               </div>
               <PatientFields
+                appointmentBooking
                 clearErrors={patientForm.clearErrors}
                 currentPatientId={null}
                 errors={patientForm.formState.errors}

@@ -8,7 +8,7 @@ import {
   YAxis,
 } from 'recharts'
 
-const PKR_FORMATTER = new Intl.NumberFormat('en-PK')
+import { formatCurrencyAmount } from '@shared/lib/currency'
 
 const SERIES_LABELS = {
   revenue: 'Revenue',
@@ -21,7 +21,7 @@ function numberValue(value) {
 }
 
 function formatCurrency(value) {
-  return `PKR ${PKR_FORMATTER.format(numberValue(value))}`
+  return formatCurrencyAmount(numberValue(value))
 }
 
 function ratioColorClass(ratio) {

@@ -50,7 +50,8 @@ export function Patients() {
   const [deleteCandidate, setDeleteCandidate] = useState(null)
   const [isDeletingPatient, setIsDeletingPatient] = useState(false)
   const hasLoadedRef = useRef(false)
-  const search = searchParams.get('search') || ''
+  const urlSearch = searchParams.get('search') || ''
+  const [searchInput, setSearchInput] = useState(urlSearch)
 
   const loadPatients = useCallback(
     async (searchTerm, pageNumber, isMounted = () => true, initial = false) => {
@@ -97,14 +98,26 @@ export function Patients() {
     const initial = !hasLoadedRef.current
     hasLoadedRef.current = true
     const debounceId = window.setTimeout(() => {
-      loadPatients(search, page, () => isMounted, initial)
+      loadPatients(searchInput, page, () => isMounted, initial)
     }, 300)
 
     return () => {
       isMounted = false
       window.clearTimeout(debounceId)
     }
-  }, [loadPatients, page, search])
+  }, [loadPatients, page, searchInput])
+
+  useEffect(() => {
+    const trimmedSearch = searchInput.trim()
+
+    if (trimmedSearch === urlSearch) {
+      return
+    }
+
+    setSearchParams(trimmedSearch ? { search: trimmedSearch } : {}, {
+      replace: true,
+    })
+  }, [searchInput, setSearchParams, urlSearch])
 
   const patientRows = useMemo(
     () =>
@@ -121,15 +134,12 @@ export function Patients() {
   )
 
   function handleSearchChange(event) {
-    const nextSearch = event.target.value.trim()
-
+    setSearchInput(event.target.value)
     setPage(1)
-    setSearchParams(nextSearch ? { search: nextSearch } : {}, {
-      replace: true,
-    })
   }
 
   function clearSearch() {
+    setSearchInput('')
     setPage(1)
     setSearchParams({}, { replace: true })
   }
@@ -171,11 +181,11 @@ export function Patients() {
             onChange={handleSearchChange}
             placeholder="Search by name or phone"
             type="search"
-            value={search}
+            value={searchInput}
           />
           {isSearching ? (
             <span className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-brand/20 border-t-brand animate-spin" />
-          ) : search ? (
+          ) : searchInput ? (
             <button
               className="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-slate transition hover:bg-mist hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
               onClick={clearSearch}
@@ -220,7 +230,7 @@ export function Patients() {
           <p className="mt-1 text-[14px] font-normal text-slate">{loadError}</p>
           <button
             className="mt-5 rounded-control border border-hairline bg-canvas px-4 py-2 text-sm font-semibold text-slate transition hover:bg-mist hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 focus-visible:ring-offset-2"
-            onClick={() => loadPatients(search, page)}
+            onClick={() => loadPatients(searchInput, page)}
             type="button"
           >
             Try again
@@ -265,7 +275,7 @@ export function Patients() {
                       <p className="mt-1 text-[14px] font-normal text-slate">
                         Try a different search or add the first patient.
                       </p>
-                      {search.trim() ? (
+                      {searchInput.trim() ? (
                         <button
                           className="mt-4 text-sm font-semibold text-brand transition hover:text-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 focus-visible:ring-offset-2"
                           onClick={clearSearch}

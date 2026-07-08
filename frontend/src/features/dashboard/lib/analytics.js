@@ -1,3 +1,5 @@
+import { formatCurrencyAmount, getCurrencySymbol } from '@shared/lib/currency'
+
 export const ANALYTICS_PERIODS = [
   ['day', 'Day'],
   ['week', 'Week'],
@@ -5,12 +7,6 @@ export const ANALYTICS_PERIODS = [
   ['quarter', 'Quarter'],
   ['year', 'Year'],
 ]
-
-const CURRENCY_FORMATTER = new Intl.NumberFormat('en-US', {
-  currency: 'USD',
-  maximumFractionDigits: 0,
-  style: 'currency',
-})
 
 const COMPACT_FORMATTER = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 1,
@@ -161,10 +157,13 @@ export function formatCurrency(value, { compact = false } = {}) {
   const amount = Number(value || 0)
 
   if (compact && Math.abs(amount) >= 10000) {
-    return `$${formatCompactNumber(amount)}`
+    return `${getCurrencySymbol()} ${formatCompactNumber(amount)}`
   }
 
-  return CURRENCY_FORMATTER.format(amount)
+  return formatCurrencyAmount(amount, undefined, {
+    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+  })
 }
 
 export function calculateGrowthPercent(current, previous) {

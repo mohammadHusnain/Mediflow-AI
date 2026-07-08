@@ -1,12 +1,42 @@
 import { computeAge } from './age'
+import {
+  COUNTRY_PHONE_CODES,
+  getAcceptedNationalDigitLengths,
+  normalizeNationalNumberForCountry,
+  splitE164PhoneValue,
+} from './countryPhoneCodes'
 
 export const E164_REGEX = /^\+[1-9]\d{7,14}$/
 export const BLOOD_PRESSURE_REGEX = /^\d{1,3}\/\d{1,3}$/
 export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export function validatePhone(value) {
-  if (!E164_REGEX.test(String(value || '').trim())) {
+  const normalizedValue = String(value || '').trim()
+
+  if (!E164_REGEX.test(normalizedValue)) {
     return 'Phone must be in E.164 format - e.g. +923001234567'
+  }
+
+  const { country, nationalNumber } = splitE164PhoneValue(normalizedValue)
+
+  return validatePhoneForCountry(nationalNumber, country)
+}
+
+export function validatePhoneForCountry(nationalNumber, countryData) {
+  const digitsOnly = String(nationalNumber || '').replace(/\D/g, '')
+  const country =
+    countryData ||
+    COUNTRY_PHONE_CODES.find((countryOption) => countryOption.iso2 === 'PK')
+
+  if (!country || digitsOnly.length === 0) {
+    return null
+  }
+
+  const normalizedDigits = normalizeNationalNumberForCountry(digitsOnly, country)
+
+  if (!country.digit_lengths.includes(normalizedDigits.length)) {
+    const expected = getAcceptedNationalDigitLengths(country).join(' or ')
+    return `Phone number for ${country.name} must have ${expected} digits`
   }
 
   return null

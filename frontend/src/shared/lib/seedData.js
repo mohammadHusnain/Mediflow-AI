@@ -6,6 +6,7 @@ import {
 } from './appointmentStatus'
 import { ensureDemoRoleName } from './accessControlData'
 import { computeAge } from './age'
+import { getAppointmentInvoiceId } from './invoices'
 import { getStaffDataIssues } from './staffUtils'
 import {
   getPublicTestingSession,
@@ -478,6 +479,7 @@ function createExtraCompletedAppointments() {
     post_scheduling_notes: '',
     additional_notes: '',
     notes: 'Routine follow-up visit.',
+    invoice_id: index % 3 === 0 ? null : 1001 + (index % 4),
     payment_status: index % 3 === 0 ? 'unpaid' : 'paid',
     booked_by_name: 'Dana Teller',
     booked_at: addDays(-10 - index, 9),
@@ -498,6 +500,7 @@ function createTodayAppointments() {
       diagnosis: 'Healing well with no swelling.',
       treatment_plan: 'Begin light stretching exercises.',
       notes: 'Completed morning review.',
+      invoice_id: 1001,
       payment_status: 'paid',
       booked_by_name: 'Dana Teller',
       booked_at: addDays(-1, 13),
@@ -526,6 +529,7 @@ function createTodayAppointments() {
       temperature: '',
       blood_pressure: '138/86',
       notes: 'Patient arrived early.',
+      invoice_id: 1002,
       payment_status: 'paid',
       booked_by_name: 'Dana Teller',
       booked_at: addDays(-1, 15),
@@ -771,8 +775,9 @@ function createDemoError(message, status = 400) {
 }
 
 function validateDemoStaff(staffMember) {
+  const emailValue = String(staffMember.email || '').trim()
   const issue =
-    validateEmail(staffMember.email) ||
+    (emailValue ? validateEmail(emailValue) : null) ||
     getStaffDataIssues(staffMember)[0]
 
   if (issue) {
@@ -914,6 +919,10 @@ function decorateAppointment(data, appointment) {
 
   return {
     ...appointment,
+    invoice_id: getAppointmentInvoiceId(appointment, {
+      generateForCompleted: true,
+      preferGeneratedForCompleted: true,
+    }),
     patient_age: patient ? computeAge(patient.date_of_birth) : null,
     patient_name: patient?.full_name || 'Unknown patient',
     doctor_name: doctorName(doctor) || 'Unknown doctor',
@@ -1537,15 +1546,18 @@ export function createDemoStaff(staffMember) {
   validateDemoStaff(nextStaffMember)
 
   if (
-    data.staff.some(
-      (currentStaff) =>
-        currentStaff.is_deleted !== true &&
-        String(currentStaff.email || '').trim().toLowerCase() === normalizedEmail,
-    ) ||
-    data.doctors.some(
-      (currentDoctor) =>
-        currentDoctor.is_active !== false &&
-        String(currentDoctor.email || '').trim().toLowerCase() === normalizedEmail,
+    normalizedEmail &&
+    (
+      data.staff.some(
+        (currentStaff) =>
+          currentStaff.is_deleted !== true &&
+          String(currentStaff.email || '').trim().toLowerCase() === normalizedEmail,
+      ) ||
+      data.doctors.some(
+        (currentDoctor) =>
+          currentDoctor.is_active !== false &&
+          String(currentDoctor.email || '').trim().toLowerCase() === normalizedEmail,
+      )
     )
   ) {
     createDemoError('Email already registered')
@@ -1565,8 +1577,8 @@ export function createDemoStaff(staffMember) {
     ...staffMember,
     id: getNextId(data.staff),
     age: Number(staffMember.age),
-    email: normalizedEmail,
-    has_account: true,
+    email: normalizedEmail || null,
+    has_account: Boolean(normalizedEmail),
     address: staffMember.address || null,
     notes: staffMember.notes || null,
     shift_start: staffMember.shift_start || null,
@@ -1579,7 +1591,7 @@ export function createDemoStaff(staffMember) {
 
   return clone({
     ...createdStaff,
-    email_sent: true,
+    email_sent: Boolean(normalizedEmail),
     role_created: roleResult.created,
   })
 }
@@ -1592,16 +1604,19 @@ export function updateDemoStaff(id, staffMember) {
   const roleResult = ensureDemoRoleName(staffMember.role)
 
   if (
-    data.staff.some(
-      (currentStaff) =>
-        currentStaff.is_deleted !== true &&
-        String(currentStaff.id) !== staffId &&
-        String(currentStaff.email || '').trim().toLowerCase() === normalizedEmail,
-    ) ||
-    data.doctors.some(
-      (currentDoctor) =>
-        currentDoctor.is_active !== false &&
-        String(currentDoctor.email || '').trim().toLowerCase() === normalizedEmail,
+    normalizedEmail &&
+    (
+      data.staff.some(
+        (currentStaff) =>
+          currentStaff.is_deleted !== true &&
+          String(currentStaff.id) !== staffId &&
+          String(currentStaff.email || '').trim().toLowerCase() === normalizedEmail,
+      ) ||
+      data.doctors.some(
+        (currentDoctor) =>
+          currentDoctor.is_active !== false &&
+          String(currentDoctor.email || '').trim().toLowerCase() === normalizedEmail,
+      )
     )
   ) {
     createDemoError('Email already registered')
@@ -1629,7 +1644,8 @@ export function updateDemoStaff(id, staffMember) {
       ...currentStaff,
       ...staffMember,
       age: Number(staffMember.age),
-      email: normalizedEmail,
+      email: normalizedEmail || null,
+      has_account: currentStaff.has_account === true || Boolean(normalizedEmail),
       address: staffMember.address || null,
       notes: staffMember.notes || null,
       shift_start: staffMember.shift_start || null,
@@ -1685,6 +1701,11 @@ export function deleteDemoStaff(id) {
 export function getDemoAppointments(params = {}) {
   const data = readDemoData()
   const normalizedParams = normalizeParams(params)
+  const searchTerms = String(normalizedParams.search || '')
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
   let appointments = scopeAppointmentsForCurrentDoctor(data.appointments)
 
   if (normalizedParams.patient) {
@@ -1709,9 +1730,35 @@ export function getDemoAppointments(params = {}) {
 
   appointments = sortAppointmentsByOrdering(appointments, normalizedParams.ordering)
 
-  const decoratedAppointments = appointments.map((appointment) =>
+  let decoratedAppointments = appointments.map((appointment) =>
     decorateAppointment(data, appointment),
   )
+
+  if (searchTerms.length > 0) {
+    decoratedAppointments = decoratedAppointments.filter((appointment) => {
+      const patient = data.patients.find(
+        (candidate) => String(candidate.id) === String(appointment.patient),
+      )
+      const text = [
+        appointment.patient_name,
+        patient?.phone,
+        patient?.pre_existing_conditions?.join(' '),
+        appointment.doctor_name,
+        appointment.reason,
+        appointment.status,
+        appointment.payment_status,
+        appointment.invoice_id,
+        appointment.temperature,
+        appointment.blood_pressure,
+        appointment.appointment_dt,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+
+      return searchTerms.every((term) => text.includes(term))
+    })
+  }
 
   return buildPagedResponse(decoratedAppointments, normalizedParams, '/appointments/')
 }

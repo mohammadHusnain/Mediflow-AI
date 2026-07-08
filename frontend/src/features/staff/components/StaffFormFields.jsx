@@ -1,8 +1,6 @@
 /* src/features/staff/components/StaffFormFields.jsx - Shared staff form controls. */
-import { useMemo, useState } from 'react'
-
+import CurrencyInput from '@shared/components/CurrencyInput'
 import PhoneInput from '@shared/components/PhoneInput'
-import { CURRENCIES } from '@shared/lib/currency'
 import {
   FieldError,
   FormField,
@@ -11,141 +9,22 @@ import {
 } from '@shared/components/FormPrimitives'
 import { getStaffJoiningDateWarning } from '@shared/lib/staffUtils'
 
-const OTHER_ROLE_VALUE = '__other__'
-const EMAIL_HELPER_TEXT = 'Login credentials will be sent to this email address.'
-
-const DEFAULT_SYSTEM_ROLES = [
-  { name: 'Admin', slug: 'admin', is_system: true },
-  { name: 'Doctor', slug: 'doctor', is_system: true },
-]
-
-function mergeRoleOptions(apiRoles) {
-  if (!Array.isArray(apiRoles) || apiRoles.length === 0) {
-    return DEFAULT_SYSTEM_ROLES
-  }
-
-  const merged = [...DEFAULT_SYSTEM_ROLES]
-
-  for (const role of apiRoles) {
-    if (!DEFAULT_SYSTEM_ROLES.some((defaultRole) => defaultRole.name === role.name)) {
-      merged.push(role)
-    }
-  }
-
-  return merged
-}
+const EMAIL_HELPER_TEXT =
+  'If provided, login credentials will be sent to this email address. If left blank, this staff member will not have portal login access and an admin can add it later.'
 
 export function StaffFormFields({
   data,
   errors = {},
   onBlur,
   onChange,
-  roleOptions,
-  roleOptionsFailed = false,
   showStatus = true,
   touched = {},
 }) {
-  const [showCustomRole, setShowCustomRole] = useState(false)
-  const resolvedRoleOptions = useMemo(() => {
-    if (roleOptions === null) return null
-    if (roleOptionsFailed || roleOptions === undefined) return DEFAULT_SYSTEM_ROLES
-    return mergeRoleOptions(roleOptions)
-  }, [roleOptions, roleOptionsFailed])
-
   const roleValue = String(data.role || '')
   const emailReadOnly = data.has_account === true
   const joinDateWarning = !errors.joining_date
     ? getStaffJoiningDateWarning(data.joining_date)
     : ''
-  const matchedRoleName = useMemo(() => {
-    if (!Array.isArray(resolvedRoleOptions)) {
-      return ''
-    }
-
-    return resolvedRoleOptions.find((role) => role.name === roleValue)?.name || ''
-  }, [resolvedRoleOptions, roleValue])
-  const usingCustomRole =
-    showCustomRole ||
-    (Array.isArray(resolvedRoleOptions) && Boolean(roleValue) && !matchedRoleName)
-
-  function emitRoleChange(value) {
-    onChange({
-      target: {
-        name: 'role',
-        value,
-      },
-    })
-  }
-
-  function handleRoleSelect(event) {
-    const nextValue = event.target.value
-
-    if (nextValue === OTHER_ROLE_VALUE) {
-      setShowCustomRole(true)
-
-      if (matchedRoleName) {
-        emitRoleChange('')
-      }
-
-      return
-    }
-
-    setShowCustomRole(false)
-    emitRoleChange(nextValue)
-  }
-
-  function renderRoleControl() {
-    if (resolvedRoleOptions === null) {
-      return (
-        <select
-          className={getFieldClass('', 'text-slate')}
-          disabled
-          name="role"
-          value=""
-        >
-          <option value="">Loading roles...</option>
-        </select>
-      )
-    }
-
-    return (
-      <div className="space-y-2">
-        <select
-          className={getFieldClass(touched.role ? errors.role : '')}
-          name="role"
-          onBlur={onBlur}
-          onChange={handleRoleSelect}
-          value={usingCustomRole ? OTHER_ROLE_VALUE : matchedRoleName}
-        >
-          <option value="">Select a role...</option>
-          {resolvedRoleOptions.map((role) => (
-            <option key={role.id || role.slug || role.name} value={role.name}>
-              {role.name}
-            </option>
-          ))}
-          <option value={OTHER_ROLE_VALUE}>Other...</option>
-        </select>
-
-        {usingCustomRole ? (
-          <input
-            className={getFieldClass(touched.role ? errors.role : '')}
-            name="role"
-            onBlur={onBlur}
-            onChange={onChange}
-            placeholder="Type custom role title..."
-            type="text"
-            value={data.role}
-          />
-        ) : null}
-
-        {roleOptionsFailed ? (
-          <p className="mt-1.5 text-[12px] text-slate">
-            Could not load additional role suggestions.
-          </p>
-        ) : null}
-      </div>
-    )
-  }
 
   return (
     <>
@@ -203,13 +82,24 @@ export function StaffFormFields({
           <PhoneInput
             error={touched.phone ? errors.phone : ''}
             name="phone"
-            onBlur={onBlur}
-            onChange={onChange}
+            onBlur={() => onBlur({ target: { name: 'phone' } })}
+            onChange={(nextValue) =>
+              onChange({
+                target: {
+                  name: 'phone',
+                  value: nextValue,
+                },
+              })
+            }
             value={data.phone}
           />
         </FormField>
 
-        <FormField error={touched.email ? errors.email : ''} label="Email">
+        <FormField
+          error={touched.email ? errors.email : ''}
+          label="Email"
+          optional={!emailReadOnly}
+        >
           <input
             className={getFieldClass(
               touched.email ? errors.email : '',
@@ -258,10 +148,20 @@ export function StaffFormFields({
       <FormSection title="Employment Details">
         <FormField
           error={touched.role ? errors.role : ''}
-          hint="You can select an existing role or type a custom one."
           label="Role"
         >
-          {renderRoleControl()}
+          <input
+            className={getFieldClass(touched.role ? errors.role : '')}
+            name="role"
+            onBlur={onBlur}
+            onChange={onChange}
+            placeholder="e.g. Nurse, Ward Boy, Sweeper, Security Guard..."
+            type="text"
+            value={data.role}
+          />
+          <p className="mt-1.5 text-[11px] text-slate/60">
+            Type any role title as needed - this field is flexible.
+          </p>
         </FormField>
 
         <FormField
@@ -429,20 +329,6 @@ export function StaffFormFields({
       </FormSection>
 
       <FormSection title="Salary Configuration" optional>
-        <FormField label="Currency" optional>
-          <select
-            className={getFieldClass('')}
-            name="salary_currency"
-            onBlur={onBlur}
-            onChange={onChange}
-            value={data.salary_currency || 'PKR'}
-          >
-            {CURRENCIES.map((c) => (
-              <option key={c.code} value={c.code}>{c.symbol} {c.code} - {c.name}</option>
-            ))}
-          </select>
-        </FormField>
-
         <FormField label="Salary Type" optional>
           <select
             className={getFieldClass('')}
@@ -457,14 +343,12 @@ export function StaffFormFields({
         </FormField>
 
         <FormField label="Base Salary" optional>
-          <input
-            className={getFieldClass('', 'font-sans')}
-            min="0"
+          <CurrencyInput
+            inputClassName="bg-mist"
             name="base_salary"
             onBlur={onBlur}
             onChange={onChange}
             placeholder="50000"
-            type="number"
             value={data.base_salary || ''}
           />
         </FormField>
@@ -516,14 +400,12 @@ export function StaffFormFields({
                 </FormField>
               ) : (
                 <FormField label="Flat per Appointment" optional>
-                  <input
-                    className={getFieldClass('', 'font-sans')}
-                    min="0"
+                  <CurrencyInput
+                    inputClassName="bg-mist"
                     name="salary_commission_per_appointment"
                     onBlur={onBlur}
                     onChange={onChange}
                     placeholder="500"
-                    type="number"
                     value={data.salary_commission_per_appointment || ''}
                   />
                 </FormField>
@@ -533,27 +415,23 @@ export function StaffFormFields({
         ) : null}
 
         <FormField label="Allowances" optional>
-          <input
-            className={getFieldClass('', 'font-sans')}
-            min="0"
+          <CurrencyInput
+            inputClassName="bg-mist"
             name="salary_allowances"
             onBlur={onBlur}
             onChange={onChange}
             placeholder="5000"
-            type="number"
             value={data.salary_allowances || ''}
           />
         </FormField>
 
         <FormField label="Deductions" optional>
-          <input
-            className={getFieldClass('', 'font-sans')}
-            min="0"
+          <CurrencyInput
+            inputClassName="bg-mist"
             name="salary_deductions"
             onBlur={onBlur}
             onChange={onChange}
             placeholder="2000"
-            type="number"
             value={data.salary_deductions || ''}
           />
         </FormField>

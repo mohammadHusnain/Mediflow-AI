@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity,
-  ArrowUpRight,
   BadgeCheck,
   BrainCircuit,
   CalendarCheck,
@@ -45,7 +44,6 @@ import {
   MetricCell,
   PanelSkeleton,
   ProgressMetricRow,
-  DashboardMiniSparkline,
   DashboardPanel,
   DashboardStatCard,
 } from '@features/dashboard/components/DashboardPrimitives'
@@ -57,7 +55,6 @@ import {
   estimateAppointmentRevenue,
   findBucketForDate,
   formatCurrency,
-  formatCompactNumber,
   getAnalyticsBuckets,
   getAxisInterval,
   getDoctorIdFromAppointment,
@@ -166,13 +163,7 @@ function formatStatusLabel(status) {
 }
 
 function formatShortCurrency(value) {
-  const amount = Number(value || 0)
-
-  if (Math.abs(amount) >= 1000) {
-    return `$${formatCompactNumber(amount)}`
-  }
-
-  return formatCurrency(amount, { compact: true })
+  return formatCurrency(value)
 }
 
 function DoctorPerformanceTooltip({ active, payload }) {
@@ -347,7 +338,7 @@ export function AdminDashboard() {
           ? getAppointments({ ordering: 'appointment_dt', period: 'day' })
           : Promise.resolve([]),
         appointmentsEnabled
-          ? getAppointments({ ordering: 'appointment_dt' })
+          ? getAppointments({ ordering: '-created_at' })
           : Promise.resolve([]),
         patientsEnabled ? getPatients() : Promise.resolve([]),
         doctorsEnabled ? getDoctors() : Promise.resolve([]),
@@ -443,44 +434,29 @@ export function AdminDashboard() {
     [chartData],
   )
 
-  const adminHeroSparkline = useMemo(() => {
-    const averageAppointments =
-      chartData.reduce((sum, day) => sum + Number(day.appointments || 0), 0) /
-      Math.max(1, chartData.length)
+  const trendQueueSummary = useMemo(() => {
+    const total = chartData.reduce((sum, day) => sum + Number(day.appointments || 0), 0)
+    const completed = chartData.reduce((sum, day) => sum + Number(day.completed || 0), 0)
+    const cancelled = chartData.reduce((sum, day) => sum + Number(day.cancelled || 0), 0)
+    const open = chartData.reduce(
+      (sum, day) =>
+        sum + Number(day.scheduled || 0) + Number(day.inProgress || 0),
+      0,
+    )
+    const completion = total ? Math.round((completed / total) * 100) : 0
+    const periodLabel =
+      ANALYTICS_PERIODS.find(([period]) => period === appointmentPeriod)?.[1] ||
+      'Selected period'
 
-    return chartData.map((day) => {
-      if (!day.appointments) {
-        return 0
-      }
-
-      const completionScore = (day.completed / day.appointments) * 100
-      const cancellationScore = 100 - (day.cancelled / day.appointments) * 100
-      const demandBalance = clampPercent(
-        100 -
-          (Math.abs(day.appointments - averageAppointments) /
-            Math.max(averageAppointments, 1)) *
-            30,
-      )
-
-      return Math.round(
-        completionScore * 0.6 +
-          cancellationScore * 0.25 +
-          demandBalance * 0.15,
-      )
-    })
-  }, [chartData])
-
-  const adminHeroSparkLabels = useMemo(() => {
-    if (chartData.length === 0) {
-      return ['Start', 'Mid', 'Now']
+    return {
+      cancelled,
+      completed,
+      completion,
+      open,
+      periodLabel,
+      total,
     }
-
-    return [
-      chartData[0]?.label || 'Start',
-      chartData[Math.floor(chartData.length / 2)]?.label || 'Mid',
-      chartData.at(-1)?.label || 'Now',
-    ]
-  }, [chartData])
+  }, [appointmentPeriod, chartData])
 
   const todayScheduledCount = useMemo(
     () =>
@@ -541,11 +517,6 @@ export function AdminDashboard() {
   const staffCoverage = dashboardData.totalStaff
     ? Math.round((activeStaff.length / dashboardData.totalStaff) * 100)
     : 0
-  const operationsScore = Math.round(
-    (dashboardData.todayAppointments.length ? completionRate : 0) * 0.45 +
-      doctorCoverage * 0.3 +
-      staffCoverage * 0.25,
-  )
 
   const inactiveStaff = useMemo(
     () =>
@@ -761,6 +732,38 @@ export function AdminDashboard() {
       staffCoverage,
       todayOpenCount,
       todayScheduledCount,
+    ],
+  )
+
+  const operatingBrief = useMemo(
+    () => [
+      {
+        context: `${todayCompletedCount} completed today`,
+        label: 'Today focus',
+        tone: todayOpenCount > 0 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700',
+        value: todayOpenCount > 0 ? `${todayOpenCount} active visits` : 'Queue clear',
+      },
+      {
+        context: `${doctorCoverage}% doctor coverage`,
+        label: 'Clinical coverage',
+        tone: 'bg-sky-50 text-sky-700',
+        value: `${activeDoctors.length}/${dashboardData.totalDoctors || 0} doctors active`,
+      },
+      {
+        context: `${dashboardData.totalPatients} total patients`,
+        label: 'Patient growth',
+        tone: 'bg-violet-50 text-violet-700',
+        value: `${joinedThisMonthCount} new this month`,
+      },
+    ],
+    [
+      activeDoctors.length,
+      dashboardData.totalDoctors,
+      dashboardData.totalPatients,
+      doctorCoverage,
+      joinedThisMonthCount,
+      todayCompletedCount,
+      todayOpenCount,
     ],
   )
 
@@ -1317,99 +1320,90 @@ export function AdminDashboard() {
   return (
     <div className="dashboard-stage space-y-3">
       <section className="relative overflow-hidden rounded-card border border-hairline/70 bg-canvas p-5 shadow-card">
-        <div className="relative grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-          <div className="flex min-w-0 flex-col gap-4">
-            <div>
+        <div className="relative flex min-w-0 flex-col gap-4">
+          <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+            <div className="min-w-0">
               <span className="inline-flex items-center gap-2 rounded-full border border-brand/10 bg-white/75 px-3 py-1.5 text-[12px] font-semibold text-brand shadow-sm backdrop-blur">
                 <Sparkles aria-hidden="true" className="h-3.5 w-3.5" />
                 Live clinic overview
               </span>
-              <h2 className="mt-3 max-w-2xl text-[26px] font-bold leading-tight text-ink md:text-[30px]">
-                Command center for patient flow, staff capacity, and care momentum.
+              <h2 className="mt-3 max-w-3xl text-[26px] font-bold leading-tight text-ink md:text-[30px]">
+                Clinic operations overview.
               </h2>
-              <p className="mt-2 max-w-2xl text-[13px] leading-5 text-slate">
-                Track today&apos;s queue, active clinical coverage, and patient growth in one polished operating view.
-              </p>
-              <p className="mt-2 inline-flex items-center rounded-full bg-white/80 px-3 py-1.5 font-sans text-[12px] font-semibold text-slate shadow-sm">
-                Live sync {lastUpdatedLabel}
+              <p className="mt-2 max-w-3xl text-[13px] leading-5 text-slate">
+                Track the queue, clinical coverage, and patient growth from one concise workspace.
               </p>
             </div>
 
-            <div className="grid gap-2.5 md:grid-cols-3">
-              {adminSignals.map((signal, index) => {
-                const SignalIcon = signal.icon
-
-                return (
-                  <div
-                    className="animate-fade-up rounded-card border border-white/75 bg-white/80 p-3.5 shadow-[0_12px_34px_rgba(20,24,31,0.06)] backdrop-blur"
-                    key={signal.label}
-                    style={stagger(index, 0.05)}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
-                          {signal.label}
-                        </p>
-                        <p className="mt-2 text-[22px] font-bold leading-none text-ink">
-                          {isLoading ? '-' : signal.value}
-                        </p>
-                        <p className="mt-2 text-[12px] font-medium text-slate">
-                          {isLoading ? 'Syncing live data' : signal.context}
-                        </p>
-                      </div>
-                      <div className={`flex h-10 w-10 items-center justify-center rounded-control ${signal.tone}`}>
-                        <SignalIcon aria-hidden="true" className="h-4 w-4" />
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
+            <div className="flex flex-wrap gap-2 lg:justify-end">
+              <span className="inline-flex items-center rounded-full border border-hairline bg-white/80 px-3 py-1.5 font-sans text-[12px] font-semibold text-slate shadow-sm">
+                Live sync {lastUpdatedLabel}
+              </span>
+              <span className="inline-flex items-center rounded-full border border-brand/10 bg-brand-light px-3 py-1.5 font-sans text-[12px] font-semibold text-brand">
+                {isLoading ? '-' : `${todayOpenCount} open`}
+              </span>
+              <span className="inline-flex items-center rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 font-sans text-[12px] font-semibold text-emerald-700">
+                {isLoading ? '-' : `${completionRate}% complete`}
+              </span>
             </div>
           </div>
 
-          <div className="relative overflow-hidden rounded-card bg-brand p-5 text-white shadow-card">
-            <div className="relative flex items-start justify-between gap-4">
-              <div>
-                <p className="text-[13px] font-semibold text-white/70">Operations score</p>
-                <p className="mt-2 text-[40px] font-bold leading-none">
-                  {isLoading ? '--' : operationsScore}
-                </p>
-                <p className="mt-2 text-[13px] text-white/70">Performance trend from completion, cancellation control, and demand balance.</p>
-              </div>
-              <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1.5 text-[12px] font-semibold text-white backdrop-blur">
-                <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
-                Today
-              </span>
+          <div className="rounded-card border border-hairline bg-mist/35 p-3">
+            <div className="grid gap-2.5 md:grid-cols-3">
+              {operatingBrief.map((item, index) => (
+                <div
+                  className="animate-fade-up rounded-control bg-white px-3.5 py-3 shadow-sm"
+                  key={item.label}
+                  style={stagger(index, 0.04)}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">
+                        {item.label}
+                      </p>
+                      <p className="mt-1.5 truncate text-[14px] font-bold text-ink">
+                        {isLoading ? 'Syncing live data' : item.value}
+                      </p>
+                      <p className="mt-1 text-[12px] font-medium text-slate">
+                        {isLoading ? 'Please wait' : item.context}
+                      </p>
+                    </div>
+                    <span className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${item.tone}`} />
+                  </div>
+                </div>
+              ))}
             </div>
+          </div>
 
-            <div className="relative mt-5 h-[76px]">
-              <DashboardMiniSparkline
-                areaClassName="fill-white/10"
-                className="absolute inset-0 h-full w-full overflow-visible"
-                lineClassName="stroke-white/85"
-                values={adminHeroSparkline}
-              />
-              <div className="absolute bottom-0 left-0 right-0 flex justify-between font-sans text-[11px] text-white/60">
-                {adminHeroSparkLabels.map((label) => (
-                  <span key={label}>{label}</span>
-                ))}
-              </div>
-            </div>
+          <div className="grid gap-2.5 md:grid-cols-3">
+            {adminSignals.map((signal, index) => {
+              const SignalIcon = signal.icon
 
-            <div className="mt-4 grid grid-cols-2 gap-2.5">
-              <div className="rounded-control bg-white/12 p-3 backdrop-blur">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/55">
-                  Completed
-                </p>
-                <p className="mt-1 text-[22px] font-bold">{isLoading ? '-' : `${completionRate}%`}</p>
-              </div>
-              <div className="rounded-control bg-white/12 p-3 backdrop-blur">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/55">
-                  New patients
-                </p>
-                <p className="mt-1 text-[22px] font-bold">{isLoading ? '-' : joinedThisMonthCount}</p>
-              </div>
-            </div>
+              return (
+                <div
+                  className="animate-fade-up rounded-card border border-hairline bg-white/85 p-3.5 shadow-[0_12px_34px_rgba(20,24,31,0.05)] backdrop-blur"
+                  key={signal.label}
+                  style={stagger(index + operatingBrief.length, 0.05)}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
+                        {signal.label}
+                      </p>
+                      <p className="mt-2 text-[22px] font-bold leading-none text-ink">
+                        {isLoading ? '-' : signal.value}
+                      </p>
+                      <p className="mt-2 text-[12px] font-medium text-slate">
+                        {isLoading ? 'Syncing live data' : signal.context}
+                      </p>
+                    </div>
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-control ${signal.tone}`}>
+                      <SignalIcon aria-hidden="true" className="h-4 w-4" />
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       </section>
@@ -1479,12 +1473,12 @@ export function AdminDashboard() {
               <div className="flex h-full flex-col">
                   <div className="grid gap-2.5 sm:grid-cols-3">
                     {[
-                      ['Daily Revenue', formatCurrency(revenueAnalytics.dailyRevenue, { compact: true })],
-                      ['Weekly Revenue', formatCurrency(revenueAnalytics.weeklyRevenue, { compact: true })],
-                      ['Monthly Revenue', formatCurrency(revenueAnalytics.monthlyRevenue, { compact: true })],
-                      ['Annual Revenue', formatCurrency(revenueAnalytics.annualRevenue, { compact: true })],
+                      ['Daily Revenue', formatCurrency(revenueAnalytics.dailyRevenue)],
+                      ['Weekly Revenue', formatCurrency(revenueAnalytics.weeklyRevenue)],
+                      ['Monthly Revenue', formatCurrency(revenueAnalytics.monthlyRevenue)],
+                      ['Annual Revenue', formatCurrency(revenueAnalytics.annualRevenue)],
                       ['Growth', `${revenueAnalytics.growthRate}%`],
-                      ['Forecast', formatCurrency(revenueAnalytics.forecastedRevenue, { compact: true })],
+                      ['Forecast', formatCurrency(revenueAnalytics.forecastedRevenue)],
                     ].map(([label, value]) => (
                       <MetricCell
                         accent={label === 'Growth' && revenueAnalytics.growthRate < 0 ? 'text-rose-600' : 'text-ink'}
@@ -2096,7 +2090,7 @@ export function AdminDashboard() {
               <div className="h-full animate-shimmer rounded-control bg-gradient-to-r from-hairline via-canvas to-hairline bg-[length:200%_100%]" />
             </div>
           ) : (
-            <div className="grid h-full items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_210px]" ref={chartRef}>
+            <div className="grid h-full items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_190px]" ref={chartRef}>
               <div className="flex h-full flex-col">
                 <div className="mb-3 flex flex-wrap gap-2" aria-label="Appointment trend legend">
                   {APPOINTMENT_FLOW_KEYS.map(([key, label]) => (
@@ -2176,34 +2170,57 @@ export function AdminDashboard() {
                 </div>
               </div>
 
-              <aside className="flex h-full flex-col justify-between rounded-card border border-hairline/80 bg-canvas p-3.5">
-                <div className="text-center">
-                  <div
-                    className="mx-auto flex h-24 w-24 items-center justify-center rounded-full p-2.5 shadow-[inset_0_0_0_1px_rgba(228,232,235,0.9)]"
-                    style={{
-                      background: `conic-gradient(#7C3AED ${completionRate * 3.6}deg, #EDE9FE 0deg)`,
-                    }}
-                  >
-                    <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-white shadow-inner">
-                      <Activity aria-hidden="true" className="mb-1 h-5 w-5 text-brand" />
-                      <span className="font-sans text-[26px] font-bold text-ink">
-                        {completionRate}%
+              <aside className="flex h-full flex-col justify-between rounded-control border border-hairline bg-mist/45 p-3">
+                <div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">
+                        {trendQueueSummary.periodLabel}
+                      </p>
+                      <p className="mt-1 text-[13px] font-semibold text-ink">
+                        Queue flow
+                      </p>
+                    </div>
+                    <Activity aria-hidden="true" className="h-4 w-4 shrink-0 text-brand" />
+                  </div>
+
+                  <div className="mt-4">
+                    <div className="flex items-end justify-between gap-3">
+                      <span className="font-sans text-[28px] font-bold leading-none text-ink">
+                        {trendQueueSummary.completion}%
                       </span>
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">
+                      <span className="pb-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
                         Complete
                       </span>
+                    </div>
+                    <div
+                      aria-label={`${trendQueueSummary.periodLabel} completion: ${trendQueueSummary.completion}%`}
+                      aria-valuemax={100}
+                      aria-valuemin={0}
+                      aria-valuenow={trendQueueSummary.completion}
+                      className="mt-3 h-2 overflow-hidden rounded-full bg-white"
+                      role="meter"
+                    >
+                      <div
+                        className="h-full rounded-full bg-brand transition-[width] duration-500 ease-out"
+                        style={{ width: `${trendQueueSummary.completion}%` }}
+                      />
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-3 space-y-2">
-                  <div className="flex items-center justify-between rounded-control bg-brand-light px-3 py-2.5">
-                    <span className="text-[12px] font-semibold text-brand">Open queue</span>
-                    <span className="font-sans text-[14px] font-bold text-brand">{todayOpenCount}</span>
+                <div className="mt-4 divide-y divide-hairline rounded-control bg-canvas px-3">
+                  <div className="flex items-center justify-between gap-3 py-2.5">
+                    <span className="text-[12px] font-medium text-slate">Open queue</span>
+                    <span className="font-sans text-[14px] font-bold tabular-nums text-brand">
+                      {trendQueueSummary.open}
+                    </span>
                   </div>
-                  <div className="flex items-center justify-between rounded-control bg-[#ECFDF5] px-3 py-2.5">
-                    <span className="text-[12px] font-semibold text-[#059669]">Completed today</span>
-                    <span className="font-sans text-[14px] font-bold text-[#059669]">{todayCompletedCount}</span>
+                  <div className="flex items-center justify-between gap-3 py-2.5">
+                    <span className="text-[12px] font-medium text-slate">Completed</span>
+                    <span className="font-sans text-[14px] font-bold tabular-nums text-[#059669]">
+                      {trendQueueSummary.completed}
+                    </span>
                   </div>
                 </div>
               </aside>

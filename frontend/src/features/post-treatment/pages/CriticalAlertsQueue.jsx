@@ -23,6 +23,7 @@ import {
   canViewAlerts,
 } from '@shared/lib/postTreatmentAccess'
 import {
+  CRITICAL_ALERTS_UPDATED_EVENT,
   getCriticalAlerts,
   markPatientCalled,
   resolveAlert,
@@ -76,6 +77,16 @@ function borderClass(status) {
   if (status === 'resolved') return 'border-l-green-500'
   if (status === 'acknowledged') return 'border-l-amber-500'
   return 'border-l-rose-500'
+}
+
+function getAlertCondition(alert) {
+  return (
+    alert?.condition ||
+    alert?.plan?.condition ||
+    alert?.post_treatment_plan?.condition ||
+    alert?.plan_condition ||
+    null
+  )
 }
 
 function StatCard({ Icon, label, tone, value }) {
@@ -167,10 +178,22 @@ export function CriticalAlertsQueue() {
     const tickId = window.setInterval(() => {
       setClockTick((tick) => tick + 1)
     }, 10_000)
+    const handleCriticalAlertsUpdated = () => {
+      loadAlerts({ silent: true })
+    }
+
+    window.addEventListener(
+      CRITICAL_ALERTS_UPDATED_EVENT,
+      handleCriticalAlertsUpdated,
+    )
 
     return () => {
       window.clearInterval(pollId)
       window.clearInterval(tickId)
+      window.removeEventListener(
+        CRITICAL_ALERTS_UPDATED_EVENT,
+        handleCriticalAlertsUpdated,
+      )
     }
   }, [loadAlerts])
 
@@ -182,7 +205,7 @@ export function CriticalAlertsQueue() {
     }
 
     return alerts.filter((alert) =>
-      [alert.patient_name, alert.patient_phone, alert.condition, alert.trigger_reason]
+      [alert.patient_name, alert.patient_phone, getAlertCondition(alert), alert.trigger_reason]
         .join(' ')
         .toLowerCase()
         .includes(query),
@@ -350,6 +373,7 @@ export function CriticalAlertsQueue() {
               alert.status === 'pending' && isOlderThanOneHour(alert.created_at)
             const canCall = alert.status === 'pending' && canMarkCalled(subject, alert)
             const canResolve = alert.status === 'acknowledged' && canResolveAlert(subject, alert)
+            const condition = getAlertCondition(alert)
 
             return (
               <article
@@ -364,13 +388,17 @@ export function CriticalAlertsQueue() {
                   <div className="flex items-center gap-3">
                     <Avatar name={alert.patient_name} size="md" />
                     <div className="min-w-0">
-                      <p className="truncate text-[15px] font-semibold text-ink">
-                        {alert.patient_name}
-                      </p>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <p className="truncate text-[15px] font-semibold text-ink">
+                          {alert.patient_name || 'Unknown patient'}
+                        </p>
+                        {condition ? (
+                          <span className="shrink-0 rounded-full border border-brand/20 bg-brand-light px-2.5 py-0.5 text-[11px] font-semibold text-brand">
+                            {condition}
+                          </span>
+                        ) : null}
+                      </div>
                       <p className="font-mono text-[12px] text-slate">{alert.patient_phone}</p>
-                      <span className="mt-1 inline-flex rounded-full bg-brand-light px-2.5 py-0.5 text-[11px] font-semibold text-brand">
-                        {alert.condition}
-                      </span>
                     </div>
                   </div>
 
@@ -460,7 +488,7 @@ export function CriticalAlertsQueue() {
           <section className="w-full max-w-[460px] rounded-card border border-hairline bg-canvas p-6 shadow-[0_16px_60px_rgba(20,24,31,0.18)] animate-scale-in">
             <h2 className="text-[18px] font-bold text-ink">Resolve alert</h2>
             <p className="mt-1 text-[13px] text-slate">
-              {resolveTarget.patient_name} · {resolveTarget.condition}
+              {resolveTarget.patient_name} - {getAlertCondition(resolveTarget) || 'Condition not provided'}
             </p>
             <label className="mt-5 block">
               <span className="mb-1.5 block text-[13px] font-medium text-ink">

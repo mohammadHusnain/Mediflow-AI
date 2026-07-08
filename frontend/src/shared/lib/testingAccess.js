@@ -1,5 +1,5 @@
 /* src/shared/lib/testingAccess.js - Temporary auth bypass for local QA. */
-export const PUBLIC_ROUTES_FOR_TESTING = false
+export const PUBLIC_ROUTES_FOR_TESTING = true
 
 const TESTING_ROLE_STORAGE_KEY = 'mediflow_testing_role'
 

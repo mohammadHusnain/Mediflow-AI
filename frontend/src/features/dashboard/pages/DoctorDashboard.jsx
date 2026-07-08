@@ -300,7 +300,7 @@ export function DoctorDashboard() {
         statsPromise,
         doctorPromise,
         appointmentsEnabled
-          ? getAppointments({ limit: 10, offset: 0, ordering: '-appointment_dt', status: 'completed' })
+          ? getAppointments({ limit: 10, offset: 0, ordering: '-created_at', status: 'completed' })
           : Promise.resolve({ count: 0, next: null, results: [] }),
       ])
 
@@ -916,7 +916,7 @@ export function DoctorDashboard() {
 
     try {
       const response = await getAppointments({
-        ordering: '-appointment_dt',
+        ordering: '-created_at',
         status: 'completed',
         ...nextParams,
       })

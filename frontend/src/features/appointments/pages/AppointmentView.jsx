@@ -33,6 +33,16 @@ function getEmbeddedAppointmentPatient(appointment) {
   return typeof appointment?.patient === 'object' ? appointment.patient : null
 }
 
+function getAppointmentInvoiceId(appointment) {
+  return (
+    appointment?.invoice_id ||
+    appointment?.invoice?.id ||
+    appointment?.invoice?.invoice_id ||
+    appointment?.billing_invoice_id ||
+    null
+  )
+}
+
 export function AppointmentView() {
   const { id } = useParams()
   const { canWrite, role } = usePermission()
@@ -209,6 +219,14 @@ export function AppointmentView() {
               </p>
               <p className="mt-1 text-[14px] font-normal text-ink">
                 {appointment.reason || 'Not recorded'}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate">
+                Invoice ID
+              </p>
+              <p className="mt-1 font-mono text-[13px] font-medium text-ink">
+                {getAppointmentInvoiceId(appointment) || '-'}
               </p>
             </div>
           </section>

@@ -14,7 +14,13 @@ import {
   validatePositiveNumber,
 } from '@shared/lib/validation'
 import { getPatients } from '@shared/services/api'
-import { FormField, FormSection, getFieldClass } from '@shared/components/FormPrimitives'
+import {
+  FieldError,
+  FieldLabel,
+  FormField,
+  FormSection,
+  getFieldClass,
+} from '@shared/components/FormPrimitives'
 import PhoneInput from '@shared/components/PhoneInput'
 import TagInput from './TagInput'
 
@@ -53,7 +59,12 @@ export function getPatientFormDefaults(patient = null) {
     return EMPTY_PATIENT_FORM
   }
 
-  const fullName = patient.full_name || patient.name || ''
+  const fullName =
+    patient.full_name ||
+    patient.name ||
+    patient.user?.full_name ||
+    [patient.user?.first_name, patient.user?.last_name].filter(Boolean).join(' ') ||
+    ''
   const nameParts = fullName.trim().split(/\s+/)
   const firstName = patient.first_name || nameParts[0] || ''
   const lastName = patient.last_name || nameParts.slice(1).join(' ') || ''
@@ -80,7 +91,10 @@ export function getPatientFormDefaults(patient = null) {
   }
 }
 
-export function toPatientPayload(values) {
+export function toPatientPayload(values, { optionalVitals = false } = {}) {
+  const weightValue = String(values.weight_kg ?? '').trim()
+  const heightValue = String(values.height_cm ?? '').trim()
+
   return {
     full_name: `${String(values.first_name || '').trim()} ${String(values.last_name || '').trim()}`.trim(),
     date_of_birth: values.date_of_birth,
@@ -88,8 +102,8 @@ export function toPatientPayload(values) {
     marital_status: values.marital_status,
     phone: values.phone.trim(),
     address: values.address.trim(),
-    weight_kg: Number(values.weight_kg),
-    height_cm: Number(values.height_cm),
+    weight_kg: weightValue ? Number(weightValue) : optionalVitals ? null : Number(values.weight_kg),
+    height_cm: heightValue ? Number(heightValue) : optionalVitals ? null : Number(values.height_cm),
     physical_activity_level: values.physical_activity_level,
     pre_existing_conditions: normalizeStringArray(values.pre_existing_conditions),
     known_allergies: normalizeStringArray(values.known_allergies),
@@ -146,6 +160,7 @@ function SelectField({ error, label, name, options, register }) {
 }
 
 export function PatientFields({
+  appointmentBooking = false,
   clearErrors,
   currentPatientId,
   errors,
@@ -222,13 +237,18 @@ export function PatientFields({
     maybeCheckDuplicatePatient()
   }
 
-  async function handlePhoneBlur(event) {
-    phoneRegistration.onBlur(event)
+  async function handlePhoneBlur(value) {
+    phoneRegistration.onBlur({
+      target: {
+        name: 'phone',
+        value,
+      },
+    })
     duplicateTouchedRef.current.phone = true
-    const value = event.target.value.trim()
-    const formatError = validatePhone(value)
+    const nextValue = String(value || '').trim()
+    const formatError = validatePhone(nextValue)
 
-    if (!value || formatError) {
+    if (!nextValue || formatError) {
       return
     }
 
@@ -241,7 +261,7 @@ export function PatientFields({
 
     try {
       const duplicateError = await validateUniquePatientPhone(
-        value,
+        nextValue,
         currentPatientId,
       )
 
@@ -260,8 +280,8 @@ export function PatientFields({
     }
   }
 
-  function handlePhoneChange(event) {
-    setValue('phone', event.target.value, {
+  function handlePhoneChange(nextValue) {
+    setValue('phone', nextValue, {
       shouldDirty: true,
       shouldTouch: true,
       shouldValidate: true,
@@ -330,33 +350,44 @@ export function PatientFields({
           register={register}
         />
 
-        <FormField
-          error={phoneError}
-          hint="Select a country and enter the local number. The saved value uses international E.164 format."
-          label="Phone"
+        <div
+          className={[
+            'relative z-[80] block animate-fade-up',
+            appointmentBooking ? 'md:col-span-2' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
         >
-          <div>
-            <input
-              {...phoneRegistration}
-              readOnly
-              type="hidden"
-              value={watch('phone') || ''}
-            />
-            <PhoneInput
-              error={phoneError}
-              name="phone"
-              onBlur={handlePhoneBlur}
-              onChange={handlePhoneChange}
-              required
-              value={watch('phone') || ''}
-            />
-            {checkingPhone ? (
-              <p className="mt-1.5 text-[12px] font-medium text-brand">
-                Checking patient records...
-              </p>
-            ) : null}
-          </div>
-        </FormField>
+          <FieldLabel error={phoneError} label="Phone" />
+          <input
+            {...phoneRegistration}
+            readOnly
+            type="hidden"
+            value={watch('phone') || ''}
+          />
+          <PhoneInput
+            error={phoneError}
+            name="phone"
+            onBlur={handlePhoneBlur}
+            onChange={handlePhoneChange}
+            required
+            value={watch('phone') || ''}
+          />
+          <p
+            className={[
+              'mt-1.5 text-[12px] font-normal italic',
+              phoneError ? 'text-rose-500' : 'text-slate/60',
+            ].join(' ')}
+          >
+            Select a country and enter the local number. The saved value uses international E.164 format.
+          </p>
+          {checkingPhone ? (
+            <p className="mt-1.5 text-[12px] font-medium text-brand">
+              Checking patient records...
+            </p>
+          ) : null}
+          <FieldError>{phoneError}</FieldError>
+        </div>
 
         <FormField error={errors.address?.message} label="Address">
           <textarea
@@ -369,39 +400,47 @@ export function PatientFields({
       </FormSection>
 
       <FormSection title="Physical Profile">
-        <FormField error={errors.weight_kg?.message} label="Weight (kg)">
+        <FormField
+          error={errors.weight_kg?.message}
+          label="Weight (kg)"
+          optional={appointmentBooking}
+        >
           <input
             className={getFieldClass(errors.weight_kg?.message, 'font-sans')}
             placeholder="72.5"
             step="0.1"
             type="number"
             {...register('weight_kg', {
-              required: 'Weight is required.',
               max: {
                 value: 500,
                 message: 'Weight cannot be greater than 500 kg.',
               },
               validate: (value) => validatePositiveNumber(value) || true,
+              ...(appointmentBooking
+                ? {}
+                : { required: 'Weight is required.' }),
             })}
           />
         </FormField>
 
-        <FormField error={errors.height_cm?.message} label="Height (cm)">
-          <input
-            className={getFieldClass(errors.height_cm?.message, 'font-sans')}
-            placeholder="175"
-            step="1"
-            type="number"
-            {...register('height_cm', {
-              required: 'Height is required.',
-              max: {
-                value: 300,
-                message: 'Height cannot be greater than 300 cm.',
-              },
-              validate: (value) => validatePositiveNumber(value) || true,
-            })}
-          />
-        </FormField>
+        {appointmentBooking ? null : (
+          <FormField error={errors.height_cm?.message} label="Height (cm)">
+            <input
+              className={getFieldClass(errors.height_cm?.message, 'font-sans')}
+              placeholder="175"
+              step="1"
+              type="number"
+              {...register('height_cm', {
+                required: 'Height is required.',
+                max: {
+                  value: 300,
+                  message: 'Height cannot be greater than 300 cm.',
+                },
+                validate: (value) => validatePositiveNumber(value) || true,
+              })}
+            />
+          </FormField>
+        )}
 
         <div className="md:col-span-2">
           <SelectField

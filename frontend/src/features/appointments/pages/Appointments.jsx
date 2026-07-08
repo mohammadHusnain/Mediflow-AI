@@ -4,6 +4,7 @@ import {
   Calendar,
   CalendarClock,
   Eye,
+  FileText,
   Info,
   Pencil,
   Plus,
@@ -21,6 +22,7 @@ import SkeletonRow from '@shared/components/SkeletonRow'
 import StatusBadge from '../components/StatusBadge'
 import { useToast } from '@shared/components/Toast'
 import { useAuth } from '@shared/context/AuthContext'
+import useDebounce from '@shared/hooks/useDebounce'
 import {
   APPOINTMENT_STATUS_OPTIONS,
   canTransitionAppointmentStatus,
@@ -50,6 +52,10 @@ import {
 } from '@shared/lib/pagination'
 import { getUserDoctorId, usePermission } from '@shared/lib/usePermission'
 import {
+  getAppointmentInvoiceId,
+  getInvoiceAppointmentId,
+} from '@shared/lib/invoices'
+import {
   deleteAppointment,
   getAppointments,
   getDoctors,
@@ -57,6 +63,7 @@ import {
   updatePaymentStatus,
   updateStatus,
 } from '@shared/services/api'
+import { getInvoices } from '@shared/services/billingApi'
 
 const STATUS_OPTIONS = APPOINTMENT_STATUS_OPTIONS
 
@@ -84,6 +91,7 @@ function getAppointmentDate(appointment) {
   const d = new Date(value)
   return Number.isNaN(d.getTime()) ? null : d
 }
+
 const STATUS_TONES = {
   all: {
     active: 'border-brand/30 bg-brand-light font-semibold text-brand',
@@ -158,6 +166,7 @@ function getSearchableAppointmentText(appointment, patients, doctors) {
     appointment.temperature,
     appointment.blood_pressure,
     appointment.payment_status,
+    getAppointmentInvoiceId(appointment),
     status,
     formatStatus(status),
     dateParts.date,
@@ -199,13 +208,16 @@ export function Appointments() {
   const [total, setTotal] = useState(0)
   const [patients, setPatients] = useState([])
   const [doctors, setDoctors] = useState([])
+  const [invoiceByAppointmentId, setInvoiceByAppointmentId] = useState(new Map())
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [flashingRow, setFlashingRow] = useState(null)
   const [updatingPaymentId, setUpdatingPaymentId] = useState(null)
   const [deleteCandidate, setDeleteCandidate] = useState(null)
   const [isDeletingAppointment, setIsDeletingAppointment] = useState(false)
-  const search = searchParams.get('search') || ''
+  const urlSearch = searchParams.get('search') || ''
+  const [searchInput, setSearchInput] = useState(urlSearch)
+  const debouncedSearchInput = useDebounce(searchInput, 300)
   const queryStatus = searchParams.get('status')
   const statusFilter = STATUS_OPTIONS.includes(queryStatus) ? queryStatus : 'all'
   const queryPeriod = searchParams.get('period')
@@ -216,23 +228,21 @@ export function Appointments() {
     setLoadError('')
     setAppointments([])
 
-    const appointmentOrdering =
-      statusFilter === 'completed' || statusFilter === 'cancelled'
-        ? '-appointment_dt'
-        : 'appointment_dt'
+    const appointmentOrdering = '-created_at'
     const appointmentParams = {
       ...pageParams(page),
       ordering: appointmentOrdering,
-      ...(search.trim() ? { search: search.trim() } : {}),
+      ...(debouncedSearchInput.trim() ? { search: debouncedSearchInput.trim() } : {}),
       ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
       ...(periodFilter !== 'all' ? { period: periodFilter } : {}),
     }
 
-    const [appointmentsResult, patientsResult, doctorsResult] =
+    const [appointmentsResult, patientsResult, doctorsResult, invoicesResult] =
       await Promise.allSettled([
         getAppointments(appointmentParams),
         getPatients(),
         getDoctors(),
+        getInvoices({ page_size: 1000 }),
       ])
 
     if (!isMounted()) {
@@ -251,8 +261,16 @@ export function Appointments() {
     }
 
     const normalizedAppointments = normalizePaginatedResponse(appointmentsResult.value)
+    const uniqueAppointments = Array.from(
+      new Map(
+        normalizedAppointments.results.map((appointment) => [
+          String(getRecordId(appointment)),
+          appointment,
+        ]),
+      ).values(),
+    )
 
-    setAppointments(normalizedAppointments.results)
+    setAppointments(uniqueAppointments)
     setTotal(normalizedAppointments.count)
     setPatients(
       patientsResult.status === 'fulfilled'
@@ -262,8 +280,23 @@ export function Appointments() {
     setDoctors(
       doctorsResult.status === 'fulfilled' ? normalizeList(doctorsResult.value) : [],
     )
+    if (invoicesResult.status === 'fulfilled') {
+      const invoiceMap = new Map()
+
+      normalizeList(invoicesResult.value).forEach((invoice) => {
+        const appointmentId = getInvoiceAppointmentId(invoice)
+
+        if (appointmentId && invoice?.id) {
+          invoiceMap.set(String(appointmentId), invoice.id)
+        }
+      })
+
+      setInvoiceByAppointmentId(invoiceMap)
+    } else {
+      setInvoiceByAppointmentId(new Map())
+    }
     setIsLoading(false)
-  }, [page, periodFilter, search, statusFilter])
+  }, [debouncedSearchInput, page, periodFilter, statusFilter])
 
   useEffect(() => {
     let mounted = true
@@ -286,7 +319,7 @@ export function Appointments() {
   )
 
   const filteredAppointments = useMemo(() => {
-    const searchTerms = normalizeSearchText(search).split(' ').filter(Boolean)
+    const searchTerms = normalizeSearchText(searchInput).split(' ').filter(Boolean)
     const periodRange = periodFilter !== 'all' ? getPeriodRange(periodFilter) : null
 
     return roleVisibleAppointments.filter((appointment) => {
@@ -308,7 +341,7 @@ export function Appointments() {
 
       return true
     })
-  }, [doctors, patients, roleVisibleAppointments, search, statusFilter, periodFilter])
+  }, [doctors, patients, roleVisibleAppointments, searchInput, statusFilter, periodFilter])
 
   const statusCounts = useMemo(
     () =>
@@ -331,10 +364,10 @@ export function Appointments() {
   )
 
   const tableHeaders = doctorUser
-    ? ['Patient', 'Date & Time', 'Reason', 'Vitals', 'Payment', 'Status', 'Details']
-    : ['Patient', 'Doctor', 'Date & Time', 'Reason', 'Vitals', 'Payment', 'Status', 'Actions']
+    ? ['Patient', 'Date & Time', 'Reason', 'Vitals', 'Payment', 'Invoice', 'Status', 'Details']
+    : ['Patient', 'Doctor', 'Date & Time', 'Reason', 'Vitals', 'Payment', 'Invoice', 'Status', 'Actions']
 
-  function updateFilters(nextSearch = search, nextStatus = statusFilter, nextPeriod = periodFilter) {
+  function updateFilters(nextSearch = searchInput, nextStatus = statusFilter, nextPeriod = periodFilter) {
     const nextParams = {}
     const trimmedSearch = nextSearch.trim()
 
@@ -448,6 +481,7 @@ export function Appointments() {
   }
 
   function clearFilters() {
+    setSearchInput('')
     setPage(1)
     setSearchParams({}, { replace: true })
   }
@@ -464,15 +498,22 @@ export function Appointments() {
             />
             <input
               className="h-11 w-full rounded-control border border-hairline bg-canvas pl-9 pr-9 text-[14px] font-normal text-ink outline-none transition-all duration-300 placeholder:text-slate/60 focus:border-brand focus:ring-2 focus:ring-brand/30 lg:w-[460px]"
-              onChange={(event) => updateFilters(event.target.value, statusFilter)}
+              onChange={(event) => {
+                const nextValue = event.target.value
+                setSearchInput(nextValue)
+                updateFilters(nextValue, statusFilter)
+              }}
               placeholder="Search patient, doctor, status"
-              type="search"
-              value={search}
+              type="text"
+              value={searchInput}
             />
-            {search ? (
+            {searchInput ? (
               <button
                 className="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-slate transition hover:bg-mist hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
-                onClick={() => updateFilters('', statusFilter)}
+                onClick={() => {
+                  setSearchInput('')
+                  updateFilters('', statusFilter)
+                }}
                 type="button"
               >
                 <span className="sr-only">Clear appointment search</span>
@@ -512,7 +553,7 @@ export function Appointments() {
                     : STATUS_TONES[status].inactive,
                 ].join(' ')}
                 key={status}
-                onClick={() => updateFilters(search, status)}
+                onClick={() => updateFilters(searchInput, status)}
                 style={stagger(index, 0.04)}
                 type="button"
               >
@@ -544,7 +585,7 @@ export function Appointments() {
                     : 'border-hairline bg-mist text-slate hover:border-slate/30 hover:text-ink',
                 ].join(' ')}
                 key={key}
-                onClick={() => updateFilters(search, statusFilter, key)}
+                onClick={() => updateFilters(searchInput, statusFilter, key)}
                 type="button"
               >
                 {key === 'day' ? <Calendar aria-hidden="true" className="h-3 w-3" /> : null}
@@ -612,16 +653,16 @@ export function Appointments() {
                         className="mx-auto mb-4 h-10 w-10 text-brand/25"
                       />
                       <p className="text-[16px] font-semibold text-ink">
-                        {search.trim() || statusFilter !== 'all' || periodFilter !== 'all'
+                        {searchInput.trim() || statusFilter !== 'all' || periodFilter !== 'all'
                           ? 'No matching appointments'
                           : 'No appointments yet'}
                       </p>
                       <p className="mt-1 text-[14px] font-normal text-slate">
-                        {search.trim() || statusFilter !== 'all' || periodFilter !== 'all'
+                        {searchInput.trim() || statusFilter !== 'all' || periodFilter !== 'all'
                           ? 'Try another search term or clear the filters.'
                           : 'Book the first appointment to get started'}
                       </p>
-                      {search.trim() || statusFilter !== 'all' || periodFilter !== 'all' ? (
+                      {searchInput.trim() || statusFilter !== 'all' || periodFilter !== 'all' ? (
                         <button
                           className="mt-4 text-sm font-semibold text-brand transition hover:text-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 focus-visible:ring-offset-2"
                           onClick={clearFilters}
@@ -652,6 +693,9 @@ export function Appointments() {
                     )
                     const dateParts = formatDateParts(appointment.appointment_dt)
                     const vitalsText = getVitalsText(appointment)
+                    const invoiceId =
+                      invoiceByAppointmentId.get(String(appointmentId)) ||
+                      getAppointmentInvoiceId(appointment)
 
                     return (
                       <tr
@@ -716,6 +760,20 @@ export function Appointments() {
                             />
                           ) : (
                             <PaymentBadge status={appointment.payment_status} />
+                          )}
+                        </td>
+                        <td className="px-5 py-4">
+                          {invoiceId ? (
+                            <button
+                              className="flex items-center gap-1 text-[12px] font-medium text-brand transition hover:text-brand-dark hover:underline"
+                              onClick={() => navigate(`/financial-reports/billing/invoice/${invoiceId}`)}
+                              type="button"
+                            >
+                              <FileText aria-hidden="true" className="h-[13px] w-[13px]" />
+                              View Invoice
+                            </button>
+                          ) : (
+                            <span className="text-[12px] text-slate/40">-</span>
                           )}
                         </td>
                         <td className="px-5 py-4">

@@ -61,32 +61,32 @@ export default function InvoiceTable({ invoices, loading, onView, onEdit, page, 
                   className="animate-fade-up border-b border-hairline transition-colors duration-100 last:border-0 hover:bg-brand-light/40"
                   style={{ animationDelay: `${index * 0.03}s` }}
                 >
-                  <td className="px-5 py-4 font-sans text-[12px] font-semibold text-brand">
+                  <td className="px-4 py-2.5 font-sans text-[12px] font-semibold text-brand">
                     {inv.invoice_number}
                   </td>
-                  <td className="px-5 py-4 text-[14px] font-medium text-ink">
+                  <td className="px-4 py-2.5 text-[14px] font-medium text-ink">
                     {inv.patient_name}
                   </td>
-                  <td className="px-5 py-4 text-[13px] text-slate">
+                  <td className="px-4 py-2.5 text-[13px] text-slate">
                     {inv.doctor_name || '—'}
                   </td>
-                  <td className="px-5 py-4 font-sans text-[12px] text-slate">
+                  <td className="px-4 py-2.5 font-sans text-[12px] text-slate">
                     {new Date(inv.invoice_date).toLocaleDateString('en-GB', {
                       day: '2-digit',
                       month: 'short',
                       year: 'numeric',
                     })}
                   </td>
-                  <td className="px-5 py-4 font-sans text-[14px] font-medium text-ink">
+                  <td className="px-4 py-2.5 font-sans text-[14px] font-medium text-ink">
                     {formatCurrency(inv.total_amount)}
                   </td>
-                  <td className="px-5 py-4 font-sans text-[14px] font-medium text-green-700">
+                  <td className="px-4 py-2.5 font-sans text-[14px] font-medium text-green-700">
                     {formatCurrency(inv.amount_paid)}
                   </td>
-                  <td className="px-5 py-4">
+                  <td className="px-4 py-2.5">
                     <StatusBadge status={inv.status} />
                   </td>
-                  <td className="px-5 py-4">
+                  <td className="px-4 py-2.5">
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => onView(inv.id)}

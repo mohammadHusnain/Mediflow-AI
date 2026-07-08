@@ -10,6 +10,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 
 import InvoiceBadge from '../../../components/financial/InvoiceBadge.jsx'
+import CurrencyDisplay from '@shared/components/CurrencyDisplay.jsx'
 import { useAuth } from '@shared/context/AuthContext'
 import { useDebounce } from '@shared/hooks/useDebounce'
 import {
@@ -48,11 +49,7 @@ function numberValue(value) {
   return Number.isFinite(number) ? number : 0
 }
 
-function formatPkr(value) {
-  return `PKR ${numberValue(value).toLocaleString()}`
-}
-
-function formatDate(value, fallback = '-') {
+function formatDateTime(value, fallback = '-') {
   if (!value) return fallback
 
   const date = new Date(value)
@@ -60,9 +57,21 @@ function formatDate(value, fallback = '-') {
 
   return new Intl.DateTimeFormat('en-US', {
     day: '2-digit',
+    hour: 'numeric',
+    minute: '2-digit',
     month: 'short',
     year: 'numeric',
   }).format(date)
+}
+
+function combineDateAndTime(dateValue, timeValue) {
+  const dateText = String(dateValue || '').trim()
+  const timeText = String(timeValue || '').trim()
+
+  if (!dateText) return ''
+  if (dateText.includes('T') || !timeText) return dateText
+
+  return `${dateText}T${timeText.slice(0, 5)}`
 }
 
 function invoiceNumber(invoice) {
@@ -79,6 +88,10 @@ function invoiceDoctor(invoice) {
 
 function invoiceDate(invoice) {
   return (
+    combineDateAndTime(
+      invoice?.appointment_info?.appointment_date,
+      invoice?.appointment_info?.appointment_time,
+    ) ||
     invoice?.appointment_date ||
     invoice?.appointment?.appointment_dt ||
     invoice?.appointment?.date ||
@@ -235,32 +248,21 @@ export default function InvoiceList() {
 
   return (
     <div>
-      <header className="mb-5 rounded-[18px] border border-hairline bg-canvas px-6 py-5 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="max-w-2xl">
-            <h2 className="font-display text-[26px] text-ink">Invoice Management</h2>
-            <p className="mt-2 text-[15px] font-normal leading-6 text-slate">
-              Create, review, download, and follow up appointment invoices.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-[13px] text-slate">
-            <span className="rounded-full border border-hairline bg-mist px-3 py-1 font-medium">
-              {loading ? 'Loading invoices' : `${total.toLocaleString()} invoices`}
-            </span>
-            {filtersActive ? (
-              <span className="rounded-full border border-brand/20 bg-brand/5 px-3 py-1 font-semibold text-brand">
-                Filtered register
-              </span>
-            ) : (
-              <span className="rounded-full border border-hairline bg-mist px-3 py-1 font-medium">
-                Current operating register
-              </span>
-            )}
-          </div>
-        </div>
-      </header>
-
       <section className="mb-6 rounded-[16px] border border-hairline bg-canvas p-5">
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-[13px] text-slate">
+          <span className="rounded-full border border-hairline bg-mist px-3 py-1 font-medium">
+            {loading ? 'Loading invoices' : `${total.toLocaleString()} invoices`}
+          </span>
+          {filtersActive ? (
+            <span className="rounded-full border border-brand/20 bg-brand/5 px-3 py-1 font-semibold text-brand">
+              Filtered register
+            </span>
+          ) : (
+            <span className="rounded-full border border-hairline bg-mist px-3 py-1 font-medium">
+              Current operating register
+            </span>
+          )}
+        </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(280px,1fr)_150px_160px_160px_auto] xl:items-end">
           <label className="space-y-1">
             <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Search</span>
@@ -359,23 +361,25 @@ export default function InvoiceList() {
                   <tr
                     className="cursor-pointer border-b border-hairline transition last:border-0 hover:bg-mist/40"
                     key={invoice.id}
-                    onClick={() => navigate(`/financial-reports/billing/invoices/${invoice.id}`)}
+                    onClick={() => navigate(`/financial-reports/billing/invoice/${invoice.id}`)}
                   >
-                    <td className="px-5 py-4 font-mono text-[13px] text-ink">{invoiceNumber(invoice)}</td>
-                    <td className="px-5 py-4 text-[14px] font-semibold text-ink">{invoicePatient(invoice)}</td>
-                    <td className="px-5 py-4 text-[13px] font-normal text-slate">{invoiceDoctor(invoice)}</td>
-                    <td className="px-5 py-4 font-mono text-[12px] text-slate">{formatDate(invoiceDate(invoice))}</td>
-                    <td className="px-5 py-4 font-mono text-[14px] text-ink">{formatPkr(invoiceAmount(invoice))}</td>
-                    <td className="px-5 py-4">
+                    <td className="px-5 py-2.5 font-mono text-[13px] text-ink">{invoiceNumber(invoice)}</td>
+                    <td className="px-5 py-2.5 text-[14px] font-semibold text-ink">{invoicePatient(invoice)}</td>
+                    <td className="px-5 py-2.5 text-[13px] font-normal text-slate">{invoiceDoctor(invoice)}</td>
+                    <td className="px-5 py-2.5 font-mono text-[12px] text-slate">{formatDateTime(invoiceDate(invoice))}</td>
+                    <td className="px-5 py-2.5 text-[14px] text-ink">
+                      <CurrencyDisplay amount={invoiceAmount(invoice)} />
+                    </td>
+                    <td className="px-5 py-2.5">
                       <InvoiceBadge status={invoice.status} />
                     </td>
-                    <td className="px-5 py-4">
+                    <td className="px-5 py-2.5">
                       <div className="flex items-center gap-2 text-[13px] font-normal">
                         <button
                           className="inline-flex items-center gap-1 text-brand transition hover:text-brand-dark"
                           onClick={(event) => {
                             event.stopPropagation()
-                            navigate(`/financial-reports/billing/invoices/${invoice.id}`)
+                            navigate(`/financial-reports/billing/invoice/${invoice.id}`)
                           }}
                           type="button"
                         >

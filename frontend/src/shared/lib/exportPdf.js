@@ -23,6 +23,14 @@ function createPdfError(message) {
   return error
 }
 
+async function isPdfBlob(blob) {
+  if (!blob?.slice) {
+    return false
+  }
+
+  return (await blob.slice(0, 5).text()) === '%PDF-'
+}
+
 function filenameLabel(params = {}) {
   if (params.period === 'custom') {
     const dateFrom = params.dateFrom || params.date_from || 'custom'
@@ -37,7 +45,7 @@ export async function exportReportPdf(reportsApi, params, onError) {
   try {
     const blob = await reportsApi.downloadReportPDF(params)
 
-    if (blob?.type !== 'application/pdf') {
+    if (!(await isPdfBlob(blob))) {
       throw createPdfError(await getBlobErrorMessage(blob))
     }
 
@@ -49,7 +57,9 @@ export async function exportReportPdf(reportsApi, params, onError) {
     document.body.appendChild(link)
     link.click()
     link.remove()
-    window.URL.revokeObjectURL(url)
+    window.setTimeout(() => {
+      window.URL.revokeObjectURL(url)
+    }, 0)
   } catch (error) {
     onError?.(error)
 

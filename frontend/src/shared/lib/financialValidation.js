@@ -100,7 +100,7 @@ export function validateSalaryConfigPayload(payload = {}, staffMember = {}) {
     if (amount === null) {
       errors.fixed_amount = 'Monthly fixed amount is required'
     } else if (amount < 1000) {
-      errors.fixed_amount = 'Minimum salary is PKR 1,000'
+      errors.fixed_amount = 'Minimum salary is 1,000'
     } else if (amount > 10000000) {
       errors.fixed_amount = 'Please verify this amount'
     }

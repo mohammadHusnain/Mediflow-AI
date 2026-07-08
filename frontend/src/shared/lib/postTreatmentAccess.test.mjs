@@ -37,9 +37,11 @@ describe('post-treatment access helpers', () => {
 
   test('admin and owning doctor can acknowledge alerts', () => {
     const alert = { doctor_id: 201 }
+    const stringIdAlert = { doctor_id: '201' }
 
     assert.equal(canAcknowledgeAlert(admin, alert), true)
     assert.equal(canAcknowledgeAlert(doctor, alert), true)
+    assert.equal(canAcknowledgeAlert(doctor, stringIdAlert), true)
     assert.equal(canAcknowledgeAlert(otherDoctor, alert), false)
   })
 })

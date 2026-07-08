@@ -2,8 +2,10 @@ import { PAGE_SIZE } from './pagination'
 
 const DEMO_ADDED_BY = 'MediFlow Admin'
 const DEMO_EXPENSES_STORAGE_KEY = 'mediflow_demo_expenses_v1'
+const DEMO_EXPENSE_CATEGORIES_STORAGE_KEY = 'mediflow_demo_expense_categories_v1'
 const DEMO_SALARIES_STORAGE_KEY = 'mediflow_demo_salary_records_v1'
 let demoExpenses = null
+let demoExpenseCategories = null
 let demoSalaryRecords = null
 
 function clone(value) {
@@ -176,6 +178,19 @@ function setExpenseStore(nextExpenses) {
   writeStoredList(DEMO_EXPENSES_STORAGE_KEY, demoExpenses)
 }
 
+function getExtraCategoryStore() {
+  if (!demoExpenseCategories) {
+    demoExpenseCategories = readStoredList(DEMO_EXPENSE_CATEGORIES_STORAGE_KEY) || []
+  }
+
+  return demoExpenseCategories
+}
+
+function setExtraCategoryStore(nextCategories) {
+  demoExpenseCategories = nextCategories
+  writeStoredList(DEMO_EXPENSE_CATEGORIES_STORAGE_KEY, demoExpenseCategories)
+}
+
 function makeSalaryRecord(id, employeeName, employeeType, role, monthOffset, amount, status, paidDay = 28) {
   const salaryMonth = monthKeyForOffset(monthOffset)
 
@@ -248,6 +263,37 @@ function makeDemoRevenue() {
 
 function normalizeCategoryFilter(category) {
   return String(category || '').trim().toLowerCase()
+}
+
+function normalizeEntryText(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+function getExpenseEntryName(expense) {
+  return expense.expense_name || expense.description || expense.category || ''
+}
+
+function isSameExpenseEntry(left, right) {
+  return (
+    String(left.expense_date || '').slice(0, 10) === String(right.expense_date || '').slice(0, 10) &&
+    String(left.expense_type || '') === String(right.expense_type || '') &&
+    Number(left.amount || 0).toFixed(2) === Number(right.amount || 0).toFixed(2) &&
+    normalizeEntryText(getExpenseEntryName(left)) === normalizeEntryText(getExpenseEntryName(right))
+  )
+}
+
+function assertUniqueExpenseEntry(expenses, nextExpense, excludeId = null) {
+  const duplicate = expenses.find(
+    (expense) =>
+      String(expense.id) !== String(excludeId || '') &&
+      isSameExpenseEntry(expense, nextExpense),
+  )
+
+  if (duplicate) {
+    const error = new Error('This expense entry already exists.')
+    error.response = { data: { detail: 'This expense entry already exists.' }, status: 400 }
+    throw error
+  }
 }
 
 function getFilteredExpenses(params = {}) {
@@ -323,49 +369,86 @@ export function getDemoExpenseCategories() {
     return map
   }, new Map())
 
+  getExtraCategoryStore().forEach((category) => {
+    const name = String(category.name || category).trim()
+    if (!name) return
+    const key = name.toLowerCase()
+    if (!categoryMap.has(key)) {
+      categoryMap.set(key, { count: 0, name })
+    }
+  })
+
   return clone([...categoryMap.values()].sort((left, right) => left.name.localeCompare(right.name)))
+}
+
+export function createDemoExpenseCategory(name) {
+  const categoryName = String(name || '').trim()
+
+  if (!categoryName) {
+    const error = new Error('Category name is required.')
+    error.response = { data: { detail: 'Category name is required.' }, status: 400 }
+    throw error
+  }
+
+  const existing = getDemoExpenseCategories().find(
+    (category) => category.name.toLowerCase() === categoryName.toLowerCase(),
+  )
+
+  if (existing) {
+    return clone(existing)
+  }
+
+  const nextCategory = { count: 0, name: categoryName }
+  setExtraCategoryStore([nextCategory, ...getExtraCategoryStore()])
+  return clone(nextCategory)
 }
 
 export function createDemoExpense(data = {}) {
   const expenses = getExpenseStore()
   const amount = Number(data.amount)
   const period = resolveExpensePeriod(data)
+  const category = String(data.category || data.expense_type || 'Other').trim()
+  const expenseName = String(data.expense_name || data.name || data.description || `${category} expense`).trim()
   const nextExpense = {
     added_by: DEMO_ADDED_BY,
     amount: Number.isFinite(amount) ? Number(amount.toFixed(2)) : 0,
-    category: String(data.category || '').trim(),
+    category,
     created_at: new Date().toISOString(),
     description: String(data.description || '').trim(),
     expense_date: period.date,
     expense_month: period.month,
-    expense_name: String(data.expense_name || data.name || data.category || '').trim(),
+    expense_name: expenseName,
     expense_type: data.expense_type || 'other',
     expense_year: period.year,
     id: Math.max(0, ...expenses.map((expense) => Number(expense.id) || 0)) + 1,
     status: data.status || 'recorded',
   }
 
+  assertUniqueExpenseEntry(expenses, nextExpense)
   setExpenseStore([nextExpense, ...expenses])
   return clone(nextExpense)
 }
 
 export function updateDemoExpense(id, data = {}) {
   let updatedExpense = null
-  const nextExpenses = getExpenseStore().map((expense) => {
+  const expenses = getExpenseStore()
+  const nextExpenses = expenses.map((expense) => {
     if (String(expense.id) !== String(id)) {
       return expense
     }
 
     const amount = Number(data.amount)
     const period = resolveExpensePeriod(data, expense.expense_date)
+    const category = String(data.category || expense.category || data.expense_type || 'Other').trim()
+    const expenseName = String(data.expense_name || data.name || expense.expense_name || expense.description || `${category} expense`).trim()
     updatedExpense = {
       ...expense,
       amount: Number.isFinite(amount) ? Number(amount.toFixed(2)) : expense.amount,
-      category: String(data.category || expense.category).trim(),
+      category,
       description: String(data.description ?? expense.description).trim(),
       expense_date: period.date,
       expense_month: period.month,
-      expense_name: String(data.expense_name || data.name || expense.expense_name || expense.category).trim(),
+      expense_name: expenseName,
       expense_type: data.expense_type || expense.expense_type,
       expense_year: period.year,
       status: data.status || expense.status || 'recorded',
@@ -380,6 +463,7 @@ export function updateDemoExpense(id, data = {}) {
     throw error
   }
 
+  assertUniqueExpenseEntry(expenses, updatedExpense, id)
   setExpenseStore(nextExpenses)
   return clone(updatedExpense)
 }

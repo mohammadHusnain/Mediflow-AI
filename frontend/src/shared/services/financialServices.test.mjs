@@ -210,9 +210,12 @@ describe('reports demo service and export helpers', () => {
     }
     const trend = await getRevenueTrend(params)
     const pdf = await downloadReportPDF(params)
+    const pdfText = await pdf.text()
 
     assert.equal(trend.length, 1)
     assert.equal(pdf.type, 'application/pdf')
+    assert.ok(pdfText.startsWith('%PDF-'))
+    assert.match(pdfText, /MediFlow Financial Report/)
   })
 
   test('surfaces JSON error blobs instead of downloading invalid PDFs', async () => {

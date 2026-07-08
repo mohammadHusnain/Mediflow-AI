@@ -119,18 +119,30 @@ export function FormField({
   )
 }
 
+export function FormSectionHeading({ className = '', optional, title }) {
+  return (
+    <h2
+      className={[
+        'mb-4 flex items-center gap-2 border-b border-[#E4E8EB] pb-2 text-[14px] font-bold uppercase tracking-wide text-slate-900 [border-bottom-width:1.5px]',
+        className,
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
+      <span>{title}</span>
+      {optional ? (
+        <span className="text-[11px] font-normal normal-case tracking-normal text-slate/70">
+          optional
+        </span>
+      ) : null}
+    </h2>
+  )
+}
+
 export function FormSection({ children, optional, title }) {
   return (
     <section className="animate-fade-up">
-      <h2 className="mb-3 flex items-center gap-2 text-[13px] font-medium uppercase tracking-wide text-slate">
-        <span>{title}</span>
-        {optional ? (
-          <span className="text-[11px] font-normal normal-case tracking-normal text-slate/70">
-            optional
-          </span>
-        ) : null}
-      </h2>
-      <div className="mb-5 h-px bg-hairline" />
+      <FormSectionHeading optional={optional} title={title} />
       <div className="grid gap-4 md:grid-cols-2">{children}</div>
     </section>
   )

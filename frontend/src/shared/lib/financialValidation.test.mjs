@@ -50,7 +50,7 @@ describe('financial validation', () => {
       { role: 'Receptionist' },
     )
 
-    assert.equal(errors.fixed_amount, 'Minimum salary is PKR 1,000')
+    assert.equal(errors.fixed_amount, 'Minimum salary is 1,000')
   })
 
   test('rejects commission salary for non-doctors', () => {

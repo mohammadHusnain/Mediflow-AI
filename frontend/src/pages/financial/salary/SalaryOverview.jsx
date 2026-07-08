@@ -1,33 +1,31 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  AlertCircle,
   CheckCircle2,
+  Eye,
   History,
+  Pencil,
+  Plus,
+  Receipt,
   Search,
-  Settings2,
-  Stethoscope,
-  Users,
   Wallet,
+  X,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
-import InvoiceBadge from '../../../components/financial/InvoiceBadge.jsx'
-import SalaryBadge from '../../../components/financial/SalaryBadge.jsx'
-import SalaryConfigModal from '../../../components/financial/SalaryConfigModal.jsx'
 import Avatar from '@shared/components/Avatar'
+import ConfirmationModal from '@shared/components/ConfirmationModal'
+import CurrencyDisplay from '@shared/components/CurrencyDisplay'
+import { useToast } from '@shared/components/Toast'
 import { useAuth } from '@shared/context/AuthContext'
+import { translucentBackdropClass } from '@shared/components/FormPrimitives'
+import { getBackendError } from '@shared/lib/records'
 import { getDoctors, getStaff } from '@shared/services/api'
 import {
   getSalaryConfigs,
   getSalaryRecords,
+  paySalary,
 } from '@shared/services/billingApi'
-import { PUBLIC_ROUTES_FOR_TESTING } from '@shared/lib/testingAccess'
-import {
-  getDoctorSalaries as getDemoDoctorSalaries,
-  getStaffSalaries as getDemoStaffSalaries,
-  getSalaryHistory as getDemoSalaryHistory,
-  getOwnSalary as getDemoOwnSalary,
-} from '@shared/services/salaryApi'
+import { getOwnSalary } from '@shared/services/salaryApi'
 
 function currentMonth() {
   return new Date().toISOString().slice(0, 7)
@@ -36,6 +34,8 @@ function currentMonth() {
 function listFromResponse(response) {
   if (Array.isArray(response)) return response
   if (Array.isArray(response?.results)) return response.results
+  if (Array.isArray(response?.data)) return response.data
+  if (Array.isArray(response?.data?.results)) return response.data.results
   return []
 }
 
@@ -44,149 +44,226 @@ function numberValue(value) {
   return Number.isFinite(number) ? number : 0
 }
 
-function formatPkr(value) {
-  return `PKR ${numberValue(value).toLocaleString()}`
+function fullName(person) {
+  return (
+    person?.full_name ||
+    person?.name ||
+    `${person?.first_name || ''} ${person?.last_name || ''}`.trim() ||
+    person?.email ||
+    'Unknown employee'
+  )
+}
+
+function employeeRole(person, employeeType) {
+  if (employeeType === 'doctor') {
+    const specialization = Array.isArray(person?.specializations)
+      ? person.specializations[0]
+      : person?.specialization || person?.specializations
+
+    return specialization || 'Doctor'
+  }
+
+  return person?.role || person?.title || 'Staff'
+}
+
+function normalizeConfig(config) {
+  if (!config) return null
+
+  return {
+    ...config,
+    base_salary: numberValue(config.base_salary ?? config.fixed_amount),
+    effective_from: config.effective_from || '',
+  }
+}
+
+function monthParts(month) {
+  const [year, monthNumber] = String(month || currentMonth()).split('-')
+  return { month: Number(monthNumber), year: Number(year) }
+}
+
+function formatDate(value, fallback = '-') {
+  if (!value) return fallback
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return fallback
+
+  return new Intl.DateTimeFormat('en-US', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(date)
 }
 
 function formatMonth(value) {
   if (!value) return '-'
-
   const [year, month] = String(value).split('-')
   if (!year || !month) return value
 
   return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
+    month: 'long',
     year: 'numeric',
   }).format(new Date(Number(year), Number(month) - 1, 1))
 }
 
-function amountLabel(person) {
-  const config = person?.current_config
-
-  if (!config) return '-'
-  if (config.salary_type === 'commission') {
-    if (config.commission_rate > 0) return `${numberValue(config.commission_rate)}%`
-    if (config.commission_per_appointment > 0) return `${formatPkr(config.commission_per_appointment)}/appt`
-    return 'Commission'
-  }
-
-  const amount = config.base_salary ?? config.fixed_amount ?? 0
-  return `${formatPkr(amount)}/mo`
+function recordEmployeeId(record) {
+  return record?.employee_id || record?.user_id || record?.employee?.id || record?.staff?.id || null
 }
 
-function payrollRecordFor(person, records) {
-  if (!records?.length) return null
+function recordEmployeeEmail(record) {
+  return String(record?.employee?.email || record?.email || '').toLowerCase()
+}
+
+function recordAmount(record) {
+  return record?.total_earned ?? record?.calculated_amount ?? record?.net_salary ?? record?.amount ?? record?.base_amount ?? 0
+}
+
+function recordStatus(record) {
+  const status = String(record?.status || '').toLowerCase()
+  if (['paid', 'disbursed', 'processed'].includes(status)) return 'paid'
+  return 'unpaid'
+}
+
+function employeeRecord(employee, records) {
   return records.find((record) => {
-    const recordUserId = record.user_id ?? record.employee?.id
-    const recordEmail = record.employee?.email?.toLowerCase()
-    if (String(recordUserId) === String(person.id)) return true
-    if (recordEmail && String(person.email || '').toLowerCase() === recordEmail) return true
-    return false
-  })
+    const id = recordEmployeeId(record)
+    if (id && String(id) === String(employee.id)) return true
+
+    const email = recordEmployeeEmail(record)
+    return email && email === String(employee.email || '').toLowerCase()
+  }) || null
 }
 
-function payrollStatusValue(person, records) {
-  if (!person?.current_config) return 'not_configured'
+function receiptNumber(employee, record, month) {
+  if (record?.receipt_number || record?.payment_reference || record?.reference) {
+    return record.receipt_number || record.payment_reference || record.reference
+  }
 
-  const record = payrollRecordFor(person, records)
-  const status = String(record?.status || 'pending').toLowerCase()
-
-  if (['paid', 'disbursed'].includes(status)) return 'paid'
-  if (['partial', 'partially_paid'].includes(status)) return 'partially_paid'
-  if (status === 'processed') return 'processed'
-  return 'pending'
+  const salaryMonth = String(record?.salary_month || month || currentMonth()).replace('-', '')
+  return `SAL-${salaryMonth}-${employee?.id || 'EMP'}`
 }
 
-const PAYROLL_STATUS_OPTIONS = [
-  { label: 'All Statuses', value: '' },
-  { label: 'Paid', value: 'paid' },
-  { label: 'Pending', value: 'pending' },
-  { label: 'Partially Paid', value: 'partially_paid' },
-  { label: 'Not Set', value: 'not_configured' },
-]
+function StatusChip({ status }) {
+  const paid = status === 'paid'
 
-function PaymentStatus({ configured, record }) {
-  if (!configured) {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F3F4F6] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-[#5B6472]">
-        <AlertCircle aria-hidden="true" className="h-3.5 w-3.5" />
-        Not Set
-      </span>
-    )
-  }
-
-  if (!record) {
-    return <InvoiceBadge status="pending" />
-  }
-
-  if (record.status === 'paid' || record.status === 'disbursed') {
-    return <InvoiceBadge status="paid" />
-  }
-
-  if (record.status === 'processed') {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-light px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-brand">
-        Processed
-      </span>
-    )
-  }
-
-  return <InvoiceBadge status={record.status || 'pending'} />
-}
-
-function ConfiguredStatus({ configured }) {
-  return configured ? (
-    <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#0F9D66]">
-      <CheckCircle2 aria-hidden="true" className="h-4 w-4" />
-      Configured
+  return (
+    <span
+      className={[
+        'inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide',
+        paid ? 'bg-[#E3F7EC] text-[#0F9D66]' : 'bg-[#FCE4E8] text-[#C8102E]',
+      ].join(' ')}
+    >
+      {paid ? 'Paid' : 'Unpaid'}
     </span>
-  ) : (
-    <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#B45309]">
-      <AlertCircle aria-hidden="true" className="h-4 w-4" />
+  )
+}
+
+function NotSetChip() {
+  return (
+    <span className="inline-flex rounded-full bg-[#F3F4F6] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-[#5B6472]">
       Not Set
     </span>
   )
 }
 
-function EmptyTable({ icon: Icon, label, onClick, toLabel }) {
+function SummaryCard({ amount, count, label }) {
   return (
-    <div className="py-12 text-center">
-      <Icon aria-hidden="true" className="mx-auto mb-3 h-10 w-10 text-hairline" />
-      <p className="font-display text-[18px] italic text-slate">{label}</p>
-      {onClick ? (
-        <button
-          className="mt-4 rounded-control border border-brand/30 px-4 py-2 text-[13px] font-semibold text-brand transition hover:bg-brand/5"
-          onClick={onClick}
-          type="button"
-        >
-          {toLabel}
-        </button>
-      ) : null}
+    <section className="rounded-[14px] border border-hairline bg-canvas px-5 py-4 shadow-sm">
+      <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">{label}</p>
+      <p className="mt-2 text-[20px] font-bold text-ink">
+        <CurrencyDisplay amount={amount} />
+      </p>
+      <p className="mt-1 text-[12px] text-slate">{count} employees</p>
+    </section>
+  )
+}
+
+function ReceiptRow({ label, value }) {
+  return (
+    <div className="flex items-start justify-between gap-4 border-b border-hairline py-2.5 last:border-0">
+      <span className="text-[13px] font-medium text-slate">{label}</span>
+      <span className="text-right text-[13px] font-semibold text-ink">{value || '-'}</span>
     </div>
   )
 }
 
-function SalaryTable({
-  emptyIcon,
-  emptyLabel,
-  emptyLink,
-  onConfigure,
-  onHistory,
-  payrollRecords,
-  people,
-  type,
-}) {
-  const navigate = useNavigate()
+function SalaryReceiptModal({ employee, month, onClose }) {
+  if (!employee) return null
 
-  if (people.length === 0) {
+  const record = employee.record || {}
+  const amount = recordAmount(record) || employee.base_salary
+  const paidDate = record.paid_date || record.disbursed_on || record.payment_date
+  const salaryMonth = record.salary_month || month
+
+  return (
+    <div className={`fixed inset-0 z-[80] flex items-center justify-center px-4 ${translucentBackdropClass}`}>
+      <section
+        aria-labelledby="salary-receipt-title"
+        aria-modal="true"
+        className="w-full max-w-[520px] animate-scale-in overflow-hidden rounded-card border border-hairline bg-canvas shadow-[0_16px_60px_rgba(20,24,31,0.18)]"
+        role="dialog"
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-hairline bg-mist/60 px-6 py-5">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-light text-brand">
+              <Receipt aria-hidden="true" className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-[18px] font-bold text-ink" id="salary-receipt-title">
+                Salary Receipt
+              </h2>
+              <p className="mt-1 font-mono text-[12px] text-slate">
+                {receiptNumber(employee, record, month)}
+              </p>
+            </div>
+          </div>
+          <button
+            className="rounded-lg p-2 text-slate transition hover:bg-canvas hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+            onClick={onClose}
+            type="button"
+          >
+            <span className="sr-only">Close receipt</span>
+            <X aria-hidden="true" className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="px-6 py-5">
+          <div className="mb-5 rounded-[14px] border border-hairline bg-mist/50 px-4 py-4">
+            <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">
+              Amount Paid
+            </p>
+            <p className="mt-2 text-[28px] font-bold leading-none text-brand">
+              <CurrencyDisplay amount={amount} />
+            </p>
+          </div>
+
+          <div className="rounded-[14px] border border-hairline px-4 py-2">
+            <ReceiptRow label="Employee" value={employee.name} />
+            <ReceiptRow label="Role" value={employee.role} />
+            <ReceiptRow label="Salary Month" value={formatMonth(salaryMonth)} />
+            <ReceiptRow label="Paid Date" value={formatDate(paidDate)} />
+            <ReceiptRow label="Status" value="Paid" />
+          </div>
+        </div>
+
+        <div className="flex justify-end border-t border-hairline px-6 py-4">
+          <button
+            className="rounded-control bg-brand px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2"
+            onClick={onClose}
+            type="button"
+          >
+            Done
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function HistoryTable({ rows }) {
+  if (rows.length === 0) {
     return (
-      <section className="rounded-[16px] border border-hairline bg-canvas">
-        <EmptyTable
-          icon={emptyIcon}
-          label={emptyLabel}
-          onClick={emptyLink ? () => navigate(emptyLink.to) : null}
-          toLabel={emptyLink?.label}
-        />
+      <section className="rounded-[14px] border border-hairline bg-canvas px-5 py-8 text-center">
+        <Wallet aria-hidden="true" className="mx-auto mb-3 h-9 w-9 text-hairline" />
+        <p className="font-display text-[17px] italic text-slate">No salary history for this month</p>
       </section>
     )
   }
@@ -194,21 +271,12 @@ function SalaryTable({
   return (
     <section className="overflow-hidden rounded-[16px] border border-hairline bg-canvas">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1080px] border-collapse text-left">
+        <table className="w-full min-w-[720px] border-collapse text-left">
           <thead className="border-b border-hairline bg-mist/60">
             <tr>
-              {[
-                'Employee',
-                'Department',
-                'Salary Type',
-                'Assigned Salary',
-                'Effective From',
-                'Configured',
-                'Selected Month Status',
-                'Actions',
-              ].map((header) => (
+              {['Date', 'Employee', 'Amount', 'Status'].map((header) => (
                 <th
-                  className="px-5 py-3.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate"
+                  className="px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate"
                   key={header}
                   scope="col"
                 >
@@ -218,66 +286,22 @@ function SalaryTable({
             </tr>
           </thead>
           <tbody>
-            {people.map((person) => {
-              const config = person.current_config
-              const record = payrollRecordFor(person, payrollRecords)
-              const invalidStaffCommission =
-                (type === 'staff' || person.employee_type === 'staff') && config?.salary_type === 'commission'
-
-              return (
-                <tr className="border-b border-hairline last:border-0 hover:bg-mist/40" key={person.id}>
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-3">
-                      <Avatar name={person.name} size="sm" />
-                      <div className="min-w-0">
-                        <p className="truncate text-[14px] font-semibold text-ink">{person.name}</p>
-                        <p className="truncate text-[12px] text-slate">{person.email}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-4 text-[13px] font-normal text-slate">{person.role}</td>
-                  <td className="px-5 py-4">
-                    {invalidStaffCommission ? (
-                      <span className="text-[12px] font-medium text-[#C8102E]">Invalid config</span>
-                    ) : (
-                      <SalaryBadge type={config?.salary_type} />
-                    )}
-                  </td>
-                  <td className={`px-5 py-4 font-mono text-[14px] ${config ? 'text-ink' : 'italic text-slate'}`}>
-                    {amountLabel(person)}
-                  </td>
-                  <td className="px-5 py-4 font-mono text-[12px] text-slate">
-                    {formatMonth(config?.effective_from)}
-                  </td>
-                  <td className="px-5 py-4">
-                    <ConfiguredStatus configured={Boolean(config)} />
-                  </td>
-                  <td className="px-5 py-4">
-                    <PaymentStatus configured={Boolean(config)} record={record} />
-                  </td>
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-2">
-                      <button
-                        className="inline-flex h-9 items-center gap-1.5 rounded-control border border-brand/20 bg-brand/5 px-3 text-[13px] font-semibold text-brand transition hover:border-brand/30 hover:bg-brand/10 hover:text-brand-dark"
-                        onClick={() => onConfigure(person)}
-                        type="button"
-                      >
-                        <Settings2 aria-hidden="true" className="h-4 w-4" />
-                        Configure
-                      </button>
-                      <button
-                        className="inline-flex h-9 items-center gap-1.5 rounded-control border border-hairline bg-canvas px-3 text-[13px] font-semibold text-slate transition hover:bg-mist hover:text-ink"
-                        onClick={() => onHistory(person)}
-                        type="button"
-                      >
-                        <History aria-hidden="true" className="h-4 w-4" />
-                        History
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
+            {rows.map((record) => (
+              <tr className="border-b border-hairline last:border-0 hover:bg-mist/40" key={record.id || `${recordEmployeeId(record)}-${record.salary_month}`}>
+                <td className="px-5 py-2.5 font-mono text-[12px] text-slate">
+                  {formatDate(record.paid_date || record.disbursed_on || record.salary_month)}
+                </td>
+                <td className="px-5 py-2.5 text-[14px] font-semibold text-ink">
+                  {record.employee_name || record.staff_name || record.employee?.full_name || '-'}
+                </td>
+                <td className="px-5 py-2.5 text-[14px] text-ink">
+                  <CurrencyDisplay amount={recordAmount(record)} />
+                </td>
+                <td className="px-5 py-2.5">
+                  <StatusChip status={recordStatus(record)} />
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -286,417 +310,378 @@ function SalaryTable({
 }
 
 function DoctorSalaryView() {
-  const navigate = useNavigate()
-  const { user } = useAuth()
   const [salary, setSalary] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  const loadOwnSalary = useCallback(async () => {
-    setLoading(true)
-    try {
-      if (PUBLIC_ROUTES_FOR_TESTING) {
-        const demoData = await getDemoOwnSalary()
-        setSalary(demoData)
-        return
-      }
-
-      const configsRes = await getSalaryConfigs()
-      const configs = configsRes?.data?.results ?? configsRes?.data ?? []
-      const ownConfig = configs.find(
-        (c) => String(c.employee?.id) === String(user?.id)
-      )
-      setSalary(ownConfig ? {
-        salary_type: ownConfig.salary_type,
-        base_salary: ownConfig.base_salary,
-        commission_rate: ownConfig.commission_rate,
-        commission_per_appointment: ownConfig.commission_per_appointment,
-        effective_from: ownConfig.effective_from,
-        configured_by: ownConfig.employee?.full_name || '',
-        updated_at: ownConfig.updated_at,
-      } : null)
-    } finally {
-      setLoading(false)
-    }
-  }, [user?.id])
-
   useEffect(() => {
-    const timeoutId = window.setTimeout(loadOwnSalary, 0)
-    return () => window.clearTimeout(timeoutId)
-  }, [loadOwnSalary])
+    let mounted = true
 
-  const configured = Boolean(salary?.salary_type)
+    async function loadOwnSalary() {
+      setLoading(true)
+      try {
+        const data = await getOwnSalary()
+        if (mounted) setSalary(data)
+      } catch {
+        if (mounted) setSalary(null)
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+
+    loadOwnSalary()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const config = salary?.current_config || salary
+  const amount = config?.base_salary ?? config?.fixed_amount ?? 0
 
   return (
     <div>
       <header className="mb-6">
         <h2 className="font-display text-[26px] text-ink">My Salary</h2>
-        <p className="mt-1 text-[14px] font-normal text-slate">Your current salary configuration and history</p>
+        <p className="mt-1 text-[14px] font-normal text-slate">Your current salary configuration</p>
       </header>
 
       {loading ? (
-        <div className="h-[360px] max-w-[480px] animate-pulse rounded-[20px] bg-canvas" />
-      ) : !configured ? (
-        <section className="flex min-h-[300px] max-w-[480px] items-center justify-center rounded-[20px] border border-hairline bg-canvas p-8 text-center">
+        <div className="h-[280px] max-w-[520px] animate-pulse rounded-[20px] bg-canvas" />
+      ) : !amount ? (
+        <section className="flex min-h-[260px] max-w-[520px] items-center justify-center rounded-[20px] border border-hairline bg-canvas p-8 text-center">
           <div>
             <Wallet aria-hidden="true" className="mx-auto mb-3 h-10 w-10 text-hairline" />
             <p className="font-display text-[20px] italic text-slate">Salary not configured yet</p>
-            <p className="mt-2 text-[14px] font-normal text-slate/70">
-              Contact your administrator to set up your salary.
-            </p>
           </div>
         </section>
       ) : (
         <section className="max-w-[520px] rounded-[20px] border border-hairline bg-canvas p-8">
-          <div className="flex items-center justify-between gap-4">
-            <p className="text-[13px] font-medium text-slate">Salary Type</p>
-            <SalaryBadge type={salary.salary_type} />
-          </div>
-
-          <div className="mt-6">
-            {salary.salary_type === 'fixed' ? (
-              <>
-                <p className="font-display text-[42px] leading-none text-brand">{formatPkr(salary.base_salary ?? salary.fixed_amount)}</p>
-                <p className="mt-2 text-[14px] font-normal text-slate">per month - fixed</p>
-              </>
-            ) : (
-              <>
-                <p className="font-display text-[42px] leading-none text-brand">{numberValue(salary.commission_rate)}%</p>
-                <p className="mt-2 text-[14px] font-normal text-slate">
-                  per consultation - commission-based
-                </p>
-              </>
-            )}
-          </div>
-
-          <div className="my-6 border-t border-hairline" />
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <p className="text-[12px] font-medium text-slate">Effective From</p>
-              <p className="mt-1 font-mono text-[13px] text-ink">{formatMonth(salary.effective_from)}</p>
-            </div>
-            <div>
-              <p className="text-[12px] font-medium text-slate">Configured By</p>
-              <p className="mt-1 text-[13px] font-normal text-slate">{salary.configured_by || '-'}</p>
-            </div>
-            <div>
-              <p className="text-[12px] font-medium text-slate">Last Updated</p>
-              <p className="mt-1 font-mono text-[13px] text-ink">{formatMonth(salary.updated_at)}</p>
-            </div>
-            <div>
-              <p className="text-[12px] font-medium text-slate">Status</p>
-              <p className="mt-1 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#0F9D66]">
-                <span className="h-2 w-2 rounded-full bg-[#0F9D66]" />
-                Active
-              </p>
-            </div>
-          </div>
-
-          <button
-            className="mt-6 block w-full rounded-control border border-brand/30 px-5 py-2.5 text-center text-[14px] font-semibold text-brand transition hover:bg-brand/5"
-            onClick={() => navigate('/financial-reports/salary/history')}
-            type="button"
-          >
-            View My Salary History
-          </button>
+          <p className="text-[13px] font-medium text-slate">Base Salary</p>
+          <p className="mt-3 text-[42px] font-bold leading-none text-brand">
+            <CurrencyDisplay amount={amount} />
+          </p>
+          <p className="mt-3 text-[14px] text-slate">Effective from {formatDate(config.effective_from)}</p>
         </section>
       )}
     </div>
   )
 }
 
-function AdminSalaryView() {
+export default function SalaryOverview() {
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState('all')
-  const [payrollMonth, setPayrollMonth] = useState(currentMonth())
-  const [departmentFilter, setDepartmentFilter] = useState('')
+  const toast = useToast()
+  const { role } = useAuth()
+  const [month, setMonth] = useState(currentMonth())
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
-  const [doctors, setDoctors] = useState([])
-  const [staff, setStaff] = useState([])
-  const [payrollRecords, setPayrollRecords] = useState([])
+  const [employees, setEmployees] = useState([])
+  const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
-  const [configModal, setConfigModal] = useState({ open: false, staff: null })
+  const [showHistory, setShowHistory] = useState(false)
+  const [payTarget, setPayTarget] = useState(null)
+  const [payingId, setPayingId] = useState(null)
+  const [receiptTarget, setReceiptTarget] = useState(null)
 
   const loadSalaryData = useCallback(async () => {
     setLoading(true)
-    try {
-      if (PUBLIC_ROUTES_FOR_TESTING) {
-        const [doctorsData, staffData, historyData] = await Promise.all([
-          getDemoDoctorSalaries(),
-          getDemoStaffSalaries(),
-          getDemoSalaryHistory({ month: payrollMonth }),
-        ])
-        setDoctors(listFromResponse(doctorsData))
-        setStaff(listFromResponse(staffData))
-        setPayrollRecords(listFromResponse(historyData))
-        return
-      }
 
-      const [doctorsRes, staffRes, configsRes] = await Promise.all([
+    try {
+      const { month: monthNumber, year } = monthParts(month)
+      const [doctorsRes, staffRes, configsRes, recordsRes] = await Promise.all([
         getDoctors(),
         getStaff(),
         getSalaryConfigs(),
+        getSalaryRecords({ month: monthNumber, year }),
       ])
-
-      const doctorsList = listFromResponse(doctorsRes)
-      const staffList = listFromResponse(staffRes)
-      const configs = configsRes?.data?.results ?? configsRes?.data ?? []
-
-      const configMap = new Map()
+      const configs = listFromResponse(configsRes)
+      const configById = new Map()
       const configByEmail = new Map()
-      for (const config of configs) {
-        const empId = config.employee?.id
-        const empEmail = config.employee?.email?.toLowerCase()
-        if (empId) configMap.set(empId, config)
-        if (empEmail) configByEmail.set(empEmail, config)
-      }
+
+      configs.forEach((config) => {
+        const normalized = normalizeConfig(config)
+        const employeeId = config.employee?.id || config.employee_id || config.user_id || config.staff_id
+        const email = String(config.employee?.email || config.email || '').toLowerCase()
+
+        if (employeeId) configById.set(String(employeeId), normalized)
+        if (email) configByEmail.set(email, normalized)
+      })
 
       const findConfig = (person) => {
-        const byId = configMap.get(person.user_id) || configMap.get(person.id)
-        if (byId) return byId
-        const email = person.email?.toLowerCase()
-        if (email) return configByEmail.get(email)
-        return null
-      }
+        const id = person.user_id ?? person.id
+        const email = String(person.email || person.user?.email || '').toLowerCase()
 
+        return configById.get(String(id)) || (email ? configByEmail.get(email) : null) || null
+      }
       const mapPerson = (person, employeeType) => {
-        const empId = employeeType === 'staff' ? (person.user_id ?? person.id) : person.id
+        const id = employeeType === 'staff' ? (person.user_id ?? person.id) : (person.user_id ?? person.id)
         const config = findConfig(person)
+
         return {
-          id: empId,
-          name: person.full_name ?? person.name ?? '',
+          base_salary: numberValue(config?.base_salary ?? person.base_salary ?? person.salary),
+          current_config: config,
           email: person.email ?? person.user?.email ?? '',
-          role: person.role ?? employeeType,
           employee_type: employeeType,
-          current_config: config ? {
-            id: config.id,
-            salary_type: config.salary_type,
-            base_salary: config.base_salary,
-            fixed_amount: config.base_salary,
-            commission_rate: config.commission_rate,
-            commission_per_appointment: config.commission_per_appointment,
-            allowances: config.allowances,
-            deductions: config.deductions,
-            effective_from: config.effective_from,
-            configured_by: config.employee?.full_name ?? '',
-            updated_at: config.updated_at,
-          } : null,
+          id,
+          name: fullName(person),
+          role: employeeRole(person, employeeType),
         }
       }
 
-      setDoctors(doctorsList.map((d) => mapPerson(d, 'doctor')))
-      setStaff(staffList.map((s) => mapPerson(s, 'staff')))
-
-      try {
-        const [month, year] = payrollMonth.split('-')
-        const recordsRes = await getSalaryRecords({ month: Number(month), year: Number(year) })
-        setPayrollRecords(listFromResponse(recordsRes))
-      } catch {
-        setPayrollRecords([])
-      }
-    } catch {
-      setDoctors([])
-      setStaff([])
-      setPayrollRecords([])
+      setEmployees([
+        ...listFromResponse(doctorsRes).map((doctor) => mapPerson(doctor, 'doctor')),
+        ...listFromResponse(staffRes).map((staffMember) => mapPerson(staffMember, 'staff')),
+      ])
+      setRecords(listFromResponse(recordsRes))
+    } catch (error) {
+      toast.error(getBackendError(error, 'Salary data could not be loaded.'))
+      setEmployees([])
+      setRecords([])
     } finally {
       setLoading(false)
     }
-  }, [payrollMonth])
+  }, [month, toast])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(loadSalaryData, 0)
     return () => window.clearTimeout(timeoutId)
   }, [loadSalaryData])
 
-  function handleHistory(person) {
-    navigate('/financial-reports/salary/history', { state: { userId: person.id } })
-  }
-
-  const allPeople = useMemo(() => [...doctors, ...staff], [doctors, staff])
-  const departments = useMemo(() => {
-    return [...new Set(allPeople.map((person) => person.role).filter(Boolean))]
-      .sort((first, second) => first.localeCompare(second))
-  }, [allPeople])
-  const currentRows = useMemo(() => {
+  const rows = useMemo(() => {
     const query = search.trim().toLowerCase()
-    const department = departmentFilter.trim().toLowerCase()
-    const source = activeTab === 'doctors'
-      ? doctors
-      : activeTab === 'staff'
-        ? staff
-        : allPeople
 
-    return source
-      .filter((person) => {
+    return employees
+      .filter((employee) => {
         if (!query) return true
-        return [person.name, person.email, person.role]
+        return [employee.name, employee.email, employee.role]
           .some((value) => String(value || '').toLowerCase().includes(query))
       })
-      .filter((person) => !department || String(person.role || '').toLowerCase() === department)
-      .filter((person) => !statusFilter || payrollStatusValue(person, payrollRecords) === statusFilter)
+      .map((employee) => {
+        const record = employeeRecord(employee, records)
+        const configured = employee.base_salary > 0
+        const status = configured ? recordStatus(record) : 'not_set'
+
+        return { ...employee, configured, record, status }
+      })
       .sort((first, second) => String(first.name || '').localeCompare(String(second.name || '')))
-  }, [activeTab, allPeople, departmentFilter, doctors, payrollRecords, search, staff, statusFilter])
+  }, [employees, records, search])
 
-  const payrollSummary = useMemo(() => {
-    return allPeople.reduce(
-      (summary, person) => {
-        const status = payrollStatusValue(person, payrollRecords)
+  const summary = useMemo(() => {
+    return rows.reduce(
+      (totals, employee) => {
+        if (!employee.configured) return totals
 
-        if (status === 'not_configured') {
-          summary.notConfigured += 1
-        } else if (status === 'paid') {
-          summary.paid += 1
-        } else if (status === 'partially_paid') {
-          summary.partial += 1
+        totals.total.count += 1
+        totals.total.amount += employee.base_salary
+
+        if (employee.status === 'paid') {
+          totals.paid.count += 1
+          totals.paid.amount += employee.base_salary
         } else {
-          summary.pending += 1
+          totals.pending.count += 1
+          totals.pending.amount += employee.base_salary
         }
 
-        return summary
+        return totals
       },
-      { notConfigured: 0, paid: 0, partial: 0, pending: 0 },
+      {
+        paid: { amount: 0, count: 0 },
+        pending: { amount: 0, count: 0 },
+        total: { amount: 0, count: 0 },
+      },
     )
-  }, [allPeople, payrollRecords])
+  }, [rows])
 
-  const tableType = activeTab === 'staff' ? 'staff' : activeTab === 'doctors' ? 'doctor' : 'mixed'
+  async function handlePayConfirm() {
+    if (!payTarget) return
 
-  return (
-    <div>
-      <header className="mb-5 rounded-[18px] border border-hairline bg-canvas px-6 py-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-2xl">
-            <h2 className="font-display text-[26px] text-ink">Payroll Management</h2>
-            <p className="mt-2 text-[15px] font-normal leading-6 text-slate">
-              Assign salaries, review monthly payroll status, and open payment history by employee.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2 text-[12px]">
-            <span className="rounded-full bg-[#E3F7EC] px-3 py-1 font-semibold text-[#0F9D66]">
-              Paid {payrollSummary.paid}
-            </span>
-            <span className="rounded-full bg-[#FEF3C7] px-3 py-1 font-semibold text-[#B45309]">
-              Pending {payrollSummary.pending}
-            </span>
-            <span className="rounded-full bg-[#E7EEFF] px-3 py-1 font-semibold text-[#1D4ED8]">
-              Partial {payrollSummary.partial}
-            </span>
-            <span className="rounded-full bg-[#F3F4F6] px-3 py-1 font-semibold text-[#5B6472]">
-              Not Set {payrollSummary.notConfigured}
-            </span>
-          </div>
-        </div>
-      </header>
+    setPayingId(payTarget.id)
 
-      <section className="mb-6 rounded-[16px] border border-hairline bg-canvas p-5">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[180px_minmax(220px,1fr)_180px_170px] md:items-end">
-          <label className="space-y-1">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Payroll Month</span>
-            <input
-              className="h-11 w-full rounded-control border border-hairline bg-canvas px-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
-              onChange={(event) => setPayrollMonth(event.target.value)}
-              type="month"
-              value={payrollMonth}
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Search</span>
-            <span className="relative block">
-              <Search aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate/60" />
-              <input
-                className="h-11 w-full rounded-control border border-hairline bg-canvas py-2 pl-9 pr-3 text-[14px] text-ink outline-none transition placeholder:text-slate/60 focus:border-brand focus:ring-1 focus:ring-brand"
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Employee or department"
-                type="search"
-              value={search}
-            />
-            </span>
-          </label>
-          <label className="space-y-1">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Department</span>
-            <select
-              className="h-11 w-full rounded-control border border-hairline bg-canvas px-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
-              onChange={(event) => setDepartmentFilter(event.target.value)}
-              value={departmentFilter}
-            >
-              <option value="">All departments</option>
-              {departments.map((department) => (
-                <option key={department} value={department}>
-                  {department}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="space-y-1">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Payment Status</span>
-            <select
-              className="h-11 w-full rounded-control border border-hairline bg-canvas px-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
-              onChange={(event) => setStatusFilter(event.target.value)}
-              value={statusFilter}
-            >
-              {PAYROLL_STATUS_OPTIONS.map((status) => (
-                <option key={status.value || 'all'} value={status.value}>
-                  {status.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </section>
-
-      <div className="mb-6 flex border-b border-hairline">
-        {[
-          { id: 'all', label: 'All Employees' },
-          { id: 'doctors', label: 'Doctors' },
-          { id: 'staff', label: 'Staff' },
-        ].map((tab) => (
-          <button
-            className={[
-              'border-b-2 px-4 py-2.5 text-[13px] transition',
-              activeTab === tab.id
-                ? 'border-brand font-semibold text-brand'
-                : 'border-transparent font-medium text-slate hover:text-ink',
-            ].join(' ')}
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            type="button"
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {loading ? (
-        <div className="h-[320px] animate-pulse rounded-[16px] bg-canvas" />
-      ) : (
-        <SalaryTable
-          emptyIcon={activeTab === 'doctors' ? Stethoscope : Users}
-          emptyLabel={activeTab === 'doctors' ? 'No doctors added yet. Add a doctor first.' : 'No staff members found.'}
-          emptyLink={activeTab === 'doctors' ? { label: 'Go to Doctors', to: '/doctors' } : { label: 'Go to Staff', to: '/staff' }}
-          onConfigure={(person) => setConfigModal({ open: true, staff: person })}
-          onHistory={handleHistory}
-          payrollRecords={payrollRecords}
-          people={currentRows}
-          type={tableType}
-        />
-      )}
-
-      <SalaryConfigModal
-        isOpen={configModal.open}
-        onClose={() => setConfigModal({ open: false, staff: null })}
-        onSaved={loadSalaryData}
-        staffMember={configModal.staff}
-      />
-    </div>
-  )
-}
-
-export default function SalaryOverview() {
-  const { role } = useAuth()
+    try {
+      await paySalary({
+        employeeId: payTarget.id,
+        month,
+        recordId: payTarget.record?.id,
+      })
+      toast.success('Payment recorded')
+      setPayTarget(null)
+      await loadSalaryData()
+    } catch (error) {
+      toast.error(getBackendError(error, 'Salary payment could not be recorded.'))
+    } finally {
+      setPayingId(null)
+    }
+  }
 
   if (role?.slug === 'doctor') {
     return <DoctorSalaryView />
   }
 
-  return <AdminSalaryView />
+  return (
+    <div>
+      <section className="mb-6 rounded-[16px] border border-hairline bg-canvas shadow-sm">
+        <div className="flex flex-col gap-4 border-b border-hairline px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="font-display text-[16px] font-bold text-ink">Salary Overview</h2>
+            <p className="mt-1 text-[14px] text-slate">{formatMonth(month)}</p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[180px_minmax(240px,1fr)]">
+            <label className="space-y-1">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Month</span>
+              <input
+                className="h-11 w-full rounded-control border border-hairline bg-canvas px-3 text-[14px] text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+                onChange={(event) => setMonth(event.target.value || currentMonth())}
+                type="month"
+                value={month}
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Search</span>
+              <span className="relative block">
+                <Search aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate/60" />
+                <input
+                  className="h-11 w-full rounded-control border border-hairline bg-canvas py-2 pl-9 pr-3 text-[14px] text-ink outline-none transition placeholder:text-slate/60 focus:border-brand focus:ring-1 focus:ring-brand"
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Employee or role"
+                  type="search"
+                  value={search}
+                />
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-3">
+          <SummaryCard amount={summary.total.amount} count={summary.total.count} label="Total Payroll" />
+          <SummaryCard amount={summary.paid.amount} count={summary.paid.count} label="Paid" />
+          <SummaryCard amount={summary.pending.amount} count={summary.pending.count} label="Pending" />
+        </div>
+
+        <div className="overflow-x-auto border-t border-hairline">
+          <table className="w-full min-w-[920px] border-collapse text-left">
+            <thead className="border-b border-hairline bg-mist/60">
+              <tr>
+                {['Employee', 'Role', 'Salary', 'Status', 'Action'].map((header) => (
+                  <th
+                    className="px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate"
+                    key={header}
+                    scope="col"
+                  >
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td className="px-5 py-10 text-center text-[14px] text-slate" colSpan={5}>
+                    Loading salary records...
+                  </td>
+                </tr>
+              ) : rows.length === 0 ? (
+                <tr>
+                  <td className="px-5 py-12 text-center" colSpan={5}>
+                    <Wallet aria-hidden="true" className="mx-auto mb-3 h-10 w-10 text-hairline" />
+                    <p className="font-display text-[18px] italic text-slate">No employees found</p>
+                  </td>
+                </tr>
+              ) : (
+                rows.map((employee) => (
+                  <tr className="border-b border-hairline last:border-0 hover:bg-mist/40" key={`${employee.employee_type}-${employee.id}`}>
+                    <td className="px-5 py-2.5">
+                      <div className="flex items-center gap-3">
+                        <Avatar name={employee.name} size="sm" />
+                        <div className="min-w-0">
+                          <p className="truncate text-[14px] font-semibold text-ink">{employee.name}</p>
+                          <p className="truncate text-[12px] text-slate">{employee.email || '-'}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-2.5 text-[13px] text-slate">{employee.role}</td>
+                    <td className="px-5 py-2.5 text-[14px] text-ink">
+                      {employee.configured ? <CurrencyDisplay amount={employee.base_salary} /> : <span className="text-slate/50">-</span>}
+                    </td>
+                    <td className="px-5 py-2.5">
+                      {employee.configured ? <StatusChip status={employee.status} /> : <NotSetChip />}
+                    </td>
+                    <td className="px-5 py-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          className="inline-flex h-9 items-center gap-1.5 rounded-control border border-brand/20 bg-brand/5 px-3 text-[13px] font-semibold text-brand transition hover:border-brand/30 hover:bg-brand/10 hover:text-brand-dark"
+                          onClick={() => navigate(`/financial-reports/salary/${employee.id}/${employee.configured ? 'edit' : 'add'}`)}
+                          type="button"
+                        >
+                          {employee.configured ? <Pencil aria-hidden="true" className="h-4 w-4" /> : <Plus aria-hidden="true" className="h-4 w-4" />}
+                          {employee.configured ? 'Edit Salary' : 'Add Salary'}
+                        </button>
+                        {employee.configured && employee.status !== 'paid' ? (
+                          <button
+                            className="inline-flex h-9 items-center gap-1.5 rounded-control bg-brand px-3 text-[13px] font-semibold text-white transition hover:bg-brand-dark disabled:opacity-60"
+                            disabled={payingId === employee.id}
+                            onClick={() => setPayTarget(employee)}
+                            type="button"
+                          >
+                            <CheckCircle2 aria-hidden="true" className="h-4 w-4" />
+                            {payingId === employee.id ? 'Paying...' : 'Pay Now'}
+                          </button>
+                        ) : null}
+                        {employee.status === 'paid' ? (
+                          <button
+                            className="inline-flex h-9 items-center gap-1.5 rounded-control border border-hairline bg-canvas px-3 text-[13px] font-semibold text-slate transition hover:bg-mist hover:text-ink"
+                            onClick={() => setReceiptTarget(employee)}
+                            type="button"
+                          >
+                            <Eye aria-hidden="true" className="h-4 w-4" />
+                            View Receipt
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <button
+        className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-brand transition hover:text-brand-dark"
+        onClick={() => setShowHistory((current) => !current)}
+        type="button"
+      >
+        <History aria-hidden="true" className="h-4 w-4" />
+        {showHistory ? 'Hide Salary History' : 'Show Salary History'}
+      </button>
+
+      {showHistory ? (
+        <div className="animate-fade-up">
+          <HistoryTable rows={records} />
+        </div>
+      ) : null}
+
+      {payTarget ? (
+        <ConfirmationModal
+          body={
+            <>
+              Confirm payment of <CurrencyDisplay amount={payTarget.base_salary} className="font-semibold text-ink" /> to{' '}
+              <span className="font-semibold text-ink">{payTarget.name}</span> for {formatMonth(month)}?
+            </>
+          }
+          confirmLabel="Pay Now"
+          isLoading={payingId === payTarget.id}
+          onCancel={() => setPayTarget(null)}
+          onConfirm={handlePayConfirm}
+          title="Record salary payment?"
+        />
+      ) : null}
+
+      {receiptTarget ? (
+        <SalaryReceiptModal
+          employee={receiptTarget}
+          month={month}
+          onClose={() => setReceiptTarget(null)}
+        />
+      ) : null}
+    </div>
+  )
 }

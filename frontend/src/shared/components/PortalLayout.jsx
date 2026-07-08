@@ -188,24 +188,17 @@ function getRouteMeta(pathname, user, role) {
     }
   }
 
-  if (/^\/financial-reports\/billing\/invoices\/[^/]+$/.test(pathname)) {
+  if (/^\/financial-reports\/billing\/invoice\/[^/]+\/edit$/.test(pathname) || /^\/financial-reports\/billing\/invoices\/[^/]+\/edit$/.test(pathname)) {
+    return {
+      title: 'Edit Invoice',
+      subtitle: 'Update invoice amount and payment status.',
+    }
+  }
+
+  if (/^\/financial-reports\/billing\/invoice\/[^/]+$/.test(pathname) || /^\/financial-reports\/billing\/invoices\/[^/]+$/.test(pathname)) {
     return {
       title: 'Invoice Details',
       subtitle: 'Review invoice and payment status.',
-    }
-  }
-
-  if (pathname.startsWith('/financial-reports/billing/payments')) {
-    return {
-      title: 'Payment Records',
-      subtitle: 'Track received patient payments.',
-    }
-  }
-
-  if (pathname.startsWith('/financial-reports/billing/history')) {
-    return {
-      title: 'Invoice History',
-      subtitle: 'Full audit trail of invoice activity.',
     }
   }
 
@@ -216,19 +209,10 @@ function getRouteMeta(pathname, user, role) {
     }
   }
 
-  if (pathname.startsWith('/financial-reports/salary/config')) {
+  if (/^\/financial-reports\/salary\/[^/]+\/(add|edit)$/.test(pathname)) {
     return {
-      title: 'Salary Configuration',
-      subtitle: 'Configure or update salary for doctors and staff',
-    }
-  }
-
-  if (pathname.startsWith('/financial-reports/salary/history')) {
-    return {
-      title: 'Salary History',
-      subtitle: role?.slug === 'doctor'
-        ? 'Your salary records and payout status'
-        : 'Salary records and disbursements',
+      title: pathname.endsWith('/edit') ? 'Edit Salary' : 'Add Salary',
+      subtitle: 'Set base salary and effective date.',
     }
   }
 
@@ -237,7 +221,7 @@ function getRouteMeta(pathname, user, role) {
       title: 'Salary',
       subtitle: role?.slug === 'doctor'
         ? 'Your current salary configuration and history'
-        : 'Salary configuration, history, and disbursements',
+        : 'Monthly salary overview and payments',
     }
   }
 

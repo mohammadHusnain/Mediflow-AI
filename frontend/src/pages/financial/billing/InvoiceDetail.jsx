@@ -6,26 +6,20 @@ import {
   Clock,
   Download,
   FileX,
+  Pencil,
 } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import InvoiceBadge from '../../../components/financial/InvoiceBadge.jsx'
+import CurrencyDisplay from '@shared/components/CurrencyDisplay.jsx'
 import { useAuth } from '@shared/context/AuthContext'
+import { getInvoiceAppointmentId } from '@shared/lib/invoices'
 import {
   downloadBlob,
   downloadInvoicePDF,
   getInvoice,
   markInvoicePaid,
 } from '@shared/services/billingApi'
-
-function numberValue(value) {
-  const number = Number(value)
-  return Number.isFinite(number) ? number : 0
-}
-
-function formatPkr(value) {
-  return `PKR ${numberValue(value).toLocaleString()}`
-}
 
 function formatDate(value, fallback = '-') {
   if (!value) return fallback
@@ -55,6 +49,16 @@ function formatDateTime(value, fallback = '-') {
   }).format(date)
 }
 
+function combineDateAndTime(dateValue, timeValue) {
+  const dateText = String(dateValue || '').trim()
+  const timeText = String(timeValue || '').trim()
+
+  if (!dateText) return ''
+  if (dateText.includes('T') || !timeText) return dateText
+
+  return `${dateText}T${timeText.slice(0, 5)}`
+}
+
 function titleCase(value) {
   const text = String(value || '').replace(/[_-]+/g, ' ').trim()
 
@@ -75,20 +79,20 @@ function patientPhone(invoice) {
   return invoice?.patient_phone || invoice?.patient?.phone || invoice?.patient?.mobile || '-'
 }
 
-function patientId(invoice) {
-  return invoice?.patient_id || invoice?.patient?.id || '-'
-}
-
 function doctorName(invoice) {
   return invoice?.doctor_name || invoice?.appointment_info?.doctor_name || invoice?.doctor?.full_name || invoice?.doctor?.name || ''
 }
 
 function appointmentId(invoice) {
-  return invoice?.appointment_id || invoice?.appointment?.id || '-'
+  return getInvoiceAppointmentId(invoice)
 }
 
 function appointmentDate(invoice) {
   return (
+    combineDateAndTime(
+      invoice?.appointment_info?.appointment_date,
+      invoice?.appointment_info?.appointment_time,
+    ) ||
     invoice?.appointment_date ||
     invoice?.appointment?.appointment_dt ||
     invoice?.appointment?.date ||
@@ -135,7 +139,7 @@ function NotFoundCard() {
         <p className="mt-2 text-[14px] text-slate">The invoice may have been deleted or moved.</p>
         <button
           className="mt-5 rounded-control bg-brand px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-brand-dark"
-          onClick={() => navigate('/financial-reports/billing/invoices')}
+          onClick={() => navigate('/financial-reports/billing')}
           type="button"
         >
           Back to Invoices
@@ -146,7 +150,8 @@ function NotFoundCard() {
 }
 
 export default function InvoiceDetail() {
-  const { id } = useParams()
+  const { id, invoiceId } = useParams()
+  const resolvedInvoiceId = invoiceId || id
   const navigate = useNavigate()
   const { role } = useAuth()
   const [invoice, setInvoice] = useState(null)
@@ -160,7 +165,7 @@ export default function InvoiceDetail() {
     setLoading(true)
     setActionError('')
     try {
-      const data = await getInvoice(id)
+      const data = await getInvoice(resolvedInvoiceId)
       setInvoice(data)
       setNotFound(false)
     } catch (error) {
@@ -173,7 +178,7 @@ export default function InvoiceDetail() {
     } finally {
       setLoading(false)
     }
-  }, [id])
+  }, [resolvedInvoiceId])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -195,7 +200,7 @@ export default function InvoiceDetail() {
 
   async function handleDownload() {
     try {
-      const blob = await downloadInvoicePDF(id)
+      const blob = await downloadInvoicePDF(resolvedInvoiceId)
       downloadBlob(blob, `${invoiceNumber(invoice)}.pdf`)
     } catch {
       setActionError('Invoice PDF could not be downloaded.')
@@ -203,10 +208,10 @@ export default function InvoiceDetail() {
   }
 
   async function handleMarkPaid() {
-    setSaving(true)
+      setSaving(true)
     setActionError('')
     try {
-      await markInvoicePaid(id)
+      await markInvoicePaid(resolvedInvoiceId)
       await loadInvoice()
     } catch {
       setActionError('Invoice could not be marked as paid.')
@@ -248,7 +253,7 @@ export default function InvoiceDetail() {
             <InvoiceBadge status={invoice.status} />
           </div>
           <p className="mt-1 text-[14px] font-normal text-slate">
-            Generated {formatDate(invoice.created_at || invoice.invoice_date)}
+            Generated {formatDateTime(invoice.created_at || invoice.invoice_date)}
           </p>
         </div>
 
@@ -261,6 +266,14 @@ export default function InvoiceDetail() {
             >
               <Download aria-hidden="true" className="h-4 w-4" />
               Download PDF
+            </button>
+            <button
+              className="inline-flex items-center gap-2 rounded-control border border-hairline bg-canvas px-5 py-2.5 text-[14px] font-semibold text-ink transition hover:bg-mist"
+              onClick={() => navigate(`/financial-reports/billing/invoice/${resolvedInvoiceId}/edit`)}
+              type="button"
+            >
+              <Pencil aria-hidden="true" className="h-4 w-4" />
+              Edit Invoice
             </button>
             {showMarkPaid ? (
               <button
@@ -305,7 +318,6 @@ export default function InvoiceDetail() {
               <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-slate">Billed To</p>
               <p className="text-[16px] font-semibold text-ink">{patientName(invoice)}</p>
               <p className="mt-1 font-mono text-[13px] text-slate">{patientPhone(invoice)}</p>
-              <p className="mt-1 font-mono text-[12px] text-slate/70">Patient ID: {patientId(invoice)}</p>
             </div>
             <div>
               <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-slate">
@@ -317,7 +329,6 @@ export default function InvoiceDetail() {
                 <p className="text-[14px] font-medium italic text-slate">Unassigned</p>
               )}
               <p className="mt-1 font-mono text-[13px] text-slate">{formatDateTime(appointmentDate(invoice))}</p>
-              <p className="mt-1 font-mono text-[12px] text-slate/70">Appointment ID: {appointmentId(invoice)}</p>
             </div>
           </div>
 
@@ -340,10 +351,10 @@ export default function InvoiceDetail() {
               </thead>
               <tbody>
                 <tr className="border-b border-hairline">
-                  <td className="px-3 py-4 pl-0 text-[14px] font-normal text-ink">Consultation Fee</td>
-                  <td className="px-3 py-4 font-mono text-[14px] text-ink">1</td>
-                  <td className="px-3 py-4 font-mono text-[14px] text-ink">{formatPkr(amount)}</td>
-                  <td className="px-3 py-4 pr-0 text-right font-mono text-[14px] text-ink">{formatPkr(amount)}</td>
+                  <td className="px-3 py-2.5 pl-0 text-[14px] font-normal text-ink">Consultation Fee</td>
+                  <td className="px-3 py-2.5 font-mono text-[14px] text-ink">1</td>
+                  <td className="px-3 py-2.5 text-[14px] text-ink"><CurrencyDisplay amount={amount} /></td>
+                  <td className="px-3 py-2.5 pr-0 text-right text-[14px] text-ink"><CurrencyDisplay amount={amount} /></td>
                 </tr>
               </tbody>
             </table>
@@ -353,15 +364,15 @@ export default function InvoiceDetail() {
             <div className="ml-auto max-w-[280px] space-y-3">
               <div className="flex items-center justify-between gap-4">
                 <span className="text-[14px] font-normal text-slate">Subtotal</span>
-                <span className="font-mono text-[14px] text-ink">{formatPkr(amount)}</span>
+                <CurrencyDisplay amount={amount} className="text-[14px] text-ink" />
               </div>
               <div className="flex items-center justify-between gap-4">
                 <span className="text-[14px] font-normal text-slate">Tax (0%)</span>
-                <span className="font-mono text-[14px] text-ink">PKR 0</span>
+                <CurrencyDisplay amount={0} className="text-[14px] text-ink" />
               </div>
               <div className="flex items-center justify-between gap-4">
                 <span className="text-[16px] font-bold text-ink">Total</span>
-                <span className="font-mono text-[18px] font-bold text-brand">{formatPkr(amount)}</span>
+                <CurrencyDisplay amount={amount} className="text-[18px] font-bold text-brand" />
               </div>
             </div>
           </div>
@@ -370,7 +381,7 @@ export default function InvoiceDetail() {
             <div className="mt-6 flex items-center gap-2 rounded-[10px] bg-[#E3F7EC] px-4 py-3">
               <CheckCircle2 aria-hidden="true" className="h-4 w-4 text-[#0F9D66]" />
               <span className="text-[13px] font-medium text-[#0F9D66]">
-                Payment received on {invoice.paid_at ? formatDate(invoice.paid_at) : '-'}
+                Payment received on {invoice.paid_at ? formatDateTime(invoice.paid_at) : '-'}
               </span>
             </div>
           ) : (
@@ -386,7 +397,7 @@ export default function InvoiceDetail() {
             <h3 className="mb-4 text-[13px] font-semibold text-ink">Invoice Details</h3>
             <MetaRow label="Status" value={titleCase(invoice.status)} />
             <MetaRow fontMono label="Invoice #" value={invoiceNumber(invoice)} />
-            <MetaRow fontMono label="Created" value={formatDate(invoice.created_at || invoice.invoice_date)} />
+            <MetaRow fontMono label="Created" value={formatDateTime(invoice.created_at || invoice.invoice_date)} />
             <MetaRow fontMono label="Due Date" value={formatDate(invoice.due_date)} />
             <MetaRow label="Payment Method" value={titleCase(invoice.payment_method)} />
           </section>
@@ -402,13 +413,15 @@ export default function InvoiceDetail() {
                 </p>
               </div>
             </div>
-            <button
-              className="mt-4 text-[13px] font-semibold text-brand transition hover:text-brand-dark"
-              onClick={() => navigate('/appointments')}
-              type="button"
-            >
-              View Appointment -&gt;
-            </button>
+            {appointmentId(invoice) ? (
+              <button
+                className="mt-4 text-[13px] font-semibold text-brand transition hover:text-brand-dark"
+                onClick={() => navigate(`/appointments/${appointmentId(invoice)}`)}
+                type="button"
+              >
+                View Appointment -&gt;
+              </button>
+            ) : null}
           </section>
         </aside>
       </div>

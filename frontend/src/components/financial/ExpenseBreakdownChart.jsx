@@ -6,8 +6,9 @@ import {
   Tooltip,
 } from 'recharts'
 
+import { formatCurrencyAmount } from '@shared/lib/currency'
+
 const COLORS = ['#4338CA', '#7C3AED', '#B45309', '#5B6472']
-const PKR_FORMATTER = new Intl.NumberFormat('en-PK')
 
 function numberValue(value) {
   const number = Number(value)
@@ -15,7 +16,7 @@ function numberValue(value) {
 }
 
 function formatCurrency(value) {
-  return `PKR ${PKR_FORMATTER.format(numberValue(value))}`
+  return formatCurrencyAmount(numberValue(value))
 }
 
 function CustomPieTooltip({ active, payload }) {

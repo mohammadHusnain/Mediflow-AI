@@ -11,7 +11,7 @@ import {
   getDoctorName,
   normalizeStringArray,
 } from '@shared/lib/records'
-import { CURRENCIES } from '@shared/lib/currency'
+import CurrencyInput from '@shared/components/CurrencyInput'
 import TagInput from '@features/patients/components/TagInput'
 import {
   getTemperatureWarning,
@@ -28,7 +28,6 @@ export const EMPTY_APPOINTMENT_FORM = {
   treatment_plan: '',
   medications_prescribed: [],
   consultation_fee: '',
-  currency: 'PKR',
   temperature: '',
   blood_pressure: '',
   notes: '',
@@ -53,7 +52,6 @@ export function getAppointmentFormDefaults(appointment = null) {
     treatment_plan: appointment.treatment_plan || '',
     medications_prescribed: normalizeStringArray(appointment.medications_prescribed || appointment.medications),
     consultation_fee: appointment.consultation_fee ?? '',
-    currency: appointment.currency || 'PKR',
     temperature: appointment.temperature || '',
     blood_pressure: appointment.blood_pressure || '',
     notes: appointment.notes || appointment.additional_notes || '',
@@ -166,35 +164,6 @@ export function AppointmentFields({
         </FormField>
       </div>
 
-      <FormField error={errors.consultation_fee?.message} label="Consultation Fee">
-        <div className="flex gap-2">
-          <select
-            className="h-11 w-[80px] shrink-0 rounded-control border border-hairline bg-canvas px-1.5 text-[11px] font-medium text-ink outline-none transition-colors focus:border-brand"
-            {...register('currency')}
-          >
-            {CURRENCIES.map((c) => (
-              <option key={c.code} value={c.code}>{c.symbol}</option>
-            ))}
-          </select>
-          <input
-            className={getFieldClass(errors.consultation_fee?.message, 'font-sans flex-1')}
-            min="0"
-            placeholder="1500"
-            step="0.01"
-            type="number"
-            {...register('consultation_fee', {
-              validate: (value) => {
-                const num = Number(value)
-                if (!value || Number.isNaN(num) || num < 0) {
-                  return 'Consultation fee is required and must be ≥ 0.'
-                }
-                return true
-              },
-            })}
-          />
-        </div>
-      </FormField>
-
       <FormField error={errors.temperature?.message} label="Temperature (C)" optional>
         <input
           className={getFieldClass(errors.temperature?.message, 'font-sans')}
@@ -289,6 +258,22 @@ export function AppointmentFields({
 
     {!doctorOnly && (
     <FormSection title="Payment">
+      <FormField error={errors.consultation_fee?.message} label="Consultation Fee">
+        <CurrencyInput
+          inputClassName={errors.consultation_fee?.message ? 'border-[#C8102E] bg-[#FCE4E8]/50' : ''}
+          placeholder="1500"
+          {...register('consultation_fee', {
+            validate: (value) => {
+              const num = Number(value)
+              if (!value || Number.isNaN(num) || num < 0) {
+                return 'Consultation fee is required and must be at least 0.'
+              }
+              return true
+            },
+          })}
+        />
+      </FormField>
+
       <div className="md:col-span-2">
         <FormField label="Payment Status">
           <PaymentToggle

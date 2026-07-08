@@ -92,16 +92,22 @@ function validateDoctorForm(data) {
 }
 
 function mapDoctorToForm(doctor) {
-  const fullNameParts = String(doctor.full_name || '').trim().split(' ').filter(Boolean)
+  const fullName = (
+    doctor.full_name ||
+    doctor.name ||
+    doctor.user?.full_name ||
+    [doctor.user?.first_name, doctor.user?.last_name].filter(Boolean).join(' ')
+  )
+  const fullNameParts = String(fullName || '').trim().split(' ').filter(Boolean)
 
   return {
-    email: doctor.email || '',
+    email: doctor.email || doctor.user?.email || '',
     experience_years: doctor.experience_years ?? 0,
     first_name: doctor.first_name || fullNameParts[0] || '',
     has_account: doctor.has_account === true,
     last_name: doctor.last_name || fullNameParts.slice(1).join(' ') || '',
     join_date: doctor.join_date || '',
-    phone: doctor.phone || '',
+    phone: doctor.phone || doctor.user?.phone || '',
     qualifications: Array.isArray(doctor.qualifications)
       ? doctor.qualifications
       : String(doctor.qualification || '')
